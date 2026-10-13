@@ -1,14 +1,35 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { getApi } from '#lib/api/mock';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Tag from '#lib/components/Tag.svelte';
+	import FunnelChart from '#lib/hustle/FunnelChart.svelte';
+	import { funnelStages, type Application } from '#lib/hustle/funnel';
+	import { statusTone } from '#lib/hustle/status';
+	import { todayTodos } from '#lib/hustle/todos';
 	import { MODULES } from '#lib/modules';
 
 	const hour = new Date().getHours();
 	const greeting = hour < 12 ? '早安' : hour < 18 ? '下午好' : '夜安';
 	const featured = MODULES.slice(0, 4);
+	let applications = $state<Application[]>([]);
+	const stages = $derived(funnelStages(applications));
+	const todos = $derived(todayTodos(applications, new Date().toISOString().slice(0, 10)));
+
+	onMount(() => {
+		void (async () => {
+			const session = await getApi().getSession();
+			if (!session) return;
+			try {
+				applications = await getApi().listApplications();
+			} catch {
+				applications = [];
+			}
+		})();
+	});
 </script>
 
 <svelte:head>
@@ -25,6 +46,36 @@
 			把情绪、账本、家人与灵感放在同一个安静的地方。轻心不提供医疗诊断、理财建议或法律咨询。
 		</p>
 	</div>
+
+	<Card>
+		<div class="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
+			<div>
+				<h2 class="text-lg font-semibold">求职概览</h2>
+				<p class="mt-1 text-sm text-[var(--qx-muted)]">今天的面试和待跟进投递。</p>
+			</div>
+			<Button href="/modules/hustle" variant="secondary" class="shrink-0 whitespace-nowrap"
+				>打开求职副业</Button
+			>
+		</div>
+		<div class="mt-4 flex flex-wrap gap-2">
+			{#each stages as stage (stage.status)}
+				<Tag tone={statusTone(stage.status)}>{stage.status} {stage.count}</Tag>
+			{/each}
+		</div>
+		<FunnelChart {stages} />
+		{#if todos.length === 0}
+			<p class="text-sm text-[var(--qx-muted)]">今天还没有面试。把投递放进看板后会出现在这里。</p>
+		{:else}
+			<ul class="mt-2 space-y-2">
+				{#each todos as item (item.id)}
+					<li class="rounded-2xl bg-[var(--qx-surface)] px-4 py-3">
+						<p class="font-medium">{item.title}</p>
+						<p class="text-sm text-[var(--qx-muted)]">{item.detail}</p>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</Card>
 
 	<div class="grid gap-3 sm:grid-cols-2">
 		{#each featured as item (item.slug)}
@@ -44,7 +95,11 @@
 	</div>
 
 	<Card>
-		<EmptyState title="今天还没有新的记录" body="离线时也会为你保存草稿，网络恢复后会静默同步。" icon="cloud">
+		<EmptyState
+			title="今天还没有新的记录"
+			body="离线时也会为你保存草稿，网络恢复后会静默同步。"
+			icon="cloud"
+		>
 			{#snippet action()}
 				<Button href="/modules">打开模块中心</Button>
 			{/snippet}

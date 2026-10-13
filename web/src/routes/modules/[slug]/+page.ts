@@ -3,7 +3,9 @@ import { getModule, MODULES } from '#lib/modules';
 import type { EntryGenerator, PageLoad } from './$types';
 
 export const entries: EntryGenerator = () =>
-	MODULES.filter((item) => item.slug !== 'mood').map((item) => ({ slug: item.slug }));
+	MODULES.filter((item) => item.slug !== 'mood' && item.slug !== 'hustle').map((item) => ({
+		slug: item.slug
+	}));
 
 export const load: PageLoad = ({ params }) => {
 	const module = getModule(params.slug);

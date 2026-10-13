@@ -6,6 +6,7 @@ pub mod db;
 pub mod elder;
 pub mod error;
 pub mod finance;
+pub mod hustle;
 pub mod moderation;
 pub mod mood;
 pub mod push;

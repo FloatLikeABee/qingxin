@@ -13,7 +13,7 @@ The system SHALL persist each accepted `policy_version` with a timestamp and use
 - **THEN** `GET /v1/privacy/consent` with their access token returns that policy version
 
 ### Requirement: JSON export
-`GET /v1/privacy/export` SHALL require an access token and SHALL return a JSON document containing the user profile, consents, device sessions (no secrets), jobs, push subscriptions, the caller's mood logs with decrypted notes, and meditation sessions.
+`GET /v1/privacy/export` SHALL require an access token and SHALL return a JSON document containing the user profile, consents, device sessions (no secrets), jobs, push subscriptions, the caller's mood logs with decrypted notes, meditation sessions, applications, resumes (content JSON), and side hustles.
 
 #### Scenario: Export requires login
 - **WHEN** a client calls `GET /v1/privacy/export` without a token
@@ -27,12 +27,20 @@ The system SHALL persist each accepted `policy_version` with a timestamp and use
 - **WHEN** an authenticated user who created a mood log with a note calls export
 - **THEN** `mood_logs` includes that note in plaintext and `meditation_sessions` is an array
 
+#### Scenario: Export contains hustle data
+- **WHEN** an authenticated user who created an application, a resume, and a side hustle calls export
+- **THEN** `applications`, `resumes`, and `side_hustles` arrays include those ids
+
 ### Requirement: Account deletion
-`DELETE /v1/privacy/account` SHALL remove the user and cascaded personal rows (tokens, consents, devices, jobs, push subscriptions, caregiver links, mood logs, meditation sessions) and SHALL return 204. A later login or use of old tokens SHALL fail.
+`DELETE /v1/privacy/account` SHALL remove the user and cascaded personal rows (tokens, consents, devices, jobs, push subscriptions, caregiver links, mood logs, meditation sessions, applications, resumes, side hustles) and SHALL return 204. A later login or use of old tokens SHALL fail.
 
 #### Scenario: Delete erases the account
 - **WHEN** an authenticated user deletes their account
 - **THEN** the response is 204 and a subsequent login with the same email returns 401
+
+#### Scenario: Delete cascades hustle rows
+- **WHEN** an authenticated user who created an application deletes their account
+- **THEN** the response is 204 and that application id is gone from the database
 
 ### Requirement: Export includes finance records
 `GET /v1/privacy/export` SHALL include a `finance` object with the caller's categories, transactions (notes decrypted), budgets, subscriptions, challenges and check-ins.
