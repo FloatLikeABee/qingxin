@@ -4,7 +4,7 @@
 
 Issue #23, Notion card [M9 内容创作助手](https://app.notion.com/p/3f8469841e1f81c9aec2d12b714eddb1), and the user brief agree: build the module on merged T1 API + AI gateway + T2 shell + M1 / M10 / M7 patterns, reuse kit/tokens/IndexedDB/`QingxinApi`, keep the editor dark by default, mimic platform previews, stub AI behind `AiGateway`, and generate PPTX on the client.
 
-The live tree already has `api/` (Axum, SQLx, `AiGateway::complete`) and `web/` (SvelteKit 5, kit, themes, mock client). `/modules/create` is the `[slug]` placeholder. `/v1/ai` is the T1 completion seam — M9 HTTP must not reuse that path. M1/M10 kept domain logic in `mood.rs` / `hustle.rs`; M7 used a folder. M4 (PR #20) is in flight and touches router, OpenAPI, migrations, and nav.
+The live tree already has `api/` (Axum, SQLx, `AiGateway::complete`) and `web/` (SvelteKit 5, kit, themes, mock client). `/modules/create` is the `[slug]` placeholder. `/v1/ai` is the T1 completion seam — M9 HTTP must not reuse that path. M1/M10 kept domain logic in `mood.rs` / `hustle.rs`; M7 used a folder. M4 and M6 are on `main` (`0007_local.sql`, `0008_pets.sql`); M8 claims `0009`, so this change uses `0010_create.sql`.
 
 Superpowers self-grill (required): proposer and skeptical reviewer, at least three alternatives per decision, failure modes checked against the actual tree.
 
@@ -134,7 +134,7 @@ Superpowers self-grill (required): proposer and skeptical reviewer, at least thr
 
 ### D10 — Shared-file strategy and migration number
 
-**Chosen:** Migration `0007_create.sql` (latest on `main` is `0006_wellness.sql`). Shared hunks are append-only: `pub mod create` in `lib.rs`; `.merge(crate::create::routes())` in `routes.rs`; two export keys; OpenAPI tag + description line + paths immediately before `components:` + `ExportPayload.creations/snippets` + schemas at EOF; `[slug]` filter adds `create`; home card appended; `QingxinApi` methods appended. If another module claims `0007` on main before this PR lands, rename without changing SQL. Do not reformat `routes.rs` / `openapi.yaml`. Do not touch `nav.ts`.
+**Chosen:** Migration `0010_create.sql` (latest on `main` is `0008_pets.sql`; M8 claims `0009`). Shared hunks are append-only: `pub mod create` in `lib.rs`; `.merge(crate::create::routes())` in `routes.rs`; two export keys; OpenAPI tag + description line + paths immediately before `components:` + `ExportPayload.creations/snippets` + schemas at EOF; `[slug]` filter adds `create`; home card appended; `QingxinApi` methods appended. If another module claims `0010` on main before this PR lands, rename without changing SQL. Do not reformat `routes.rs` / `openapi.yaml`. Do not touch `nav.ts`.
 
 **Rejected:**
 
@@ -181,7 +181,7 @@ Superpowers self-grill (required): proposer and skeptical reviewer, at least thr
 - PPTX is client-side STORED OOXML with tests.
 - Privacy export and delete cascade include the two new tables.
 - HTTP lives under `/v1/create`, never `/v1/ai`.
-- Migration `0007_create.sql`; renumber if main moved.
+- Migration `0010_create.sql`; renumber if main moved.
 - No `nav.ts` edits.
 
 ## Risks / Trade-offs
@@ -199,7 +199,7 @@ Superpowers self-grill (required): proposer and skeptical reviewer, at least thr
 1. Land OpenSpec artifacts, then tests, then implementation on `cursor/m9-content-creation-ca02`.
 2. Echo's live gateway already sits behind `QingxinAiGateway::from_env()`; create AI starts returning `source: gateway` when complete succeeds, with no UI rewrite.
 3. A later HTTP `QingxinApi` implements the same methods from OpenAPI.
-4. Rollback: revert the branch; drop `0007_create.sql` on empty local DBs.
+4. Rollback: revert the branch; drop `0010_create.sql` on empty local DBs.
 
 ## Open Questions
 

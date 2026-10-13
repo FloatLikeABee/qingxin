@@ -14,7 +14,7 @@
 - Template library (filter, preview, one-click use), works page (version history + Markdown/PPTX export), snippet library (phrases/quotes/cases).
 - Home shows scenario cards and an inspiration feed.
 - Atmosphere stays on existing theme tokens. Do not add a second theme engine. Do not edit `nav.ts`.
-- Shared files (router, OpenAPI, migrations, nav) stay append-only because M4 PR #20 is in flight. Migration is `0007_create.sql` (next free after `0006_wellness.sql` on current `main`).
+- Shared files (router, OpenAPI, migrations, nav) stay append-only. Migration is `0010_create.sql` (M6 merged `0008_pets.sql` on `main`; M8 claims `0009`).
 
 ## Capabilities
 
@@ -34,7 +34,7 @@
 
 ## Impact
 
-- New migration `api/migrations/0007_create.sql`, `api/src/create.rs`, create tests, and OpenAPI paths under `/v1/create`.
+- New migration `api/migrations/0010_create.sql`, `api/src/create.rs`, create tests, and OpenAPI paths under `/v1/create`.
 - New `web/src/lib/create/` domain modules and `/modules/create` UI; Playwright screenshots of M9 screens at 390px and 1280px in light and dark.
 - Default `POST /v1/ai/complete` stays the gateway seam; this module does not change it.
 - Shared hunks only: `lib.rs` module, router merge, export JSON keys, OpenAPI tag/paths/schemas/ExportPayload, `[slug]` exclusion, home card, mock/types append. No `nav.ts` edits.

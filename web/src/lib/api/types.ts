@@ -3,6 +3,15 @@ import type { MoodLog } from '../mood/trends';
 import type { InterviewQuestion, SideHustle } from '../hustle/catalog';
 import type { Application, FunnelStage } from '../hustle/funnel';
 import type { ResumeContent } from '../hustle/resume';
+import type {
+	CreateLength,
+	CreateOutline,
+	CreatePlatform,
+	CreateTemplate,
+	CreateTone,
+	Inspiration,
+	SnippetKind
+} from '../create/catalog';
 
 export interface Session {
 	userId: string;
@@ -22,6 +31,8 @@ export interface ExportPayload {
 		applications?: Application[];
 		resumes?: ResumeVersion[];
 		sideHustles?: SideHustle[];
+		creations?: Creation[];
+		snippets?: CreateSnippet[];
 	};
 }
 
@@ -46,6 +57,52 @@ export interface SideHustleSuggest {
 	items: SideHustle[];
 	disclaimer: string;
 	source: 'mock' | 'gateway';
+}
+
+export interface CreationVersion {
+	at: string;
+	kind: string;
+	content: string;
+}
+
+export interface Creation {
+	id: string;
+	platform: CreatePlatform;
+	title?: string | null;
+	promptParams?: Record<string, unknown>;
+	generatedContent: string;
+	finalContent: string;
+	versions: CreationVersion[];
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface CreateSnippet {
+	id: string;
+	content: string;
+	kind: SnippetKind;
+	tags: string[];
+	usageCount: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface CreateAiText {
+	text: string;
+	disclaimer: string;
+	source: 'mock' | 'gateway';
+}
+
+export interface CreateTitles {
+	titles: string[];
+	disclaimer: string;
+	source: 'mock' | 'gateway';
+}
+
+export interface CreateOutlineResult extends CreateOutline {
+	disclaimer: string;
+	source: 'mock' | 'gateway';
+	markdown: string;
 }
 
 export interface MoodInsight {
@@ -165,6 +222,46 @@ export interface QingxinApi {
 		difficulty?: string;
 	}): Promise<InterviewQuestion[]>;
 	mockInterview(input: { questionId?: string; question?: string }): Promise<HustleAiText>;
+	listCreations(): Promise<Creation[]>;
+	createCreation(input: {
+		id?: string;
+		platform: CreatePlatform;
+		title?: string;
+		promptParams?: Record<string, unknown>;
+		generatedContent: string;
+		finalContent?: string;
+	}): Promise<Creation>;
+	getCreation(id: string): Promise<Creation>;
+	patchCreation(
+		id: string,
+		patch: {
+			title?: string;
+			generatedContent?: string;
+			finalContent?: string;
+			promptParams?: Record<string, unknown>;
+		}
+	): Promise<Creation>;
+	listCreateTemplates(platform?: CreatePlatform): Promise<CreateTemplate[]>;
+	listCreateInspiration(): Promise<Inspiration[]>;
+	generateCreateCopy(input: {
+		platform: CreatePlatform;
+		topic: string;
+		keywords?: string[];
+		tone?: CreateTone;
+		length?: CreateLength;
+		templateId?: string;
+	}): Promise<CreateAiText>;
+	generateCreateTitles(input: { topic: string; platform?: CreatePlatform }): Promise<CreateTitles>;
+	polishCreateCopy(input: { text: string; tone: CreateTone }): Promise<CreateAiText>;
+	generateCreateOutline(input: { topic: string }): Promise<CreateOutlineResult>;
+	listCreateSnippets(): Promise<CreateSnippet[]>;
+	createSnippet(input: {
+		id?: string;
+		content: string;
+		kind?: SnippetKind;
+		tags?: string[];
+	}): Promise<CreateSnippet>;
+	useSnippet(id: string): Promise<CreateSnippet>;
 }
 
 export class ApiError extends Error {

@@ -10,7 +10,7 @@
 
 ## 2. Backend implementation
 
-- [ ] 2.1 Add `0007_create.sql` (or next free after `git fetch origin main`) and `api/src/create.rs`; implement validation, CRUD, catalogs, and AI stubs until API tests pass
+- [ ] 2.1 Add `0010_create.sql` and `api/src/create.rs`; implement validation, CRUD, catalogs, and AI stubs until API tests pass
 - [ ] 2.2 Wire `pub mod create` and `.merge(crate::create::routes())` append-only; extend `export_data` with `creations` and `snippets`; extend `api/openapi.yaml` (tag, paths before `components:`, schemas at EOF, ExportPayload keys). Do not reformat shared files. Do not edit `nav.ts`
 - [ ] 2.3 Run `cargo fmt`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and `cargo test --workspace` in `api/` until green
 

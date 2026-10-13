@@ -66,7 +66,7 @@ export const MODULES: ModuleInfo[] = [
 	{
 		slug: 'create',
 		name: '内容创作',
-		summary: '灵感箱与草稿夹，把想法轻轻放下。',
+		summary: '标题、润色与平台草稿，把想法写成可发出去的文字。',
 		accent: '#38BDF8',
 		icon: 'pen'
 	},

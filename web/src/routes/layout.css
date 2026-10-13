@@ -197,3 +197,22 @@ dialog::backdrop {
 		0 28px 70px -16px rgb(0 0 0 / 0.82),
 		0 0 0 1px rgb(96 165 250 / 0.14);
 }
+
+.create-editor {
+	background: #0f172a;
+	color: #e2e8f0;
+	color-scheme: dark;
+}
+
+.create-editor textarea,
+.create-editor label,
+.create-editor p,
+.create-editor span {
+	color: #e2e8f0;
+}
+
+.create-preview-xhs,
+.create-preview-mp,
+.create-preview-weekly {
+	color-scheme: light;
+}
