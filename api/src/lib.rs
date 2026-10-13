@@ -9,6 +9,7 @@ pub mod finance;
 pub mod hustle;
 pub mod moderation;
 pub mod mood;
+pub mod pets;
 pub mod push;
 pub mod routes;
 pub mod scheduler;

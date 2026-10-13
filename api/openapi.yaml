@@ -3,12 +3,13 @@ info:
   title: Qingxin (轻心) API
   version: 0.2.0
   description: |
-    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M2 finance, M3 elder-assistant, and M10 hustle routes.
+    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M2 finance, M3 elder-assistant, M6 pets, and M10 hustle routes.
 
-    The Rust service lives in `api/`. Sensitive fields (phone numbers and
-    finance transaction notes) are stored with AES-256-GCM. Access tokens are short-lived JWTs; refresh
+    The Rust service lives in `api/`. Sensitive fields (phone numbers,
+    finance transaction notes, and pet health-record notes) are stored with AES-256-GCM. Access tokens are short-lived JWTs; refresh
     tokens and caregiver-issued device sessions are opaque, hashed, and
     revocable. M2 finance lives at `/v1/finance` (CNY fen amounts stay plaintext).
+    M6 pets lives at `/v1/pets` (weights stay plaintext grams).
 
     AI generation is intentionally a seam: `POST /v1/ai/complete` is reserved
     for Echo's gateway and returns `ai_unconfigured` until that crate is
@@ -35,6 +36,7 @@ tags:
   - name: Mood
   - name: Meditation
   - name: Hustle
+  - name: Pets
 paths:
   /health:
     get:
@@ -2126,6 +2128,432 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /v1/pets:
+    get:
+      tags: [Pets]
+      summary: List the caller's pets
+      operationId: listPets
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: Pets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Pets]
+      summary: Create a pet profile
+      operationId: createPet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/pets/today:
+    get:
+      tags: [Pets]
+      summary: Today's care progress and upcoming dues
+      operationId: getPetsToday
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Today summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetsToday"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/pets/ai/care-tip:
+    post:
+      tags: [Pets]
+      summary: Non-veterinary care tip via the AI gateway seam
+      operationId: petCareTip
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetCareTipWrite"
+      responses:
+        "200":
+          description: Generated text plus 非兽医建议 disclaimer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetCareTip"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          description: AI gateway is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /v1/pets/{id}:
+    get:
+      tags: [Pets]
+      summary: Get a pet the caller owns
+      operationId: getPet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: Pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Pets]
+      summary: Update a pet
+      operationId: patchPet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Pets]
+      summary: Delete a pet
+      operationId: deletePet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/pets/{id}/records:
+    get:
+      tags: [Pets]
+      summary: List health records
+      operationId: listPetRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetRecordList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Pets]
+      summary: Create a health record and enqueue a pet.due job when next_due_date is set
+      operationId: createPetRecord
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetRecordWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetRecord"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/pets/records/{id}:
+    patch:
+      tags: [Pets]
+      summary: Patch a health record
+      operationId: patchPetRecord
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetRecordPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetRecord"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Pets]
+      summary: Delete a health record and cancel its pending pet.due job
+      operationId: deletePetRecord
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/pets/{id}/weights:
+    get:
+      tags: [Pets]
+      summary: List weight samples in grams
+      operationId: listPetWeights
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: Weights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetWeightList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Pets]
+      summary: Record a positive gram weight
+      operationId: createPetWeight
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetWeightWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetWeight"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/pets/{id}/logs:
+    get:
+      tags: [Pets]
+      summary: List daily care logs
+      operationId: listPetLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: Logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetLogList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Pets]
+      summary: Check in a daily care log
+      operationId: createPetLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetLogWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetLog"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/pets/{id}/reminders:
+    get:
+      tags: [Pets]
+      summary: List care reminders
+      operationId: listPetReminders
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: Reminders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetReminderList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Pets]
+      summary: Create a time-plus-weekday care reminder and enqueue a pet.care job
+      operationId: createPetReminder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetReminderWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetReminder"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/pets/reminders/{id}:
+    patch:
+      tags: [Pets]
+      summary: Patch a care reminder
+      operationId: patchPetReminder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetReminderPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetReminder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Pets]
+      summary: Delete a care reminder
+      operationId: deletePetReminder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2160,6 +2588,13 @@ components:
       required: true
       schema:
         type: string
+    PetId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   responses:
     BadRequest:
       description: Validation failed
@@ -2373,6 +2808,8 @@ components:
             $ref: "#/components/schemas/PushSubscription"
         finance:
           $ref: "#/components/schemas/FinanceExport"
+        pets:
+          $ref: "#/components/schemas/PetsExport"
     CaregiverInvite:
       type: object
       required: [code, expires_at]
@@ -3389,3 +3826,234 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FinanceChallenge"
+    Pet:
+      type: object
+      required: [id, name, species, sort_order, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        species: { type: string, enum: [cat, dog, other] }
+        breed: { type: string, nullable: true }
+        birthday: { type: string, format: date, nullable: true }
+        avatar_url: { type: string, nullable: true }
+        sort_order: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PetList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pet"
+    PetWrite:
+      type: object
+      required: [name, species]
+      properties:
+        name: { type: string }
+        species: { type: string, enum: [cat, dog, other] }
+        breed: { type: string }
+        birthday: { type: string, format: date }
+        avatar_url: { type: string }
+    PetPatch:
+      type: object
+      properties:
+        name: { type: string }
+        species: { type: string, enum: [cat, dog, other] }
+        breed: { type: string, nullable: true }
+        birthday: { type: string, format: date, nullable: true }
+        avatar_url: { type: string, nullable: true }
+    PetRecord:
+      type: object
+      required: [id, pet_id, type, date, created_at, updated_at, disclaimer]
+      properties:
+        id: { type: string, format: uuid }
+        pet_id: { type: string, format: uuid }
+        type: { type: string, enum: [vaccine, deworm, checkup, vet_visit] }
+        date: { type: string, format: date }
+        next_due_date: { type: string, format: date, nullable: true }
+        note:
+          type: string
+          nullable: true
+          description: Returned in plaintext to the owner. Stored as note_encrypted AES-256-GCM.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        disclaimer: { type: string }
+    PetRecordList:
+      type: object
+      required: [items, disclaimer]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetRecord"
+        disclaimer: { type: string }
+    PetRecordWrite:
+      type: object
+      required: [type, date]
+      properties:
+        type: { type: string, enum: [vaccine, deworm, checkup, vet_visit] }
+        date: { type: string, format: date }
+        next_due_date: { type: string, format: date }
+        note: { type: string }
+    PetRecordPatch:
+      type: object
+      properties:
+        type: { type: string, enum: [vaccine, deworm, checkup, vet_visit] }
+        date: { type: string, format: date }
+        next_due_date: { type: string, format: date, nullable: true }
+        note: { type: string, nullable: true }
+    PetWeight:
+      type: object
+      required: [id, pet_id, measured_on, weight_g, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        pet_id: { type: string, format: uuid }
+        measured_on: { type: string, format: date }
+        weight_g: { type: integer, exclusiveMinimum: 0 }
+        created_at: { type: string, format: date-time }
+    PetWeightList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetWeight"
+    PetWeightWrite:
+      type: object
+      required: [measured_on, weight_g]
+      properties:
+        measured_on: { type: string, format: date }
+        weight_g: { type: integer, exclusiveMinimum: 0 }
+    PetLog:
+      type: object
+      required: [id, pet_id, type, logged_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        pet_id: { type: string, format: uuid }
+        type: { type: string, enum: [feed, walk, groom, litter] }
+        value: { type: string, nullable: true }
+        logged_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    PetLogList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetLog"
+    PetLogWrite:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [feed, walk, groom, litter] }
+        value: { type: string }
+        logged_at: { type: string, format: date-time }
+    PetReminder:
+      type: object
+      required: [id, pet_id, kind, time_local, days_of_week, timezone, active, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        pet_id: { type: string, format: uuid }
+        kind: { type: string, enum: [feed, walk, groom, litter] }
+        time_local: { type: string, pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" }
+        days_of_week:
+          type: array
+          items: { type: integer, minimum: 1, maximum: 7 }
+        timezone: { type: string }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PetReminderList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetReminder"
+    PetReminderWrite:
+      type: object
+      required: [kind, time_local, days_of_week]
+      properties:
+        kind: { type: string, enum: [feed, walk, groom, litter] }
+        time_local: { type: string }
+        days_of_week:
+          type: array
+          items: { type: integer, minimum: 1, maximum: 7 }
+        timezone: { type: string }
+        active: { type: boolean }
+    PetReminderPatch:
+      type: object
+      properties:
+        kind: { type: string, enum: [feed, walk, groom, litter] }
+        time_local: { type: string }
+        days_of_week:
+          type: array
+          items: { type: integer, minimum: 1, maximum: 7 }
+        timezone: { type: string }
+        active: { type: boolean }
+    PetsTodayItem:
+      type: object
+      required: [pet_id, name, done]
+      properties:
+        pet_id: { type: string, format: uuid }
+        name: { type: string }
+        species: { type: string }
+        avatar_url: { type: string, nullable: true }
+        done:
+          type: object
+          additionalProperties: { type: integer }
+        dues:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetRecord"
+    PetsToday:
+      type: object
+      required: [items, disclaimer]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetsTodayItem"
+        disclaimer: { type: string }
+    PetCareTipWrite:
+      type: object
+      required: [pet_id, topic]
+      properties:
+        pet_id: { type: string, format: uuid }
+        topic: { type: string }
+    PetCareTip:
+      type: object
+      required: [content, disclaimer]
+      properties:
+        content: { type: string }
+        model: { type: string, nullable: true }
+        disclaimer: { type: string }
+    PetsExport:
+      type: object
+      required: [pets, records, weights, logs, reminders]
+      properties:
+        pets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pet"
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetRecord"
+        weights:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetWeight"
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetLog"
+        reminders:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetReminder"
