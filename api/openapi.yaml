@@ -3,7 +3,7 @@ info:
   title: Qingxin (轻心) API
   version: 0.2.0
   description: |
-    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M2 finance, M3 elder-assistant, M7 wellness, and M10 hustle routes.
+    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M2 finance, M3 elder-assistant, M7 wellness, M9 content studio, and M10 hustle routes.
 
     The Rust service lives in `api/`. Sensitive fields (phone numbers,
     finance transaction notes, and wellness symptoms/sleep notes/report metrics)
@@ -40,6 +40,7 @@ tags:
   - name: Meditation
   - name: Hustle
   - name: Wellness
+  - name: Create
 paths:
   /health:
     get:
@@ -2871,6 +2872,303 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /v1/create/creations:
+    get:
+      tags: [Create]
+      summary: List the caller's works
+      operationId: listCreations
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Creation list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreationList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Create]
+      summary: Create a work
+      operationId: createCreation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCreationRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Creation"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/create/creations/{id}:
+    get:
+      tags: [Create]
+      summary: Get one work
+      operationId: getCreation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Creation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Creation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Create]
+      summary: Update a work
+      operationId: patchCreation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchCreationRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Creation"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/create/snippets:
+    get:
+      tags: [Create]
+      summary: List snippets
+      operationId: listCreateSnippets
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Snippet list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateSnippetList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Create]
+      summary: Create a snippet
+      operationId: createSnippet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSnippetRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateSnippet"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/create/snippets/{id}/use:
+    post:
+      tags: [Create]
+      summary: Increment snippet usage
+      operationId: useCreateSnippet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Updated snippet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateSnippet"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/create/templates:
+    get:
+      tags: [Create]
+      summary: List platform templates
+      operationId: listCreateTemplates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: platform
+          in: query
+          schema:
+            type: string
+            enum: [小红书, 公众号, 抖音, 周报]
+      responses:
+        "200":
+          description: Template list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateTemplateList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/create/inspiration:
+    get:
+      tags: [Create]
+      summary: List inspiration cards
+      operationId: listCreateInspiration
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Inspiration list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateInspirationList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/create/generate:
+    post:
+      tags: [Create]
+      summary: Generate platform copy
+      operationId: generateCreateCopy
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGenerateRequest"
+      responses:
+        "200":
+          description: Generated text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAiText"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/create/titles:
+    post:
+      tags: [Create]
+      summary: Generate ten titles
+      operationId: generateCreateTitles
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTitlesRequest"
+      responses:
+        "200":
+          description: Title list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateTitles"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/create/polish:
+    post:
+      tags: [Create]
+      summary: Polish copy in a tone
+      operationId: polishCreateCopy
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePolishRequest"
+      responses:
+        "200":
+          description: Polished text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAiText"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/create/outline:
+    post:
+      tags: [Create]
+      summary: Generate a PPT outline
+      operationId: generateCreateOutline
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOutlineRequest"
+      responses:
+        "200":
+          description: Outline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateOutline"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3126,6 +3424,14 @@ components:
           $ref: "#/components/schemas/FinanceExport"
         wellness:
           $ref: "#/components/schemas/WellnessExport"
+        creations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Creation"
+        snippets:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateSnippet"
     CaregiverInvite:
       type: object
       required: [code, expires_at]
@@ -4484,3 +4790,260 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WellnessReminder"
+    Creation:
+      type: object
+      required: [id, platform, generated_content, final_content, versions, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        platform:
+          type: string
+          enum: [小红书, 公众号, 抖音, 周报]
+        title:
+          type: string
+          nullable: true
+        prompt_params:
+          type: object
+          additionalProperties: true
+        generated_content:
+          type: string
+        final_content:
+          type: string
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreationVersion"
+        created_at:
+          type: string
+        updated_at:
+          type: string
+    CreationVersion:
+      type: object
+      required: [at, kind, content]
+      properties:
+        at:
+          type: string
+        kind:
+          type: string
+        content:
+          type: string
+    CreationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Creation"
+    CreateCreationRequest:
+      type: object
+      required: [platform, generated_content]
+      properties:
+        id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          enum: [小红书, 公众号, 抖音, 周报]
+        title:
+          type: string
+        prompt_params:
+          type: object
+          additionalProperties: true
+        generated_content:
+          type: string
+        final_content:
+          type: string
+    PatchCreationRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        generated_content:
+          type: string
+        final_content:
+          type: string
+        prompt_params:
+          type: object
+          additionalProperties: true
+    CreateSnippet:
+      type: object
+      required: [id, content, kind, tags, usage_count, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        kind:
+          type: string
+          enum: [金句, 案例, 过渡]
+        tags:
+          type: array
+          items:
+            type: string
+        usage_count:
+          type: integer
+        created_at:
+          type: string
+        updated_at:
+          type: string
+    CreateSnippetList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateSnippet"
+    CreateSnippetRequest:
+      type: object
+      required: [content]
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        kind:
+          type: string
+          enum: [金句, 案例, 过渡]
+        tags:
+          type: array
+          items:
+            type: string
+    CreateTemplate:
+      type: object
+      required: [id, platform, name, body]
+      properties:
+        id:
+          type: string
+        platform:
+          type: string
+        name:
+          type: string
+        body:
+          type: string
+    CreateTemplateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateTemplate"
+    CreateInspiration:
+      type: object
+      required: [id, topic, platform, hook]
+      properties:
+        id:
+          type: string
+        topic:
+          type: string
+        platform:
+          type: string
+        hook:
+          type: string
+    CreateInspirationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateInspiration"
+    CreateAiText:
+      type: object
+      required: [text, disclaimer, source]
+      properties:
+        text:
+          type: string
+        disclaimer:
+          type: string
+        source:
+          type: string
+          enum: [gateway, mock]
+    CreateGenerateRequest:
+      type: object
+      required: [platform, topic]
+      properties:
+        platform:
+          type: string
+          enum: [小红书, 公众号, 抖音, 周报]
+        topic:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
+        tone:
+          type: string
+          enum: [更专业, 更幽默, 更精简]
+        length:
+          type: string
+          enum: [短, 中, 长]
+        template_id:
+          type: string
+    CreateTitlesRequest:
+      type: object
+      required: [topic]
+      properties:
+        topic:
+          type: string
+        platform:
+          type: string
+          enum: [小红书, 公众号, 抖音, 周报]
+    CreateTitles:
+      type: object
+      required: [titles, disclaimer, source]
+      properties:
+        titles:
+          type: array
+          items:
+            type: string
+        disclaimer:
+          type: string
+        source:
+          type: string
+          enum: [gateway, mock]
+    CreatePolishRequest:
+      type: object
+      required: [text, tone]
+      properties:
+        text:
+          type: string
+        tone:
+          type: string
+          enum: [更专业, 更幽默, 更精简]
+    CreateOutlineRequest:
+      type: object
+      required: [topic]
+      properties:
+        topic:
+          type: string
+    CreateOutline:
+      type: object
+      required: [title, slides, markdown, disclaimer, source]
+      properties:
+        title:
+          type: string
+        slides:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateOutlineSlide"
+        markdown:
+          type: string
+        disclaimer:
+          type: string
+        source:
+          type: string
+          enum: [gateway, mock]
+    CreateOutlineSlide:
+      type: object
+      required: [heading, bullets]
+      properties:
+        heading:
+          type: string
+        bullets:
+          type: array
+          items:
+            type: string
