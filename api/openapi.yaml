@@ -3,11 +3,12 @@ info:
   title: Qingxin (轻心) API
   version: 0.2.0
   description: |
-    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M2 finance, M3 elder-assistant, M4 local-life, M6 pets, M7 wellness, M9 content studio, and M10 hustle routes.
+    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M2 finance, M3 elder-assistant, M4 local-life, M6 pets, M7 wellness, M8 study, M9 content studio, and M10 hustle routes.
 
     The Rust service lives in `api/`. Sensitive fields (phone numbers,
-    finance transaction notes, pet health-record notes, and wellness
-    symptoms/sleep notes/report metrics) are stored with AES-256-GCM.
+    finance transaction notes, pet health-record notes, wellness
+    symptoms/sleep notes/report metrics, and study flashcard faces plus
+    note Markdown) are stored with AES-256-GCM.
     Access tokens are short-lived JWTs; refresh
     tokens and caregiver-issued device sessions are opaque, hashed, and
     revocable. M2 finance lives at `/v1/finance` (CNY fen amounts stay plaintext).
@@ -17,6 +18,9 @@ info:
     M9 content studio lives at `/v1/create` (generate/titles/polish/outline use the AI gateway seam).
     Cycle symptoms, sleep notes and report metrics use `*_encrypted` BLOB columns
     (`symptoms_encrypted`, `note_encrypted`, `metrics_encrypted`).
+    M8 study lives at `/v1/study` (owner-only). Flashcard fronts/backs and
+    study-note Markdown use `front_encrypted`, `back_encrypted`, and
+    `content_md_encrypted`.
 
     AI generation is intentionally a seam: `POST /v1/ai/complete` is reserved
     for Echo's gateway and returns `ai_unconfigured` until that crate is
@@ -47,6 +51,7 @@ tags:
   - name: Wellness
   - name: Local
   - name: Create
+  - name: Study
 paths:
   /health:
     get:
@@ -3769,6 +3774,588 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /v1/study/today:
+    get:
+      tags: [Study]
+      summary: Today's challenges, due card count, and disclaimer
+      operationId: getStudyToday
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: Today snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyToday"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/study/challenges:
+    get:
+      tags: [Study]
+      summary: List the caller's study challenges
+      operationId: listStudyChallenges
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Challenge list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyChallengeList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Study]
+      summary: Create a 7, 14, or 21-day challenge
+      operationId: createStudyChallenge
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyChallengeWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyChallenge"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/study/challenges/{id}:
+    get:
+      tags: [Study]
+      summary: Get one challenge with derived streak
+      operationId: getStudyChallenge
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      responses:
+        "200":
+          description: Challenge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyChallenge"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Study]
+      summary: Delete a challenge
+      operationId: deleteStudyChallenge
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/study/challenges/{id}/checkins:
+    post:
+      tags: [Study]
+      summary: Daily check-in (idempotent per local day)
+      operationId: checkinStudyChallenge
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyCheckinWrite"
+      responses:
+        "200":
+          description: Already checked in that day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyCheckin"
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyCheckin"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/study/flashcards:
+    get:
+      tags: [Study]
+      summary: List flashcards
+      operationId: listStudyFlashcards
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Cards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyFlashcardList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Study]
+      summary: Create a text flashcard (no file storage)
+      operationId: createStudyFlashcard
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyFlashcardWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyFlashcard"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/study/flashcards/due:
+    get:
+      tags: [Study]
+      summary: Cards due for review
+      operationId: listDueStudyFlashcards
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Due cards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyFlashcardList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/study/flashcards/classify:
+    post:
+      tags: [Study]
+      summary: Suggest a category via AiGateway stub
+      operationId: classifyStudyFlashcard
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyClassifyWrite"
+      responses:
+        "200":
+          description: Suggested category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyClassify"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /v1/study/flashcards/{id}:
+    get:
+      tags: [Study]
+      summary: Get one flashcard
+      operationId: getStudyFlashcard
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      responses:
+        "200":
+          description: Card
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyFlashcard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Study]
+      summary: Delete a flashcard
+      operationId: deleteStudyFlashcard
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/study/flashcards/{id}/review:
+    post:
+      tags: [Study]
+      summary: Grade a card with SM-2-lite
+      operationId: reviewStudyFlashcard
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyReviewWrite"
+      responses:
+        "200":
+          description: Updated card
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyFlashcard"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/study/notes:
+    get:
+      tags: [Study]
+      summary: List notes; q matches title and tags only
+      operationId: listStudyNotes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Notes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyNoteList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Study]
+      summary: Create an encrypted Markdown note
+      operationId: createStudyNote
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyNoteWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyNote"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/study/notes/{id}:
+    get:
+      tags: [Study]
+      summary: Get one note
+      operationId: getStudyNote
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      responses:
+        "200":
+          description: Note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyNote"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Study]
+      summary: Update a note
+      operationId: patchStudyNote
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyNotePatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyNote"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Study]
+      summary: Delete a note
+      operationId: deleteStudyNote
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/study/skills:
+    get:
+      tags: [Study]
+      summary: List skill nodes
+      operationId: listStudySkills
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Nodes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudySkillList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Study]
+      summary: Create a user-built skill node
+      operationId: createStudySkill
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudySkillWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudySkill"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/study/skills/templates:
+    get:
+      tags: [Study]
+      summary: Built-in skill tree templates
+      operationId: listStudySkillTemplates
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyTemplateList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/study/skills/from-template:
+    post:
+      tags: [Study]
+      summary: Copy a template into the caller's tree
+      operationId: copyStudySkillTemplate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyFromTemplate"
+      responses:
+        "201":
+          description: Copied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudySkillList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/study/skills/{id}:
+    patch:
+      tags: [Study]
+      summary: Update a skill node
+      operationId: patchStudySkill
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudySkillPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudySkill"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Study]
+      summary: Delete a skill node
+      operationId: deleteStudySkill
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/study/reminders:
+    get:
+      tags: [Study]
+      summary: List streak and review reminders
+      operationId: listStudyReminders
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reminders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyReminderList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Study]
+      summary: Create a time-plus-weekday reminder
+      operationId: createStudyReminder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyReminderWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyReminder"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/study/reminders/{id}:
+    patch:
+      tags: [Study]
+      summary: Update a reminder
+      operationId: patchStudyReminder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyReminderPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyReminder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Study]
+      summary: Delete a reminder
+      operationId: deleteStudyReminder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StudyId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3816,6 +4403,12 @@ components:
       required: true
       schema:
         type: string
+    StudyId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
   responses:
     BadRequest:
       description: Validation failed
@@ -3843,6 +4436,12 @@ components:
             $ref: "#/components/schemas/ErrorBody"
     Conflict:
       description: Unique constraint or already linked
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+    NotImplemented:
+      description: AI gateway is not configured
       content:
         application/json:
           schema:
@@ -4033,6 +4632,8 @@ components:
           $ref: "#/components/schemas/PetsExport"
         wellness:
           $ref: "#/components/schemas/WellnessExport"
+        study:
+          $ref: "#/components/schemas/StudyExport"
         local_reviews:
           type: array
           items:
@@ -6050,3 +6651,266 @@ components:
           type: array
           items:
             type: string
+
+    StudyDisclaimer:
+      type: string
+      example: 本模块为学习习惯记录工具，不构成教学辅导或心理咨询。
+    StudyCheckin:
+      type: object
+      required: [id, challenge_id, day, created_at]
+      properties:
+        id: { type: string }
+        challenge_id: { type: string }
+        day: { type: string, format: date }
+        created_at: { type: string, format: date-time }
+    StudyCheckinWrite:
+      type: object
+      properties:
+        day: { type: string, format: date }
+    StudyChallenge:
+      type: object
+      required: [id, name, target_days, start_date, timezone, current_streak, progress_days]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        target_days: { type: integer, enum: [7, 14, 21] }
+        start_date: { type: string, format: date }
+        timezone: { type: string }
+        current_streak: { type: integer }
+        progress_days: { type: integer }
+        checked_in_today: { type: boolean }
+        checkins:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudyCheckin"
+        created_at: { type: string, format: date-time }
+        disclaimer: { $ref: "#/components/schemas/StudyDisclaimer" }
+    StudyChallengeList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudyChallenge"
+        disclaimer: { $ref: "#/components/schemas/StudyDisclaimer" }
+    StudyChallengeWrite:
+      type: object
+      required: [name, target_days]
+      properties:
+        name: { type: string }
+        target_days: { type: integer, enum: [7, 14, 21] }
+        start_date: { type: string, format: date }
+        timezone: { type: string }
+    StudyToday:
+      type: object
+      required: [disclaimer, date, challenges]
+      properties:
+        disclaimer: { $ref: "#/components/schemas/StudyDisclaimer" }
+        date: { type: string, format: date }
+        challenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudyChallenge"
+        due_flashcards: { type: integer }
+    StudyFlashcard:
+      type: object
+      required: [id, front, back, ease, interval_days, next_review_date]
+      properties:
+        id: { type: string }
+        front: { type: string }
+        back: { type: string }
+        category: { type: string, nullable: true }
+        ease: { type: number }
+        interval_days: { type: integer }
+        next_review_date: { type: string, format: date }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    StudyFlashcardList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudyFlashcard"
+        disclaimer: { $ref: "#/components/schemas/StudyDisclaimer" }
+    StudyFlashcardWrite:
+      type: object
+      required: [front, back]
+      properties:
+        front: { type: string }
+        back: { type: string }
+        category: { type: string }
+        file_url: { type: string, description: Rejected in v1 }
+    StudyReviewWrite:
+      type: object
+      required: [grade]
+      properties:
+        grade: { type: string, enum: [again, hard, good, easy] }
+    StudyClassifyWrite:
+      type: object
+      required: [front, back]
+      properties:
+        front: { type: string }
+        back: { type: string }
+    StudyClassify:
+      type: object
+      required: [category, disclaimer]
+      properties:
+        category: { type: string }
+        disclaimer: { $ref: "#/components/schemas/StudyDisclaimer" }
+        source: { type: string }
+    StudyNote:
+      type: object
+      required: [id, title, content_md, tags]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        content_md: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    StudyNoteList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudyNote"
+        disclaimer: { $ref: "#/components/schemas/StudyDisclaimer" }
+    StudyNoteWrite:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        content_md: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+    StudyNotePatch:
+      type: object
+      properties:
+        title: { type: string }
+        content_md: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+    StudySkill:
+      type: object
+      required: [id, title, unlocked, sort_order]
+      properties:
+        id: { type: string }
+        parent_id: { type: string, nullable: true }
+        title: { type: string }
+        unlocked: { type: boolean }
+        sort_order: { type: integer }
+        created_at: { type: string, format: date-time }
+    StudySkillList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudySkill"
+        disclaimer: { $ref: "#/components/schemas/StudyDisclaimer" }
+    StudySkillWrite:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        parent_id: { type: string }
+        unlocked: { type: boolean }
+        sort_order: { type: integer }
+    StudySkillPatch:
+      type: object
+      properties:
+        title: { type: string }
+        parent_id: { type: string, nullable: true }
+        unlocked: { type: boolean }
+        sort_order: { type: integer }
+    StudyTemplateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        disclaimer: { $ref: "#/components/schemas/StudyDisclaimer" }
+    StudyFromTemplate:
+      type: object
+      required: [template_id]
+      properties:
+        template_id: { type: string }
+    StudyReminder:
+      type: object
+      required: [id, kind, time, days_of_week, timezone, active]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [streak, review] }
+        time: { type: string, example: "21:00" }
+        days_of_week:
+          type: array
+          items: { type: integer, minimum: 1, maximum: 7 }
+        timezone: { type: string }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    StudyReminderList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudyReminder"
+        disclaimer: { $ref: "#/components/schemas/StudyDisclaimer" }
+    StudyReminderWrite:
+      type: object
+      required: [time_local]
+      properties:
+        kind: { type: string, enum: [streak, review] }
+        time_local: { type: string }
+        days_of_week:
+          type: array
+          items: { type: integer }
+        timezone: { type: string }
+        active: { type: boolean }
+    StudyReminderPatch:
+      type: object
+      properties:
+        time_local: { type: string }
+        days_of_week:
+          type: array
+          items: { type: integer }
+        timezone: { type: string }
+        active: { type: boolean }
+    StudyExport:
+      type: object
+      required: [challenges, flashcards, notes, skills, reminders]
+      properties:
+        challenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudyChallenge"
+        flashcards:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudyFlashcard"
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudyNote"
+        skills:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudySkill"
+        reminders:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudyReminder"

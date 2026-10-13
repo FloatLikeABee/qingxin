@@ -53,6 +53,7 @@ pub fn router() -> Router<AppState> {
         .merge(crate::pets::router())
         .merge(crate::local::routes())
         .merge(crate::wellness::router())
+        .merge(crate::study::router())
         .merge(crate::create::routes())
 }
 
@@ -559,6 +560,7 @@ async fn export_data(
     let finance = crate::finance::export_for_user(&state, &user.user_id).await?;
     let pets = crate::pets::export_for_user(&state, &user.user_id).await?;
     let wellness = crate::wellness::export_for_user(&state, &user.user_id).await?;
+    let study = crate::study::export_for_user(&state, &user.user_id).await?;
     let mood_logs = crate::mood::export_mood(&state, &user.user_id).await?;
     let meditation_sessions = crate::mood::export_sessions(&state, &user.user_id).await?;
     let applications = crate::hustle::export_applications(&state, &user.user_id).await?;
@@ -579,6 +581,7 @@ async fn export_data(
         "finance": finance,
         "pets": pets,
         "wellness": wellness,
+        "study": study,
         "mood_logs": mood_logs,
         "meditation_sessions": meditation_sessions,
         "applications": applications,
