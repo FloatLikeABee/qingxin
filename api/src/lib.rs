@@ -10,6 +10,7 @@ pub mod hustle;
 pub mod local;
 pub mod moderation;
 pub mod mood;
+pub mod pets;
 pub mod push;
 pub mod routes;
 pub mod scheduler;

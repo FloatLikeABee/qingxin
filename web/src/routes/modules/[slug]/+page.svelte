@@ -52,6 +52,8 @@
 				{#snippet action()}
 					{#if data.module.slug === 'elder'}
 						<Button href="/elder">打开老人助手</Button>
+					{:else if data.module.slug === 'pet'}
+						<Button href="/pets">打开宠物</Button>
 					{:else}
 						<Button href="/kit">查看设计系统</Button>
 					{/if}
