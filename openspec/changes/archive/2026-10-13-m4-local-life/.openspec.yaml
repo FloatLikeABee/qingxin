@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-13
+goal: "Build Qingxin M4 本地生活 on the merged T1 API, T2 SvelteKit shell, M1 mood,
+  and M10 hustle patterns per issue #16"

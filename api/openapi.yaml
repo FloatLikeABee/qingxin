@@ -3,7 +3,7 @@ info:
   title: Qingxin (轻心) API
   version: 0.2.0
   description: |
-    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M2 finance, M3 elder-assistant, M7 wellness, and M10 hustle routes.
+    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M2 finance, M3 elder-assistant, M4 local-life, M7 wellness, and M10 hustle routes.
 
     The Rust service lives in `api/`. Sensitive fields (phone numbers,
     finance transaction notes, and wellness symptoms/sleep notes/report metrics)
@@ -40,6 +40,7 @@ tags:
   - name: Meditation
   - name: Hustle
   - name: Wellness
+  - name: Local
 paths:
   /health:
     get:
@@ -2871,6 +2872,174 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /v1/local/services:
+    get:
+      tags: [Local]
+      summary: List neighborhood services
+      operationId: listLocalServices
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [维修, 宠物, 配送, 适老]
+        - name: tag
+          in: query
+          schema:
+            type: string
+            enum: [有坡道, 大字菜单, 耐心服务]
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [distance, rating]
+        - name: lat
+          in: query
+          schema:
+            type: number
+        - name: lng
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Filtered services
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalServiceList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Local]
+      summary: Publish a service
+      operationId: createLocalService
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocalServiceRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalService"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/local/services/{id}:
+    get:
+      tags: [Local]
+      summary: Service detail
+      operationId: getLocalService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalService"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/local/services/{id}/reviews:
+    get:
+      tags: [Local]
+      summary: List reviews for a service
+      operationId: listLocalReviews
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalReviewList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Local]
+      summary: Create a review
+      operationId: createLocalReview
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocalReviewRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalReview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/local/services/{id}/corrections:
+    post:
+      tags: [Local]
+      summary: Flag a data correction
+      operationId: createLocalCorrection
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocalCorrectionRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalCorrection"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3126,6 +3295,18 @@ components:
           $ref: "#/components/schemas/FinanceExport"
         wellness:
           $ref: "#/components/schemas/WellnessExport"
+        local_reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/LocalReview"
+        local_services:
+          type: array
+          items:
+            $ref: "#/components/schemas/LocalService"
+        local_corrections:
+          type: array
+          items:
+            $ref: "#/components/schemas/LocalCorrection"
     CaregiverInvite:
       type: object
       required: [code, expires_at]
@@ -4484,3 +4665,154 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WellnessReminder"
+    LocalService:
+      type: object
+      required: [id, name, category, latitude, longitude, address, tags, rating_avg]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+          enum: [维修, 宠物, 配送, 适老]
+        latitude:
+          type: number
+        longitude:
+          type: number
+        address:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        rating_avg:
+          type: number
+        hours:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        hero_key:
+          type: string
+          nullable: true
+        distance_m:
+          type: number
+        correction_counts:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          nullable: true
+    LocalServiceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LocalService"
+    CreateLocalServiceRequest:
+      type: object
+      required: [category, latitude, longitude]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+          enum: [维修, 宠物, 配送, 适老]
+        address:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        hours:
+          type: string
+        phone:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        hero_key:
+          type: string
+    LocalReview:
+      type: object
+      required: [id, service_id, user_id, content, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        service_id:
+          type: string
+        user_id:
+          type: string
+        content:
+          type: string
+        rating:
+          type: integer
+          nullable: true
+        images:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+    LocalReviewList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LocalReview"
+    CreateLocalReviewRequest:
+      type: object
+      required: [content]
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        rating:
+          type: integer
+        images:
+          type: array
+          items:
+            type: string
+    LocalCorrection:
+      type: object
+      required: [id, service_id, user_id, kind, created_at]
+      properties:
+        id:
+          type: string
+        service_id:
+          type: string
+        user_id:
+          type: string
+        kind:
+          type: string
+          enum: [已搬迁, 电话空号]
+        created_at:
+          type: string
+          format: date-time
+    CreateLocalCorrectionRequest:
+      type: object
+      required: [kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [已搬迁, 电话空号]
