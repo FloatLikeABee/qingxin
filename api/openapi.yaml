@@ -3,12 +3,16 @@ info:
   title: Qingxin (轻心) API
   version: 0.2.0
   description: |
-    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M2 finance, M3 elder-assistant, and M10 hustle routes.
+    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M2 finance, M3 elder-assistant, M7 wellness, and M10 hustle routes.
 
-    The Rust service lives in `api/`. Sensitive fields (phone numbers and
-    finance transaction notes) are stored with AES-256-GCM. Access tokens are short-lived JWTs; refresh
+    The Rust service lives in `api/`. Sensitive fields (phone numbers,
+    finance transaction notes, and wellness symptoms/sleep notes/report metrics)
+    are stored with AES-256-GCM. Access tokens are short-lived JWTs; refresh
     tokens and caregiver-issued device sessions are opaque, hashed, and
     revocable. M2 finance lives at `/v1/finance` (CNY fen amounts stay plaintext).
+    M7 wellness lives at `/v1/wellness` (owner-only; caregivers never see it).
+    Cycle symptoms, sleep notes and report metrics use `*_encrypted` BLOB columns
+    (`symptoms_encrypted`, `note_encrypted`, `metrics_encrypted`).
 
     AI generation is intentionally a seam: `POST /v1/ai/complete` is reserved
     for Echo's gateway and returns `ai_unconfigured` until that crate is
@@ -35,6 +39,7 @@ tags:
   - name: Mood
   - name: Meditation
   - name: Hustle
+  - name: Wellness
 paths:
   /health:
     get:
@@ -2126,6 +2131,746 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /v1/wellness/today:
+    get:
+      tags: [Wellness]
+      summary: Today's water ring, latest sleep, plans, and disclaimer
+      operationId: getWellnessToday
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: Today snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessToday"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/wellness/goals:
+    get:
+      tags: [Wellness]
+      summary: Water target and cycle consent
+      operationId: getWellnessGoals
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Goals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessGoals"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Wellness]
+      summary: Update daily water target
+      operationId: putWellnessGoals
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessGoalsWrite"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessGoals"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/wellness/consent:
+    get:
+      tags: [Wellness]
+      summary: Period-tracking consent (off by default)
+      operationId: getWellnessConsent
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Consent flag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessConsent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Wellness]
+      summary: Set period-tracking consent; turning off deletes cycle rows
+      operationId: putWellnessConsent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessConsentWrite"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessConsent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/wellness/water:
+    get:
+      tags: [Wellness]
+      summary: List water logs
+      operationId: listWellnessWater
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessWaterList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Wellness]
+      summary: Log millilitres (default cup 250)
+      operationId: createWellnessWater
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessWaterWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessWaterLog"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/wellness/water/{id}:
+    get:
+      tags: [Wellness]
+      summary: Get a water log
+      operationId: getWellnessWater
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "200":
+          description: Log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessWaterLog"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Wellness]
+      summary: Delete a water log
+      operationId: deleteWellnessWater
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/wellness/sleep:
+    get:
+      tags: [Wellness]
+      summary: List sleep check-ins
+      operationId: listWellnessSleep
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessSleepList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Wellness]
+      summary: Record sleep
+      operationId: createWellnessSleep
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessSleepWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessSleepLog"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/wellness/sleep/{id}:
+    get:
+      tags: [Wellness]
+      summary: Get a sleep log
+      operationId: getWellnessSleep
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "200":
+          description: Log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessSleepLog"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Wellness]
+      summary: Update a sleep log
+      operationId: patchWellnessSleep
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessSleepPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessSleepLog"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Wellness]
+      summary: Delete a sleep log
+      operationId: deleteWellnessSleep
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/wellness/cycles/prediction:
+    get:
+      tags: [Wellness]
+      summary: Average-based cycle prediction (仅供参考)
+      operationId: getWellnessCyclePrediction
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Prediction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessPrediction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/wellness/cycles:
+    get:
+      tags: [Wellness]
+      summary: List cycles (empty without consent)
+      operationId: listWellnessCycles
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Cycles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessCycleList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Wellness]
+      summary: Record a cycle (requires cycle_consent)
+      operationId: createWellnessCycle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessCycleWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessCycle"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/wellness/cycles/{id}:
+    get:
+      tags: [Wellness]
+      summary: Get a cycle
+      operationId: getWellnessCycle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "200":
+          description: Cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessCycle"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Wellness]
+      summary: Update a cycle
+      operationId: patchWellnessCycle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessCyclePatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessCycle"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Wellness]
+      summary: Delete a cycle
+      operationId: deleteWellnessCycle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/wellness/reports/ocr:
+    post:
+      tags: [Wellness]
+      summary: OCR stub via AiGateway (pasted text, metrics only)
+      operationId: ocrWellnessReport
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessOcrWrite"
+      responses:
+        "201":
+          description: Unconfirmed report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          description: AI gateway unconfigured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /v1/wellness/reports:
+    get:
+      tags: [Wellness]
+      summary: List metric reports
+      operationId: listWellnessReports
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessReportList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Wellness]
+      summary: Store metrics (no files)
+      operationId: createWellnessReport
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessReportWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/wellness/reports/{id}:
+    get:
+      tags: [Wellness]
+      summary: Get a report
+      operationId: getWellnessReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessReport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Wellness]
+      summary: Confirm or edit metrics
+      operationId: patchWellnessReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessReportPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessReport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Wellness]
+      summary: Delete a report
+      operationId: deleteWellnessReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/wellness/plans/suggest:
+    post:
+      tags: [Wellness]
+      summary: AiGateway plan suggestion (not stored)
+      operationId: suggestWellnessPlan
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Suggestion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessPlanSuggest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          description: AI gateway unconfigured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /v1/wellness/plans:
+    get:
+      tags: [Wellness]
+      summary: List 21-day plans
+      operationId: listWellnessPlans
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Plans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessPlanList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Wellness]
+      summary: Start a water_21 or sleep_21 plan
+      operationId: createWellnessPlan
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessPlanWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessPlan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/wellness/plans/{id}:
+    get:
+      tags: [Wellness]
+      summary: Get a plan
+      operationId: getWellnessPlan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "200":
+          description: Plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessPlan"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Wellness]
+      summary: Delete a plan
+      operationId: deleteWellnessPlan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/wellness/plans/{id}/checkins:
+    post:
+      tags: [Wellness]
+      summary: Manual daily check-in (idempotent per day)
+      operationId: checkinWellnessPlan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessCheckinWrite"
+      responses:
+        "200":
+          description: Already checked in that day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessCheckin"
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessCheckin"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/wellness/reminders:
+    get:
+      tags: [Wellness]
+      summary: List reminder times (defaults 08:00-22:00 every 2h)
+      operationId: listWellnessReminders
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reminders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessReminderList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Wellness]
+      summary: Create a time or expand an interval window into HH:MM rows
+      operationId: createWellnessReminder
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessReminderWrite"
+      responses:
+        "201":
+          description: Created
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/wellness/reminders/{id}:
+    patch:
+      tags: [Wellness]
+      summary: Update a reminder
+      operationId: patchWellnessReminder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellnessReminderPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellnessReminder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Wellness]
+      summary: Delete a reminder
+      operationId: deleteWellnessReminder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WellnessId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2155,6 +2900,12 @@ components:
         type: string
       description: Elder user id, or `me` for the caller
     FinanceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    WellnessId:
       name: id
       in: path
       required: true
@@ -2373,6 +3124,8 @@ components:
             $ref: "#/components/schemas/PushSubscription"
         finance:
           $ref: "#/components/schemas/FinanceExport"
+        wellness:
+          $ref: "#/components/schemas/WellnessExport"
     CaregiverInvite:
       type: object
       required: [code, expires_at]
@@ -3389,3 +4142,345 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FinanceChallenge"
+    WellnessDisclaimer:
+      type: string
+      description: Fixed 非医疗建议 notice
+      example: 本模块为生活习惯记录工具，不构成医疗建议。身体不适请及时就医。
+    WellnessToday:
+      type: object
+      required: [disclaimer, date, water, cycle_consent]
+      properties:
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+        date: { type: string, format: date }
+        water:
+          type: object
+          required: [total_ml, target_ml]
+          properties:
+            total_ml: { type: integer }
+            target_ml: { type: integer }
+            cup_ml: { type: integer }
+        sleep:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/WellnessSleepLog"
+        cycle_consent: { type: boolean }
+        prediction:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/WellnessPrediction"
+        plans:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessPlan"
+    WellnessGoals:
+      type: object
+      required: [water_ml_target, cycle_consent, disclaimer]
+      properties:
+        water_ml_target: { type: integer }
+        cycle_consent: { type: boolean }
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+    WellnessGoalsWrite:
+      type: object
+      required: [water_ml_target]
+      properties:
+        water_ml_target: { type: integer, exclusiveMinimum: 0 }
+    WellnessConsent:
+      type: object
+      required: [cycle_consent, disclaimer]
+      properties:
+        cycle_consent: { type: boolean }
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+    WellnessConsentWrite:
+      type: object
+      required: [cycle_consent]
+      properties:
+        cycle_consent: { type: boolean }
+    WellnessWaterLog:
+      type: object
+      required: [id, logged_on, ml, logged_at]
+      properties:
+        id: { type: string }
+        logged_on: { type: string, format: date }
+        ml: { type: integer }
+        logged_at: { type: string, format: date-time }
+    WellnessWaterList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessWaterLog"
+    WellnessWaterWrite:
+      type: object
+      properties:
+        ml: { type: integer, exclusiveMinimum: 0 }
+        logged_on: { type: string, format: date }
+    WellnessSleepLog:
+      type: object
+      required: [id, sleep_at, wake_at, quality]
+      properties:
+        id: { type: string }
+        sleep_at: { type: string, format: date-time }
+        wake_at: { type: string, format: date-time }
+        quality: { type: integer, minimum: 1, maximum: 5 }
+        note: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+    WellnessSleepList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessSleepLog"
+    WellnessSleepWrite:
+      type: object
+      required: [sleep_at, wake_at, quality]
+      properties:
+        sleep_at: { type: string, format: date-time }
+        wake_at: { type: string, format: date-time }
+        quality: { type: integer, minimum: 1, maximum: 5 }
+        note: { type: string }
+    WellnessSleepPatch:
+      type: object
+      properties:
+        sleep_at: { type: string, format: date-time }
+        wake_at: { type: string, format: date-time }
+        quality: { type: integer, minimum: 1, maximum: 5 }
+        note: { type: string }
+    WellnessCycle:
+      type: object
+      required: [id, start_date]
+      properties:
+        id: { type: string }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date, nullable: true }
+        flow_level: { type: string, enum: [light, medium, heavy], nullable: true }
+        symptoms: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    WellnessCycleList:
+      type: object
+      required: [items, cycle_consent, disclaimer]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessCycle"
+        cycle_consent: { type: boolean }
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+    WellnessCycleWrite:
+      type: object
+      required: [start_date]
+      properties:
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        flow_level: { type: string, enum: [light, medium, heavy] }
+        symptoms: { type: string }
+    WellnessCyclePatch:
+      type: object
+      properties:
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        flow_level: { type: string, enum: [light, medium, heavy] }
+        symptoms: { type: string }
+    WellnessPrediction:
+      type: object
+      required: [average_length_days, next_start, label, disclaimer]
+      properties:
+        average_length_days: { type: integer }
+        sample_count: { type: integer }
+        last_start: { type: string, format: date }
+        next_start: { type: string, format: date }
+        fertile_start: { type: string, format: date }
+        fertile_end: { type: string, format: date }
+        label: { type: string, example: 仅供参考 }
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+    WellnessMetric:
+      type: object
+      required: [name, value]
+      properties:
+        name: { type: string }
+        value: { type: string }
+        unit: { type: string, nullable: true }
+    WellnessReport:
+      type: object
+      required: [id, report_date, title, source, confirmed, disclaimer]
+      properties:
+        id: { type: string }
+        report_date: { type: string, format: date }
+        title: { type: string }
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessMetric"
+        source: { type: string, enum: [manual, ai_stub] }
+        confirmed: { type: boolean }
+        created_at: { type: string, format: date-time }
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+    WellnessReportList:
+      type: object
+      required: [items, disclaimer]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessReport"
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+    WellnessReportWrite:
+      type: object
+      required: [title, report_date, metrics]
+      properties:
+        title: { type: string }
+        report_date: { type: string, format: date }
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessMetric"
+        file_url:
+          type: string
+          description: Rejected in v1; metrics only
+    WellnessReportPatch:
+      type: object
+      properties:
+        title: { type: string }
+        report_date: { type: string, format: date }
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessMetric"
+        confirmed: { type: boolean }
+    WellnessOcrWrite:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string }
+        file_url: { type: string }
+    WellnessPlan:
+      type: object
+      required: [id, kind, title, target_days, start_date, progress_days]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [water_21, sleep_21] }
+        title: { type: string }
+        target_days: { type: integer }
+        start_date: { type: string, format: date }
+        progress_days: { type: integer }
+        created_at: { type: string, format: date-time }
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+    WellnessPlanList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessPlan"
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+    WellnessPlanWrite:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [water_21, sleep_21] }
+        target_days: { type: integer }
+        start_date: { type: string, format: date }
+    WellnessPlanSuggest:
+      type: object
+      required: [disclaimer]
+      properties:
+        suggestion: { type: string }
+        kind: { type: string }
+        title: { type: string }
+        target_days: { type: integer }
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+        label: { type: string }
+    WellnessCheckin:
+      type: object
+      required: [id, plan_id, day]
+      properties:
+        id: { type: string }
+        plan_id: { type: string }
+        day: { type: string, format: date }
+        created_at: { type: string, format: date-time }
+    WellnessCheckinWrite:
+      type: object
+      properties:
+        day: { type: string, format: date }
+    WellnessReminder:
+      type: object
+      required: [id, kind, time, days_of_week, timezone, active]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [water, sleep, plan] }
+        time: { type: string, example: "08:00" }
+        days_of_week:
+          type: array
+          items: { type: integer, minimum: 1, maximum: 7 }
+        timezone: { type: string }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    WellnessReminderList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessReminder"
+        disclaimer: { $ref: "#/components/schemas/WellnessDisclaimer" }
+    WellnessReminderWrite:
+      type: object
+      properties:
+        kind: { type: string, enum: [water, sleep, plan] }
+        time_local: { type: string }
+        days_of_week:
+          type: array
+          items: { type: integer }
+        timezone: { type: string }
+        interval_hours: { type: integer }
+        window_start: { type: string }
+        window_end: { type: string }
+        active: { type: boolean }
+    WellnessReminderPatch:
+      type: object
+      properties:
+        time_local: { type: string }
+        days_of_week:
+          type: array
+          items: { type: integer }
+        timezone: { type: string }
+        active: { type: boolean }
+    WellnessExport:
+      type: object
+      required: [cycle_consent, water_logs, sleep_logs, cycles, reports, plans, reminders]
+      properties:
+        goals:
+          $ref: "#/components/schemas/WellnessGoals"
+        cycle_consent: { type: boolean }
+        water_logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessWaterLog"
+        sleep_logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessSleepLog"
+        cycles:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessCycle"
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessReport"
+        plans:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessPlan"
+        reminders:
+          type: array
+          items:
+            $ref: "#/components/schemas/WellnessReminder"
