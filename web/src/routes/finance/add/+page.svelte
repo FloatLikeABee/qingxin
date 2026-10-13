@@ -2,10 +2,11 @@
 	import { goto } from '$app/navigation';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
-	import { confirmEntry, createEntry, selectCategory, typeDigit } from '#lib/finance/entry';
+	import { createEntry, selectCategory, typeDigit } from '#lib/finance/entry';
 	import Keypad from '#lib/finance/Keypad.svelte';
-	import { displayYuan, todayIso } from '#lib/finance/money';
+	import { displayYuan, fenFromYuanInput, todayIso } from '#lib/finance/money';
 	import { getFinanceStore } from '#lib/finance/store';
+	import { pushToast } from '#lib/toast';
 
 	const store = getFinanceStore();
 	let entry = $state(createEntry('expense'));
@@ -18,19 +19,24 @@
 	}
 
 	async function confirm() {
-		const done = confirmEntry({ ...entry, category: entry.category });
-		if (!done) return;
+		const amountFen = fenFromYuanInput(String(entry.digits ?? ''));
+		const category = entry.category;
+		if (!amountFen || !category) return;
 		pending = true;
 		try {
 			await store.addTransaction({
-				amountFen: done.amountFen,
-				type: done.type,
-				categoryId: done.category!.id,
-				note: done.note,
+				amountFen,
+				type: category.kind,
+				categoryId: category.id,
 				occurredOn: todayIso(),
 				clientId: crypto.randomUUID()
 			});
 			await goto('/finance');
+		} catch (error) {
+			pushToast({
+				title: error instanceof Error ? error.message : '记账失败',
+				tone: 'danger'
+			});
 		} finally {
 			pending = false;
 		}

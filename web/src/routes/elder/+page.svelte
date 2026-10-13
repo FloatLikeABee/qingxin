@@ -1,18 +1,39 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Modal from '#lib/components/Modal.svelte';
-	import { allContacts, loadDemo, saveDemo, todayCopy } from '#lib/elder/demo';
-	import { MEDICAL_DISCLAIMER, REMINDER_DISCLAIMER } from '#lib/elder/schedule';
+	import { getElderStore } from '#lib/elder/store';
+	import { shanghaiClock } from '#lib/elder/due';
+	import type { ElderContact, ElderReminder } from '#lib/elder/demo';
 
-	let demo = $state(loadDemo());
-	const copy = todayCopy();
+	const store = getElderStore();
+	let reminders = $state<ElderReminder[]>([]);
+	let contacts = $state<ElderContact[]>([]);
+	let disclaimer = $state(store.disclaimer);
+	let medical = $state(store.medicalDisclaimer);
 	let dueOpen = $state(false);
-	const due = $derived(demo.reminders.find((item) => !demo.acked.includes(item.id)));
+	let due = $state<ElderReminder | undefined>();
+	let acked = $state<string[]>([]);
+
+	function refreshDue(now = new Date()) {
+		due = store.dueReminder(now);
+		acked = store.ackedToday(now);
+		dueOpen = Boolean(due);
+	}
 
 	$effect(() => {
-		if (due) dueOpen = true;
+		if (!browser) return;
+		void store.hydrate().then(() => {
+			reminders = store.reminders;
+			contacts = store.contacts;
+			disclaimer = store.disclaimer;
+			medical = store.medicalDisclaimer;
+			refreshDue();
+		});
+		const id = window.setInterval(() => refreshDue(), 60_000);
+		return () => window.clearInterval(id);
 	});
 
 	function speak(text: string) {
@@ -23,11 +44,11 @@
 		speechSynthesis.speak(utter);
 	}
 
-	function ack() {
+	async function ack() {
 		if (!due) return;
-		demo = { ...demo, acked: [...demo.acked, due.id] };
-		saveDemo(demo);
+		await store.ack(due.id);
 		dueOpen = false;
+		refreshDue();
 	}
 
 	const tools = [
@@ -46,32 +67,33 @@
 	<div>
 		<p class="text-sm text-[var(--qx-muted)]">老人助手</p>
 		<h1 class="text-3xl font-semibold">今天先做这几件</h1>
+		<p class="sr-only">{shanghaiClock(new Date()).date}</p>
 	</div>
 
 	<Card class="space-y-3">
 		<h2 class="text-xl font-semibold">今日提醒</h2>
-		{#if demo.reminders.length === 0}
+		{#if reminders.length === 0}
 			<p class="text-lg text-[var(--qx-muted)]">今天没有用药提醒。</p>
 		{:else}
 			<ul class="space-y-3">
-				{#each demo.reminders as item (item.id)}
+				{#each reminders as item (item.id)}
 					<li class="rounded-2xl bg-[var(--qx-surface)] p-4">
 						<p class="text-xl font-semibold">{item.time} · {item.title}</p>
 						<p class="text-lg">{item.body}</p>
 						<p class="text-sm text-[var(--qx-muted)]">
-							{demo.acked.includes(item.id) ? '已确认' : '待确认'}
+							{acked.includes(item.id) ? '已确认' : '待确认'}
 						</p>
 					</li>
 				{/each}
 			</ul>
 		{/if}
-		<p class="text-base text-[var(--qx-muted)]">{copy.disclaimer}</p>
+		<p class="text-base text-[var(--qx-muted)]">{disclaimer}</p>
 	</Card>
 
 	<Card class="space-y-3">
 		<h2 class="text-xl font-semibold">紧急呼叫</h2>
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-			{#each allContacts(demo).filter((c) => c.isEmergency) as contact (contact.id)}
+			{#each contacts.filter((c) => c.isEmergency) as contact (contact.id)}
 				<a
 					class="flex min-h-14 items-center justify-center rounded-2xl bg-rose-600 text-xl font-semibold text-white"
 					href="tel:{contact.phone}"
@@ -95,13 +117,13 @@
 		{/each}
 	</div>
 
-	<p class="text-sm text-[var(--qx-muted)]">{copy.medical}</p>
+	<p class="text-sm text-[var(--qx-muted)]">{medical}</p>
 </section>
 
 <Modal bind:open={dueOpen} title="该吃药了" dismissible={false}>
 	<p class="text-xl text-[var(--qx-text)]">{due?.title} · {due?.body}</p>
-	<p class="text-base">{REMINDER_DISCLAIMER}</p>
-	<p class="text-sm">{MEDICAL_DISCLAIMER}</p>
+	<p class="text-base">{disclaimer}</p>
+	<p class="text-sm">{medical}</p>
 	{#snippet footer()}
 		<Button
 			class="min-h-14 w-full text-lg"

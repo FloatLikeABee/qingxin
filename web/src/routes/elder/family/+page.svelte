@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Input from '#lib/components/Input.svelte';
 	import Switch from '#lib/components/Switch.svelte';
-	import { loadDemo, saveDemo, type ElderReminder } from '#lib/elder/demo';
+	import type { ElderReminder } from '#lib/elder/demo';
 	import { REMINDER_DISCLAIMER, validateReminderSchedule } from '#lib/elder/schedule';
+	import { getElderStore } from '#lib/elder/store';
 
 	const weekdayLabels = [
 		{ id: 1, label: '一' },
@@ -16,44 +18,56 @@
 		{ id: 7, label: '日' }
 	];
 
-	let demo = $state(loadDemo());
-	let optIn = $state(loadDemo().optInLog);
+	const store = getElderStore();
+	let reminders = $state<ElderReminder[]>([]);
+	let optIn = $state(false);
+	let hydrated = $state(false);
 	let title = $state('降压药');
 	let body = $state('早餐后一粒');
 	let time = $state('08:00');
 	let days = $state([1, 2, 3, 4, 5]);
 	let error = $state('');
 
+	$effect(() => {
+		if (!browser) return;
+		void store.hydrate().then(() => {
+			reminders = store.reminders;
+			optIn = store.optInLog;
+			hydrated = true;
+		});
+	});
+
+	$effect(() => {
+		if (!hydrated) return;
+		const next = optIn;
+		if (next === store.optInLog) return;
+		void store.setOptIn(next);
+	});
+
 	function toggleDay(id: number) {
 		days = days.includes(id) ? days.filter((day) => day !== id) : [...days, id];
 	}
 
-	$effect(() => {
-		persistOptIn(optIn);
-	});
-
-	function addReminder() {
+	async function addReminder() {
 		const parsed = validateReminderSchedule({ time, daysOfWeek: days });
 		if (!parsed.ok) {
 			error = '请填写时间，并至少选择一个星期几。不要使用 cron。';
 			return;
 		}
-		const reminder: ElderReminder = {
-			id: crypto.randomUUID(),
-			title: title.trim() || '提醒',
-			body: body.trim() || '请按时完成',
-			kind: 'medication',
-			time: parsed.time,
-			daysOfWeek: parsed.daysOfWeek,
-			voiceText: `${title}，${body}`
-		};
-		demo = { ...demo, reminders: [...demo.reminders, reminder] };
-		saveDemo(demo);
-		error = '';
-	}
-
-	function persistOptIn(next: boolean) {
-		saveDemo({ ...loadDemo(), optInLog: next });
+		try {
+			await store.createReminder({
+				title: title.trim() || '提醒',
+				body: body.trim() || '请按时完成',
+				kind: 'medication',
+				time: parsed.time,
+				daysOfWeek: parsed.daysOfWeek,
+				voiceText: `${title}，${body}`
+			});
+			reminders = store.reminders;
+			error = '';
+		} catch (err) {
+			error = err instanceof Error ? err.message : '保存失败';
+		}
 	}
 </script>
 
@@ -106,7 +120,7 @@
 		{/if}
 		<Button class="min-h-14 w-full text-lg" onclick={addReminder}>保存提醒</Button>
 		<ul class="space-y-2 text-lg">
-			{#each demo.reminders as item (item.id)}
+			{#each reminders as item (item.id)}
 				<li>{item.time} {item.title}（周 {item.daysOfWeek.join(' / ')}）</li>
 			{/each}
 		</ul>

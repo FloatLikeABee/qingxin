@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Disclaimer from '#lib/wellness/Disclaimer.svelte';
@@ -14,8 +15,13 @@
 		snapshot = store.today(date);
 	}
 
-	function addCup() {
-		store.addWater(250, date);
+	$effect(() => {
+		if (!browser) return;
+		void store.hydrate().then(refresh);
+	});
+
+	async function addCup() {
+		await store.addWater(250, date);
 		refresh();
 	}
 </script>

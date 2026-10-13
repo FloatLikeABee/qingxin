@@ -123,6 +123,30 @@ describe('HttpQingxinApi', () => {
 		expect(calls[0]).toBe('http://127.0.0.1:8080/v1/auth/login');
 	});
 
+	it('keeps a stored session when /v1/me is unreachable', async () => {
+		const storage = memoryStorage({
+			'qingxin.session': JSON.stringify({
+				userId: 'user-1',
+				displayName: 'Ada',
+				email: 'ada@qingxin.app',
+				token: 'access-1',
+				refreshToken: 'refresh-1'
+			})
+		});
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage,
+			fetch: async () => {
+				throw new Error('offline');
+			}
+		});
+		await expect(api.getSession()).resolves.toMatchObject({
+			displayName: 'Ada',
+			token: 'access-1'
+		});
+		expect(storage.getItem('qingxin.session')).toContain('access-1');
+	});
+
 	it('returns null from getSession when nothing is stored', async () => {
 		const api = new HttpQingxinApi({
 			baseUrl: 'http://127.0.0.1:8080',
@@ -450,5 +474,188 @@ describe('HttpQingxinApi', () => {
 		});
 		await deleter.deleteAccount();
 		await expect(deleter.getSession()).resolves.toBeNull();
+	});
+
+	it('posts finance salary, subscription, budgets, elder reminder, job, and water as snake_case', async () => {
+		const calls: { url: string; method: string; body: unknown }[] = [];
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage: memoryStorage({
+				'qingxin.session': JSON.stringify({
+					userId: 'user-1',
+					displayName: 'Ada',
+					email: 'ada@qingxin.app',
+					token: 'access-1',
+					refreshToken: 'refresh-1'
+				})
+			}),
+			fetch: async (input, init) => {
+				const url = String(input);
+				const body = init?.body ? JSON.parse(String(init.body)) : null;
+				calls.push({ url, method: init?.method ?? 'GET', body });
+				if (url.endsWith('/v1/finance/transactions')) {
+					return jsonResponse(201, {
+						id: 'tx-1',
+						amount_fen: 880000,
+						currency: 'CNY',
+						type: 'income',
+						category_id: 'fin-cat-inc-salary',
+						category_name: '工资',
+						note: null,
+						occurred_on: '2026-10-13',
+						client_id: '11111111-1111-4111-8111-111111111111',
+						created_at: '2026-10-13T00:00:00Z',
+						updated_at: '2026-10-13T00:00:00Z'
+					});
+				}
+				if (url.endsWith('/v1/finance/subscriptions')) {
+					return jsonResponse(201, {
+						id: 'sub-1',
+						name: '音乐会员',
+						price_fen: 3000,
+						currency: 'CNY',
+						cycle: 'monthly',
+						next_billing_date: '2026-10-15',
+						remind_days_before: 3,
+						active: true,
+						annual_cost_fen: 36000
+					});
+				}
+				if (url.endsWith('/v1/finance/budgets')) {
+					return jsonResponse(200, {
+						items: [
+							{
+								id: 'b-1',
+								category_id: 'fin-cat-exp-food',
+								category_name: '餐饮',
+								monthly_limit_fen: 100000,
+								alert_threshold_pct: 80,
+								currency: 'CNY'
+							}
+						]
+					});
+				}
+				if (url.endsWith('/v1/jobs')) {
+					return jsonResponse(201, {
+						id: 'job-1',
+						user_id: 'user-1',
+						kind: 'web_push',
+						run_at: '2026-10-13T00:00:00+00:00',
+						status: 'pending',
+						attempts: 0,
+						payload: { title: '该吃药了', body: '早餐后一粒' },
+						created_at: '2026-10-13T00:00:00Z'
+					});
+				}
+				if (url.includes('/reminders') && !url.endsWith('/ack')) {
+					return jsonResponse(201, {
+						id: 'rem-1',
+						elder_user_id: 'user-1',
+						created_by_user_id: 'user-1',
+						title: '降压药',
+						body: '早餐后一粒',
+						kind: 'medication',
+						time: '08:00',
+						days_of_week: [1, 2, 3, 4, 5],
+						timezone: 'Asia/Shanghai',
+						voice_text: '该吃降压药了',
+						active: true
+					});
+				}
+				if (url.endsWith('/v1/wellness/water')) {
+					return jsonResponse(201, {
+						id: 'w-1',
+						logged_on: '2026-10-13',
+						ml: 250,
+						logged_at: '2026-10-13T00:00:00Z'
+					});
+				}
+				return jsonResponse(404, { error: { code: 'not_found', message: 'no' } });
+			}
+		});
+
+		const salary = await api.createFinanceTransaction({
+			amountFen: 880_000,
+			type: 'income',
+			categoryId: 'fin-cat-inc-salary',
+			note: '',
+			occurredOn: '2026-10-13',
+			clientId: '11111111-1111-4111-8111-111111111111'
+		});
+		expect(salary.categoryName).toBe('工资');
+		expect(calls[0]).toMatchObject({
+			url: 'http://127.0.0.1:8080/v1/finance/transactions',
+			method: 'POST',
+			body: {
+				amount_fen: 880000,
+				currency: 'CNY',
+				type: 'income',
+				category_id: 'fin-cat-inc-salary',
+				occurred_on: '2026-10-13',
+				client_id: '11111111-1111-4111-8111-111111111111'
+			}
+		});
+		expect(calls[0]?.body).not.toHaveProperty('note');
+
+		const sub = await api.createFinanceSubscription({
+			name: '音乐会员',
+			priceFen: 3000,
+			cycle: 'monthly',
+			nextBillingDate: '2026-10-15',
+			remindDaysBefore: 3
+		});
+		expect(sub.annualCostFen).toBe(36_000);
+		expect(calls[1]?.body).toMatchObject({
+			name: '音乐会员',
+			price_fen: 3000,
+			next_billing_date: '2026-10-15'
+		});
+
+		const budgets = await api.putFinanceBudgets([
+			{ categoryId: 'fin-cat-exp-food', monthlyLimitFen: 100_000, alertThresholdPct: 80 }
+		]);
+		expect(calls[2]?.method).toBe('PUT');
+		expect(calls[2]?.body).toEqual({
+			items: [
+				{
+					category_id: 'fin-cat-exp-food',
+					monthly_limit_fen: 100000,
+					alert_threshold_pct: 80
+				}
+			]
+		});
+		expect(budgets[0]?.categoryName).toBe('餐饮');
+
+		const reminder = await api.createElderReminder({
+			title: '降压药',
+			body: '早餐后一粒',
+			kind: 'medication',
+			time: '08:00',
+			daysOfWeek: [1, 2, 3, 4, 5],
+			voiceText: '该吃降压药了'
+		});
+		expect(reminder.daysOfWeek).toEqual([1, 2, 3, 4, 5]);
+		expect(calls[3]?.url).toBe('http://127.0.0.1:8080/v1/elder/me/reminders');
+		expect(calls[3]?.body).toMatchObject({
+			days_of_week: [1, 2, 3, 4, 5],
+			voice_text: '该吃降压药了'
+		});
+		expect(calls[3]?.body).not.toHaveProperty('schedule_cron');
+
+		const job = await api.createJob({
+			runAt: '2026-10-13T00:00:00.000Z',
+			title: '该吃药了',
+			body: '早餐后一粒'
+		});
+		expect(calls[4]?.body).toEqual({
+			kind: 'web_push',
+			run_at: '2026-10-13T00:00:00+00:00',
+			payload: { title: '该吃药了', body: '早餐后一粒' }
+		});
+		expect(job.kind).toBe('web_push');
+
+		const water = await api.addWellnessWater(250, '2026-10-13');
+		expect(calls[5]?.body).toEqual({ ml: 250, logged_on: '2026-10-13' });
+		expect(water.ml).toBe(250);
 	});
 });

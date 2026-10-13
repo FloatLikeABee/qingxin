@@ -109,6 +109,29 @@
 						const payload = op.payload as { toolId: ToolId; favourite: boolean };
 						await getApi().setToolFavourite(payload.toolId, payload.favourite);
 					}
+					if (op.type === 'finance_transaction_create') {
+						const payload = op.payload as {
+							amountFen: number;
+							type: 'income' | 'expense';
+							categoryId: string;
+							note?: string | null;
+							occurredOn: string;
+							clientId: string;
+						};
+						await getApi().createFinanceTransaction(payload);
+					}
+					if (op.type === 'wellness_water_create') {
+						const payload = op.payload as { ml: number; loggedOn: string };
+						await getApi().addWellnessWater(payload.ml, payload.loggedOn);
+					}
+					if (op.type === 'elder_reminder_ack') {
+						const payload = op.payload as {
+							id: string;
+							occurrenceAt: string;
+							elderId?: string;
+						};
+						await getApi().ackElderReminder(payload.id, payload.occurrenceAt, payload.elderId);
+					}
 				} catch (error) {
 					if (error instanceof ApiError && error.code === 'conflict') return;
 					throw error;

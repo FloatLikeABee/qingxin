@@ -14,7 +14,11 @@ import type { QingxinApi } from './types';
 let singleton: QingxinApi | undefined;
 
 export function createApi(env?: { PUBLIC_API_URL?: unknown }): QingxinApi {
-	const url = readPublicApiUrl(env ?? (import.meta.env as { PUBLIC_API_URL?: unknown }));
+	const url = readPublicApiUrl(
+		env ?? {
+			PUBLIC_API_URL: import.meta.env.PUBLIC_API_URL
+		}
+	);
 	return url ? new HttpQingxinApi({ baseUrl: url }) : new MockQingxinApi();
 }
 

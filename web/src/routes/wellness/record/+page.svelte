@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Input from '#lib/components/Input.svelte';
@@ -15,33 +16,44 @@
 	let note = $state('');
 	let startDate = $state(shanghaiToday());
 	let symptoms = $state('');
-	let consent = $state(store.cycleConsent);
+	let consent = $state(false);
+	let hydrated = $state(false);
 	let message = $state('');
-	let starts = $state(store.cycles.map((row) => row.startDate));
+	let starts = $state<string[]>([]);
 
 	$effect(() => {
-		if (consent !== store.cycleConsent) {
-			store.setCycleConsent(consent);
+		if (!browser) return;
+		void store.hydrate().then(() => {
+			consent = store.cycleConsent;
 			starts = store.cycles.map((row) => row.startDate);
-			if (!consent) message = '已关闭经期记录并删除本地周期。';
-		}
+			hydrated = true;
+		});
 	});
 
-	function saveSleep() {
+	$effect(() => {
+		if (!hydrated) return;
+		if (consent === store.cycleConsent) return;
+		void store.setCycleConsent(consent).then(() => {
+			starts = store.cycles.map((row) => row.startDate);
+			if (!consent) message = '已关闭经期记录并删除本地周期。';
+		});
+	});
+
+	async function saveSleep() {
 		const wake = new Date();
 		const sleep = new Date(wake.getTime() - 8 * 3600_000);
-		store.addSleep({
+		await store.addSleep({
 			sleepAt: sleep.toISOString(),
 			wakeAt: wake.toISOString(),
 			quality: Number(quality),
-			note
+			note: note.trim() || undefined
 		});
 		message = '已记下睡眠。';
 	}
 
-	function saveCycle() {
+	async function saveCycle() {
 		try {
-			store.addCycle({ startDate, symptoms });
+			await store.addCycle({ startDate, symptoms: symptoms.trim() || undefined });
 			starts = store.cycles.map((row) => row.startDate);
 			message = '已记下周期。';
 		} catch {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
@@ -9,19 +10,24 @@
 
 	const store = getWellnessStore();
 	const today = shanghaiToday();
-	let plans = $state<PlanLog[]>([...store.plans]);
+	let plans = $state<PlanLog[]>([]);
 
 	function refresh() {
 		plans = [...store.plans];
 	}
 
-	function start(kind: 'water_21' | 'sleep_21') {
-		store.createPlan(kind);
+	$effect(() => {
+		if (!browser) return;
+		void store.hydrate().then(refresh);
+	});
+
+	async function start(kind: 'water_21' | 'sleep_21') {
+		await store.createPlan(kind);
 		refresh();
 	}
 
-	function checkin(id: string) {
-		store.checkin(id, today);
+	async function checkin(id: string) {
+		await store.checkin(id, today);
 		refresh();
 	}
 </script>
