@@ -1,0 +1,32 @@
+{
+	"name": "轻心",
+	"short_name": "轻心",
+	"description": "把日子过轻一点。工具辅助与信息展示，非医疗、金融或法律建议。",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "portrait",
+	"background_color": "#FFFFFF",
+	"theme_color": "#3B82F6",
+	"lang": "zh-CN",
+	"icons": [
+		{
+			"src": "/icons/icon-192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icons/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icons/icon-maskable-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "maskable"
+		}
+	]
+}
