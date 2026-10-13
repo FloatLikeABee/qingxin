@@ -7,7 +7,9 @@
 - HTTP contract: [`api/openapi.yaml`](api/openapi.yaml)
 - AI gateway: [`api/crates/ai-gateway`](api/crates/ai-gateway) (issue #3)
 
-Issue tracker: [T1 Foundation](https://github.com/FloatLikeABee/qingxin/issues/4), [T1 AI gateway](https://github.com/FloatLikeABee/qingxin/issues/3), [T2 frontend shell](https://github.com/FloatLikeABee/qingxin/issues/1).
+Issue tracker: [T1 Foundation](https://github.com/FloatLikeABee/qingxin/issues/4), [T1 AI gateway](https://github.com/FloatLikeABee/qingxin/issues/3), [T2 frontend shell](https://github.com/FloatLikeABee/qingxin/issues/1), [M1 情绪日记+冥想](https://github.com/FloatLikeABee/qingxin/issues/9).
+
+M1 lives at `/modules/mood` (web) and `/v1/mood/*` plus `/v1/meditation/*` (API). Diary notes use T1 AES-GCM. AI insight uses the `AiGateway` seam and falls back to a deterministic mock when the gateway is unconfigured.
 
 ## API
 
