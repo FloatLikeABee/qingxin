@@ -7,7 +7,7 @@
 - HTTP contract: [`api/openapi.yaml`](api/openapi.yaml)
 - AI gateway: [`api/crates/ai-gateway`](api/crates/ai-gateway) (issue #3)
 
-Issue tracker: [T1 Foundation](https://github.com/FloatLikeABee/qingxin/issues/4), [T1 AI gateway](https://github.com/FloatLikeABee/qingxin/issues/3), [T2 frontend shell](https://github.com/FloatLikeABee/qingxin/issues/1), [M1 情绪日记+冥想](https://github.com/FloatLikeABee/qingxin/issues/9), [M10 求职副业](https://github.com/FloatLikeABee/qingxin/issues/13), [M7 健康](https://github.com/FloatLikeABee/qingxin/issues/18), [M4 本地生活](https://github.com/FloatLikeABee/qingxin/issues/16), [M8 学习打卡](https://github.com/FloatLikeABee/qingxin/issues/19).
+Issue tracker: [T1 Foundation](https://github.com/FloatLikeABee/qingxin/issues/4), [T1 AI gateway](https://github.com/FloatLikeABee/qingxin/issues/3), [T2 frontend shell](https://github.com/FloatLikeABee/qingxin/issues/1), [M1 情绪日记+冥想](https://github.com/FloatLikeABee/qingxin/issues/9), [M4 本地生活](https://github.com/FloatLikeABee/qingxin/issues/16), [M7 健康](https://github.com/FloatLikeABee/qingxin/issues/18), [M8 学习打卡](https://github.com/FloatLikeABee/qingxin/issues/19), [M9 内容创作](https://github.com/FloatLikeABee/qingxin/issues/23), [M10 求职副业](https://github.com/FloatLikeABee/qingxin/issues/13).
 
 M1 lives at `/modules/mood` (web) and `/v1/mood/*` plus `/v1/meditation/*` (API). Diary notes use T1 AES-GCM. AI insight uses the `AiGateway` seam and falls back to a deterministic mock when the gateway is unconfigured.
 
@@ -16,6 +16,8 @@ M10 lives at `/modules/hustle` (web) and `/v1/hustle/*` (API). Resume optimize, 
 M4 lives at `/modules/local` (web) and `/v1/local/*` (API). The map provider is a `stub`/`osm` seam; CI and offline use the SVG stub so no paid keys are required. Demo services are seeded.
 
 M8 lives at `/modules/study` (web) and `/v1/study/*` (API). Flashcard faces and note Markdown use T1 AES-GCM. Classify uses the `AiGateway` seam. The focus timer stays in the browser.
+
+M9 lives at `/modules/create` (web) and `/v1/create/*` (API). Titles, polish, generate, and PPT outlines use the same `AiGateway` seam with a deterministic mock fallback. The editor island stays dark; PPTX export is generated in the browser.
 
 ## API
 

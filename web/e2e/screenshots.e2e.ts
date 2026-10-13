@@ -39,6 +39,11 @@ for (const view of views) {
 			await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 			await expect(page.getByRole('heading', { name: '求职概览' })).toBeVisible();
 			await expect(page.getByText('轻心实验室').first()).toBeVisible();
+			await expect(page.getByRole('heading', { name: '内容创作' })).toBeVisible();
+			await expect(page.getByText('小红书').first()).toBeVisible();
+			await expect(page.getByText('公众号').first()).toBeVisible();
+			await expect(page.getByText('抖音').first()).toBeVisible();
+			await expect(page.getByText('周报').first()).toBeVisible();
 			if (view.width < 800) {
 				await expect(page.locator('nav.fixed')).toBeVisible();
 			} else {
@@ -136,6 +141,35 @@ for (const view of views) {
 				}
 				await page.screenshot({
 					path: `screenshots/local-${screen.key}-${view.name}-${theme}.png`,
+					fullPage: true
+				});
+			});
+		}
+	}
+}
+
+const createScreens = [
+	{ key: 'editor', tab: '创作', ready: 'IDE 深色编辑区' },
+	{ key: 'templates', tab: '模板', ready: '一键使用' },
+	{ key: 'works', tab: '作品', ready: '版本历史' }
+] as const;
+
+for (const view of views) {
+	for (const theme of themes) {
+		for (const screen of createScreens) {
+			test(`create ${screen.key} ${view.name} ${theme}`, async ({ page }) => {
+				await page.setViewportSize({ width: view.width, height: view.height });
+				await boot(page, theme);
+				await openReady(page, '/modules/create');
+				await expect(page.getByRole('heading', { name: '内容创作' })).toBeVisible();
+				await expect(page.getByRole('button', { name: '生成' })).toBeVisible();
+				await page.getByRole('tab', { name: screen.tab }).click();
+				await expect(page.getByText(screen.ready).first()).toBeVisible();
+				if (view.width < 800) {
+					await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+				}
+				await page.screenshot({
+					path: `screenshots/create-${screen.key}-${view.name}-${theme}.png`,
 					fullPage: true
 				});
 			});

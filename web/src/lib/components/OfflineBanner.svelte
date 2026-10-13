@@ -93,6 +93,17 @@
 						};
 						await getApi().createLocalCorrection(payload.serviceId, payload);
 					}
+					if (op.type === 'create_work_create') {
+						const payload = op.payload as {
+							id?: string;
+							platform: '小红书' | '公众号' | '抖音' | '周报';
+							title?: string;
+							promptParams?: Record<string, unknown>;
+							generatedContent: string;
+							finalContent?: string;
+						};
+						await getApi().createCreation(payload);
+					}
 				} catch (error) {
 					if (error instanceof ApiError && error.code === 'conflict') return;
 					throw error;

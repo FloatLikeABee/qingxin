@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod auth;
 pub mod config;
+pub mod create;
 pub mod crypto;
 pub mod db;
 pub mod elder;
@@ -10,6 +11,7 @@ pub mod hustle;
 pub mod local;
 pub mod moderation;
 pub mod mood;
+pub mod pets;
 pub mod push;
 pub mod routes;
 pub mod scheduler;
