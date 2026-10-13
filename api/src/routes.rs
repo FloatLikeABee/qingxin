@@ -50,6 +50,7 @@ pub fn router() -> Router<AppState> {
         .merge(crate::elder::router())
         .merge(crate::mood::routes())
         .merge(crate::hustle::routes())
+        .merge(crate::local::routes())
 }
 
 #[derive(FromRow)]
@@ -558,6 +559,9 @@ async fn export_data(
     let applications = crate::hustle::export_applications(&state, &user.user_id).await?;
     let resumes = crate::hustle::export_resumes(&state, &user.user_id).await?;
     let side_hustles = crate::hustle::export_side_hustles(&state, &user.user_id).await?;
+    let local_reviews = crate::local::export_reviews(&state, &user.user_id).await?;
+    let local_services = crate::local::export_services(&state, &user.user_id).await?;
+    let local_corrections = crate::local::export_corrections(&state, &user.user_id).await?;
     Ok(Json(json!({
         "exported_at": now_rfc3339(),
         "user": profile.public(&state.crypto),
@@ -571,6 +575,9 @@ async fn export_data(
         "applications": applications,
         "resumes": resumes,
         "side_hustles": side_hustles,
+        "local_reviews": local_reviews,
+        "local_services": local_services,
+        "local_corrections": local_corrections,
     })))
 }
 
