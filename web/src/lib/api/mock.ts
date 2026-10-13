@@ -33,12 +33,36 @@ import {
 	mockSuggestions
 } from '../hustle/ai';
 import { validateResumeContent, type ResumeContent } from '../hustle/resume';
+import {
+	DISCLAIMER as CREATE_DISCLAIMER,
+	mockGenerate,
+	mockOutline,
+	mockPolish,
+	mockTitles
+} from '../create/ai';
+import {
+	filterTemplates,
+	INSPIRATION,
+	isCreatePlatform,
+	isCreateTone,
+	isSnippetKind,
+	TEMPLATES,
+	type CreateLength,
+	type CreatePlatform,
+	type CreateTone,
+	type SnippetKind
+} from '../create/catalog';
 import { BEDTIME_STORIES, SOUND_PRESETS } from '../mood/catalog';
 import { DISCLAIMER, mockInsight } from '../mood/insight';
 import { aggregateTrends, type MoodLog } from '../mood/trends';
 import { validateCheckIn } from '../mood/validate';
 import {
 	ApiError,
+	type CreateAiText,
+	type CreateOutlineResult,
+	type CreateSnippet,
+	type CreateTitles,
+	type Creation,
 	type ExportPayload,
 	type HustleAiText,
 	type MeditationKind,
@@ -61,6 +85,8 @@ const SESSIONS_KEY = 'qingxin.meditationSessions';
 const APPS_KEY = 'qingxin.hustleApplications';
 const RESUMES_KEY = 'qingxin.hustleResumes';
 const HUSTLES_KEY = 'qingxin.sideHustles';
+const CREATIONS_KEY = 'qingxin.creations';
+const SNIPPETS_KEY = 'qingxin.createSnippets';
 
 const KINDS: MeditationKind[] = ['breathe', 'noise', 'story', 'timer'];
 
@@ -135,6 +161,8 @@ function forgetUserLists(
 	apps: Map<string, Application[]>,
 	resumes: Map<string, ResumeVersion[]>,
 	hustles: Map<string, SideHustle[]>,
+	creations: Map<string, Creation[]>,
+	snippets: Map<string, CreateSnippet[]>,
 	userId: string
 ) {
 	logs.delete(userId);
@@ -142,7 +170,17 @@ function forgetUserLists(
 	apps.delete(userId);
 	resumes.delete(userId);
 	hustles.delete(userId);
-	for (const key of [LOGS_KEY, SESSIONS_KEY, APPS_KEY, RESUMES_KEY, HUSTLES_KEY]) {
+	creations.delete(userId);
+	snippets.delete(userId);
+	for (const key of [
+		LOGS_KEY,
+		SESSIONS_KEY,
+		APPS_KEY,
+		RESUMES_KEY,
+		HUSTLES_KEY,
+		CREATIONS_KEY,
+		SNIPPETS_KEY
+	]) {
 		const stored = readUserMap(key);
 		delete stored[userId];
 		writeUserMap(key, stored);
@@ -167,6 +205,44 @@ function seedResumes(userId: string): ResumeVersion[] {
 function requireSession(session: Session | null): Session {
 	if (!session) throw new ApiError('unauthenticated', '请先登录');
 	return session;
+}
+
+function seedCreations(userId: string): Creation[] {
+	const now = new Date().toISOString();
+	return [
+		{
+			id: `seed-create-${userId}`,
+			platform: '小红书',
+			title: '阳台种菜',
+			promptParams: { topic: '阳台种菜', tone: '更专业', length: '短' },
+			generatedContent: '【小红书·更专业·短】阳台种菜：把日常写成可收藏的日常。此为示意文案。',
+			finalContent: '【小红书·更专业·短】阳台种菜：把日常写成可收藏的日常。此为示意文案。',
+			versions: [
+				{
+					at: now,
+					kind: 'generate',
+					content: '【小红书·更专业·短】阳台种菜：把日常写成可收藏的日常。此为示意文案。'
+				}
+			],
+			createdAt: now,
+			updatedAt: now
+		}
+	];
+}
+
+function seedSnippets(userId: string): CreateSnippet[] {
+	const now = new Date().toISOString();
+	return [
+		{
+			id: `seed-snip-${userId}`,
+			content: '把结论写在第一句。',
+			kind: '金句',
+			tags: ['开头'],
+			usageCount: 2,
+			createdAt: now,
+			updatedAt: now
+		}
+	];
 }
 
 function seedLogs(userId: string): MoodLog[] {
@@ -197,6 +273,8 @@ export class MockQingxinApi implements QingxinApi {
 	#apps = new Map<string, Application[]>();
 	#resumes = new Map<string, ResumeVersion[]>();
 	#hustles = new Map<string, SideHustle[]>();
+	#creations = new Map<string, Creation[]>();
+	#snippets = new Map<string, CreateSnippet[]>();
 	#services: LocalService[] = SEED_SERVICES.map((item) => ({ ...item, tags: [...item.tags] }));
 	#reviews: LocalReview[] = SEED_REVIEWS.map((item) => ({ ...item }));
 	#corrections: LocalCorrection[] = [];
@@ -207,12 +285,18 @@ export class MockQingxinApi implements QingxinApi {
 		hydrateUserList(this.#hustles, HUSTLES_KEY, userId, SEED_SIDE_HUSTLES);
 	}
 
+	#hydrateCreate(userId: string) {
+		hydrateUserList(this.#creations, CREATIONS_KEY, userId, seedCreations(userId));
+		hydrateUserList(this.#snippets, SNIPPETS_KEY, userId, seedSnippets(userId));
+	}
+
 	async getSession(): Promise<Session | null> {
 		this.#session ??= readStoredSession();
 		if (this.#session) {
 			hydrateUserList(this.#logs, LOGS_KEY, this.#session.userId, seedLogs(this.#session.userId));
 			hydrateUserList(this.#sessions, SESSIONS_KEY, this.#session.userId, []);
 			this.#hydrateHustle(this.#session.userId);
+			this.#hydrateCreate(this.#session.userId);
 		}
 		return this.#session;
 	}
@@ -234,6 +318,7 @@ export class MockQingxinApi implements QingxinApi {
 		hydrateUserList(this.#logs, LOGS_KEY, this.#session.userId, seedLogs(this.#session.userId));
 		hydrateUserList(this.#sessions, SESSIONS_KEY, this.#session.userId, []);
 		this.#hydrateHustle(this.#session.userId);
+		this.#hydrateCreate(this.#session.userId);
 		return this.#session;
 	}
 
@@ -253,6 +338,8 @@ export class MockQingxinApi implements QingxinApi {
 		persistUserList(this.#apps, APPS_KEY, this.#session.userId, []);
 		persistUserList(this.#resumes, RESUMES_KEY, this.#session.userId, []);
 		persistUserList(this.#hustles, HUSTLES_KEY, this.#session.userId, []);
+		persistUserList(this.#creations, CREATIONS_KEY, this.#session.userId, []);
+		persistUserList(this.#snippets, SNIPPETS_KEY, this.#session.userId, []);
 		return this.#session;
 	}
 
@@ -280,7 +367,9 @@ export class MockQingxinApi implements QingxinApi {
 				sideHustles: [...(this.#hustles.get(session.userId) ?? [])],
 				localReviews: this.#reviews.filter((item) => item.userId === session.userId),
 				localServices: this.#services.filter((item) => item.createdBy === session.userId),
-				localCorrections: this.#corrections.filter((item) => item.userId === session.userId)
+				localCorrections: this.#corrections.filter((item) => item.userId === session.userId),
+				creations: [...(this.#creations.get(session.userId) ?? [])],
+				snippets: [...(this.#snippets.get(session.userId) ?? [])]
 			}
 		};
 	}
@@ -288,7 +377,16 @@ export class MockQingxinApi implements QingxinApi {
 	async deleteAccount(): Promise<void> {
 		if (this.#session) {
 			const userId = this.#session.userId;
-			forgetUserLists(this.#logs, this.#sessions, this.#apps, this.#resumes, this.#hustles, userId);
+			forgetUserLists(
+				this.#logs,
+				this.#sessions,
+				this.#apps,
+				this.#resumes,
+				this.#hustles,
+				this.#creations,
+				this.#snippets,
+				userId
+			);
 			this.#reviews = this.#reviews.filter((item) => item.userId !== userId);
 			this.#corrections = this.#corrections.filter((item) => item.userId !== userId);
 			this.#services = this.#services.filter((item) => item.createdBy !== userId);
@@ -784,6 +882,236 @@ export class MockQingxinApi implements QingxinApi {
 		};
 		this.#corrections = [row, ...this.#corrections];
 		return row;
+	}
+
+	async listCreations(): Promise<Creation[]> {
+		const session = requireSession(this.#session);
+		this.#hydrateCreate(session.userId);
+		return [...(this.#creations.get(session.userId) ?? [])];
+	}
+
+	async createCreation(input: {
+		id?: string;
+		platform: CreatePlatform;
+		title?: string;
+		promptParams?: Record<string, unknown>;
+		generatedContent: string;
+		finalContent?: string;
+	}): Promise<Creation> {
+		const session = requireSession(this.#session);
+		if (!isCreatePlatform(input.platform)) {
+			throw new ApiError('invalid_request', '未知平台');
+		}
+		const generated = input.generatedContent.trim();
+		if (!generated) throw new ApiError('invalid_request', '请先生成文案');
+		this.#hydrateCreate(session.userId);
+		const list = this.#creations.get(session.userId) ?? [];
+		const id = input.id ?? crypto.randomUUID();
+		const existing = list.find((item) => item.id === id);
+		if (existing) return existing;
+		const now = new Date().toISOString();
+		const finalContent = input.finalContent?.trim() || generated;
+		const topic =
+			typeof input.promptParams?.topic === 'string' ? input.promptParams.topic : undefined;
+		const versions = [{ at: now, kind: 'generate', content: generated }];
+		if (finalContent !== generated) {
+			versions.push({ at: now, kind: 'edit', content: finalContent });
+		}
+		const work: Creation = {
+			id,
+			platform: input.platform,
+			title: input.title?.trim() || topic,
+			promptParams: input.promptParams,
+			generatedContent: generated,
+			finalContent,
+			versions,
+			createdAt: now,
+			updatedAt: now
+		};
+		persistUserList(this.#creations, CREATIONS_KEY, session.userId, [work, ...list]);
+		return work;
+	}
+
+	async getCreation(id: string): Promise<Creation> {
+		const session = requireSession(this.#session);
+		this.#hydrateCreate(session.userId);
+		const found = (this.#creations.get(session.userId) ?? []).find((item) => item.id === id);
+		if (!found) throw new ApiError('not_found', '未找到作品');
+		return found;
+	}
+
+	async patchCreation(
+		id: string,
+		patch: {
+			title?: string;
+			generatedContent?: string;
+			finalContent?: string;
+			promptParams?: Record<string, unknown>;
+		}
+	): Promise<Creation> {
+		const session = requireSession(this.#session);
+		this.#hydrateCreate(session.userId);
+		const list = this.#creations.get(session.userId) ?? [];
+		const index = list.findIndex((item) => item.id === id);
+		if (index < 0) throw new ApiError('not_found', '未找到作品');
+		const now = new Date().toISOString();
+		const current = { ...list[index], versions: [...list[index].versions] };
+		if (patch.title !== undefined) current.title = patch.title.trim() || null;
+		if (patch.promptParams) current.promptParams = patch.promptParams;
+		if (patch.generatedContent !== undefined) {
+			const text = patch.generatedContent.trim();
+			if (!text) throw new ApiError('invalid_request', '请填写生成稿');
+			if (text !== current.generatedContent) {
+				current.generatedContent = text;
+				current.versions.push({ at: now, kind: 'generate', content: text });
+			}
+		}
+		if (patch.finalContent !== undefined) {
+			const text = patch.finalContent.trim();
+			if (!text) throw new ApiError('invalid_request', '请填写定稿');
+			if (text !== current.finalContent) {
+				current.finalContent = text;
+				current.versions.push({ at: now, kind: 'edit', content: text });
+			}
+		}
+		current.updatedAt = now;
+		const next = [...list];
+		next[index] = current;
+		persistUserList(this.#creations, CREATIONS_KEY, session.userId, next);
+		return current;
+	}
+
+	async listCreateTemplates(platform?: CreatePlatform) {
+		requireSession(this.#session);
+		if (platform && !isCreatePlatform(platform)) {
+			throw new ApiError('invalid_request', '未知平台');
+		}
+		return filterTemplates(TEMPLATES, platform);
+	}
+
+	async listCreateInspiration() {
+		requireSession(this.#session);
+		return [...INSPIRATION];
+	}
+
+	async generateCreateCopy(input: {
+		platform: CreatePlatform;
+		topic: string;
+		keywords?: string[];
+		tone?: CreateTone;
+		length?: CreateLength;
+		templateId?: string;
+	}): Promise<CreateAiText> {
+		requireSession(this.#session);
+		if (!isCreatePlatform(input.platform)) {
+			throw new ApiError('invalid_request', '未知平台');
+		}
+		if (!input.topic.trim()) throw new ApiError('invalid_request', '请填写主题');
+		const tone = input.tone ?? '更专业';
+		const length = input.length ?? '中';
+		if (!isCreateTone(tone)) throw new ApiError('invalid_request', '未知语气');
+		return {
+			text: mockGenerate({
+				platform: input.platform,
+				topic: input.topic.trim(),
+				keywords: input.keywords ?? [],
+				tone,
+				length
+			}),
+			disclaimer: CREATE_DISCLAIMER,
+			source: 'mock'
+		};
+	}
+
+	async generateCreateTitles(input: {
+		topic: string;
+		platform?: CreatePlatform;
+	}): Promise<CreateTitles> {
+		requireSession(this.#session);
+		if (!input.topic.trim()) throw new ApiError('invalid_request', '请填写主题');
+		if (input.platform && !isCreatePlatform(input.platform)) {
+			throw new ApiError('invalid_request', '未知平台');
+		}
+		return {
+			titles: mockTitles(input.topic.trim()),
+			disclaimer: CREATE_DISCLAIMER,
+			source: 'mock'
+		};
+	}
+
+	async polishCreateCopy(input: { text: string; tone: CreateTone }): Promise<CreateAiText> {
+		requireSession(this.#session);
+		if (!input.text.trim()) throw new ApiError('invalid_request', '请填写原文');
+		if (!isCreateTone(input.tone)) throw new ApiError('invalid_request', '未知语气');
+		return {
+			text: mockPolish(input.text.trim(), input.tone),
+			disclaimer: CREATE_DISCLAIMER,
+			source: 'mock'
+		};
+	}
+
+	async generateCreateOutline(input: { topic: string }): Promise<CreateOutlineResult> {
+		requireSession(this.#session);
+		if (!input.topic.trim()) throw new ApiError('invalid_request', '请填写主题');
+		const outline = mockOutline(input.topic.trim());
+		return {
+			...outline,
+			markdown: outline.markdown ?? '',
+			disclaimer: CREATE_DISCLAIMER,
+			source: 'mock'
+		};
+	}
+
+	async listCreateSnippets(): Promise<CreateSnippet[]> {
+		const session = requireSession(this.#session);
+		this.#hydrateCreate(session.userId);
+		return [...(this.#snippets.get(session.userId) ?? [])];
+	}
+
+	async createSnippet(input: {
+		id?: string;
+		content: string;
+		kind?: SnippetKind;
+		tags?: string[];
+	}): Promise<CreateSnippet> {
+		const session = requireSession(this.#session);
+		const content = input.content.trim();
+		if (!content) throw new ApiError('invalid_request', '请填写片段');
+		const kind = input.kind ?? '金句';
+		if (!isSnippetKind(kind)) throw new ApiError('invalid_request', '未知类型');
+		this.#hydrateCreate(session.userId);
+		const list = this.#snippets.get(session.userId) ?? [];
+		const id = input.id ?? crypto.randomUUID();
+		const existing = list.find((item) => item.id === id);
+		if (existing) return existing;
+		const now = new Date().toISOString();
+		const row: CreateSnippet = {
+			id,
+			content,
+			kind,
+			tags: input.tags ?? [],
+			usageCount: 0,
+			createdAt: now,
+			updatedAt: now
+		};
+		persistUserList(this.#snippets, SNIPPETS_KEY, session.userId, [row, ...list]);
+		return row;
+	}
+
+	async useSnippet(id: string): Promise<CreateSnippet> {
+		const session = requireSession(this.#session);
+		this.#hydrateCreate(session.userId);
+		const list = this.#snippets.get(session.userId) ?? [];
+		const index = list.findIndex((item) => item.id === id);
+		if (index < 0) throw new ApiError('not_found', '未找到片段');
+		const next = [...list];
+		next[index] = {
+			...next[index],
+			usageCount: next[index].usageCount + 1,
+			updatedAt: new Date().toISOString()
+		};
+		persistUserList(this.#snippets, SNIPPETS_KEY, session.userId, next);
+		return next[index];
 	}
 }
 

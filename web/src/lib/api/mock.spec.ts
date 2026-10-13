@@ -195,6 +195,51 @@ describe('MockQingxinApi', () => {
 		expect(ideas.source).toBe('mock');
 	});
 
+	it('covers create studio generate titles polish outline and snippets', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		await expect(
+			api.generateCreateCopy({ platform: '微博' as '小红书', topic: 'x' })
+		).rejects.toMatchObject({ code: 'invalid_request' });
+		const gen = await api.generateCreateCopy({
+			platform: '小红书',
+			topic: '阳台种菜',
+			keywords: ['番茄'],
+			tone: '更幽默',
+			length: '短'
+		});
+		expect(gen.source).toBe('mock');
+		expect(gen.disclaimer).toContain('不构成');
+		expect(gen.text).toContain('阳台种菜');
+		const titles = await api.generateCreateTitles({ topic: '阳台种菜' });
+		expect(titles.titles).toHaveLength(10);
+		const polish = await api.polishCreateCopy({ text: '今天写周报', tone: '更幽默' });
+		expect(polish.text).toContain('今天写周报');
+		const outline = await api.generateCreateOutline({ topic: '季度复盘' });
+		expect(outline.slides.length).toBeGreaterThanOrEqual(3);
+		expect(outline.markdown).toContain('季度复盘');
+		const templates = await api.listCreateTemplates('小红书');
+		expect(templates.every((item) => item.platform === '小红书')).toBe(true);
+		const work = await api.createCreation({
+			platform: '周报',
+			promptParams: { topic: '本周进展' },
+			generatedContent: '进展一览',
+			finalContent: '润色稿'
+		});
+		expect(work.finalContent).toBe('润色稿');
+		expect(work.versions).toHaveLength(2);
+		const patched = await api.patchCreation(work.id, { finalContent: '定稿' });
+		expect(patched.versions.length).toBeGreaterThan(work.versions.length);
+		const same = await api.patchCreation(work.id, { finalContent: '定稿' });
+		expect(same.versions).toHaveLength(patched.versions.length);
+		const snip = await api.createSnippet({ content: '先写结论。', kind: '过渡' });
+		const used = await api.useSnippet(snip.id);
+		expect(used.usageCount).toBe(1);
+		const exported = await api.exportUserData();
+		expect(exported.data.creations?.some((item) => item.id === work.id)).toBe(true);
+		expect(exported.data.snippets?.some((item) => item.id === snip.id)).toBe(true);
+	});
+
 	it('lists seeded 宠物医院 and sorts by rating', async () => {
 		const api = new MockQingxinApi();
 		await api.login('demo@qingxin.app', 'qingxin');

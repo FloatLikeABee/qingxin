@@ -10,6 +10,7 @@
 	import { funnelStages, type Application } from '#lib/hustle/funnel';
 	import { statusTone } from '#lib/hustle/status';
 	import { todayTodos } from '#lib/hustle/todos';
+	import { INSPIRATION, PLATFORMS } from '#lib/create/catalog';
 	import { MODULES } from '#lib/modules';
 
 	const hour = new Date().getHours();
@@ -75,6 +76,37 @@
 				{/each}
 			</ul>
 		{/if}
+	</Card>
+
+	<Card>
+		<div class="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
+			<div>
+				<h2 class="text-lg font-semibold">内容创作</h2>
+				<p class="mt-1 text-sm text-[var(--qx-muted)]">选一个场景，把灵感写成可发出去的草稿。</p>
+			</div>
+			<Button href="/modules/create" variant="secondary" class="shrink-0 whitespace-nowrap"
+				>打开内容创作</Button
+			>
+		</div>
+		<div class="mt-4 grid gap-2 sm:grid-cols-2">
+			{#each PLATFORMS as item (item)}
+				<a
+					href="/modules/create?platform={encodeURIComponent(item)}"
+					class="min-h-11 rounded-2xl bg-[var(--qx-surface)] px-4 py-3"
+				>
+					<p class="font-medium">{item}</p>
+					<p class="text-sm text-[var(--qx-muted)]">平台模板与预览</p>
+				</a>
+			{/each}
+		</div>
+		<ul class="mt-4 space-y-2">
+			{#each INSPIRATION as item (item.id)}
+				<li class="rounded-2xl bg-[var(--qx-surface)] px-4 py-3">
+					<p class="font-medium">{item.topic}</p>
+					<p class="text-sm text-[var(--qx-muted)]">{item.platform} · {item.hook}</p>
+				</li>
+			{/each}
+		</ul>
 	</Card>
 
 	<div class="grid gap-3 sm:grid-cols-2">

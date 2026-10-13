@@ -81,3 +81,10 @@ In dark appearance, the local-life map SHALL use a dark tile/background treatmen
 #### Scenario: Dark card border
 - **WHEN** the user selects 深色 and a service card is shown
 - **THEN** the card uses the local-life bright-border class
+
+### Requirement: Create editor ignores light tokens
+The content-studio editor island SHALL keep the dark IDE palette even when the document root does not have class `dark`. Surrounding chrome SHALL continue to use the existing four theme modes. Platform preview frames MAY use a light mock surface.
+
+#### Scenario: Light chrome, dark editor
+- **WHEN** the user selects 浅色 and opens the 创作 tab
+- **THEN** the module chrome uses light tokens and the editor island background is `#0F172A`
