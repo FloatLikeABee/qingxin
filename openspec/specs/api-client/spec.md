@@ -65,15 +65,19 @@ The TypeScript `QingxinApi` interface SHALL expose methods to list/create/update
 - **THEN** it rejects with a typed `invalid_request` error
 
 ### Requirement: Toolbox operations on the typed client
-The TypeScript `QingxinApi` interface SHALL expose methods to list tools (with recent and favourites), toggle favourite, list tasks filtered by tool, and run a tool as an async stream of deltas plus a final task. Screens SHALL depend on that interface, not a concrete HTTP client. Export SHALL include `aiTasks` and `aiTemplates`.
+The TypeScript `QingxinApi` interface SHALL expose methods to list tools (with recent and favourites), toggle favourite, list tasks filtered by tool, and run a tool as an async stream of deltas plus a final task. `ToolRunInput` MAY include an `AbortSignal` that implementations MUST honour and MUST NOT serialise onto the wire. Screens SHALL depend on that interface, not a concrete HTTP client. Export SHALL include `aiTasks` and `aiTemplates`.
 
 #### Scenario: Interface covers M5 operations
 - **WHEN** a caller uses the API client
-- **THEN** it can list eight tools, favourite one, run summary, and list tasks by tool
+- **THEN** it can list eight tools, favourite one, run summary, abort a run, and list tasks by tool
 
 #### Scenario: Mock enforces tool catalog
 - **WHEN** the mock client runs tool id `translate`
 - **THEN** it rejects with a typed `invalid_request` error
+
+#### Scenario: Mock honours abort
+- **WHEN** the mock `runTool` is iterating and the input signal aborts
+- **THEN** it stops yielding further deltas
 
 ### Requirement: HTTP implementation
 The system SHALL provide an `HttpQingxinApi` class that implements the TypeScript `QingxinApi` interface by calling the Axum service under `/v1`. Screens SHALL keep depending on `QingxinApi`, not `fetch`.
@@ -116,6 +120,65 @@ The HTTP client SHALL map OpenAPI snake_case JSON to the existing camelCase `Qin
 - **WHEN** a Bearer request returns 401 and a refresh token is stored
 - **THEN** the client posts `/v1/auth/refresh` and retries the original request once
 
+### Requirement: HTTP toolbox uses live /v1/tools
+`HttpQingxinApi` SHALL implement toolbox methods by calling the OpenAPI `/v1/tools` operations with the same session headers as other HTTP methods: `Authorization: Bearer` from `qingxin.session`, JSON `Content-Type` on bodies, and a single 401 refresh-and-retry. `runTool` SHALL set `Accept: text/event-stream` and SHALL NOT put the access token in the query string.
+
+#### Scenario: Run sends Bearer and SSE Accept
+- **WHEN** a stored session exists and `runTool` is called for `summary`
+- **THEN** the POST to `/v1/tools/summary/run` includes `Authorization: Bearer` with the access token and `Accept: text/event-stream`
+
+### Requirement: Toolbox stream abort and error frames
+`AbortSignal` on `ToolRunInput` SHALL abort the fetch and stop yielding. `event: error` frames SHALL become `ApiError`. Privacy export SHALL map API `templates` to `aiTemplates` in addition to `ai_tasks` → `aiTasks`.
+
+#### Scenario: Abort stops the stream
+- **WHEN** `runTool` is iterating deltas and the input `signal` is aborted
+- **THEN** the client stops yielding further events and does not throw an `unavailable` network error
+
+#### Scenario: Export maps templates
+- **WHEN** the API export JSON includes a `templates` array with a favourite row
+- **THEN** `exportUserData().data.aiTemplates` contains that row with camelCase fields
+
+#### Scenario: SSE error frame
+- **WHEN** the run stream emits `event: error` with JSON `{ "error": { "code": "unavailable", "message": "保存失败" } }`
+- **THEN** `runTool` throws `ApiError` whose `code` is `unavailable`
+
+### Requirement: OpenAPI contract tests for toolbox
+The web test suite SHALL parse `api/openapi.yaml` and assert that every toolbox method on `HttpQingxinApi` matches a documented path, HTTP method, and (for run) request body field names. Tests SHALL fail if the client sends a field the spec does not declare, or if a documented `/v1/tools*` operation has no client method.
+
+#### Scenario: Documented tools paths have client methods
+- **WHEN** the contract tests read `api/openapi.yaml`
+- **THEN** they require `GET /v1/tools`, `GET /v1/tools/tasks`, `GET /v1/tools/tasks/{id}`, `PUT /v1/tools/{tool_id}/favourite`, and `POST /v1/tools/{tool_id}/run`
+
+#### Scenario: Run body fields stay in spec
+- **WHEN** `HttpQingxinApi.runTool` JSON-encodes a payload
+- **THEN** every encoded key exists on `components.schemas.ToolRunRequest` (including `pdf_base64` when sent)
+
+### Requirement: Pets operations on the typed client
+The TypeScript `QingxinApi` interface SHALL expose methods to list/create pets, fetch today's care summary, list/create health records, weights, and daily logs, and SHALL map OpenAPI snake_case (`avatar_url`, `next_due_date`, `measured_on`, `weight_g`) to the existing camelCase pet types. `HttpQingxinApi` SHALL implement those methods via `/v1/pets*`. `MockQingxinApi` SHALL implement the same methods in memory. Screens SHALL depend on `QingxinApi`, not `fetch`.
+
+#### Scenario: Interface covers M6 operations
+- **WHEN** a caller uses the API client
+- **THEN** it can create a pet, list pets, fetch today's summary, add a feed log, add a gram weight, and add a health record
+
+#### Scenario: Pet write uses avatar_url and omits empties
+- **WHEN** the HTTP client creates a pet with an avatar URL and empty breed
+- **THEN** the JSON body includes `avatar_url` and MUST NOT include `avatarUrl`, `breed`, or `null` optional fields
+
+### Requirement: Study operations on the typed client
+The TypeScript `QingxinApi` interface SHALL expose methods to fetch today's study snapshot, create 7/14/21-day challenges, check in, list/create/review flashcards, list/create notes (`content_md`), list/create/patch skills (`parent_id`), list skill templates from the server, and copy a template by `template_id`. `HttpQingxinApi` SHALL implement those methods via `/v1/study*`. Review grade MUST be one of `again`, `hard`, `good`, `easy`.
+
+#### Scenario: Interface covers M8 operations
+- **WHEN** a caller uses the API client
+- **THEN** it can create a 21-day challenge, check in, add a flashcard, post a review grade, save a note, list skill templates, and copy a template
+
+#### Scenario: Challenge write rejects other lengths
+- **WHEN** the client builds a challenge body with `targetDays` other than 7, 14, or 21
+- **THEN** it MUST NOT send the request; the write helper rejects the value
+
+#### Scenario: Contract test catches camelCase regression
+- **WHEN** an adapter would send `avatarUrl` instead of `avatar_url`
+- **THEN** the OpenAPI contract test fails
+
 ### Requirement: Finance operations on the typed client
 The TypeScript `QingxinApi` interface SHALL expose methods to list categories, list/create transactions, fetch summary and report, list/put budgets, list/create subscriptions (including upcoming), list/create/check-in challenges, and create a scheduled job. `HttpQingxinApi` SHALL send snake_case JSON that validates against `api/openapi.yaml` write schemas. Screens SHALL depend on that interface, not a concrete HTTP client.
 
@@ -148,3 +211,4 @@ The TypeScript `QingxinApi` interface SHALL expose methods for today, water, sle
 #### Scenario: Shape regression
 - **WHEN** an adapter would send a camelCase field on a write body
 - **THEN** the OpenAPI contract test fails
+

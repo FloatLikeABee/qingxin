@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-10-13
+goal: Wire M5 /modules/ai off MockQingxinApi onto HttpQingxinApi against
+  /v1/tools with SSE abort/retry/error, persisted favourites/history, OpenAPI
+  contract tests, and mock kept for tests/dev only

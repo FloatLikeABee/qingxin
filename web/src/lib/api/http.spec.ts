@@ -158,6 +158,47 @@ describe('HttpQingxinApi', () => {
 		await expect(api.getSession()).resolves.toBeNull();
 	});
 
+	it('keeps a stored session when /v1/me is temporarily unavailable', async () => {
+		const storage = memoryStorage({
+			'qingxin.session': JSON.stringify({
+				userId: 'user-1',
+				displayName: 'Ada',
+				email: 'ada@qingxin.app',
+				token: 'access-1',
+				refreshToken: 'refresh-1'
+			})
+		});
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage,
+			fetch: async () => jsonResponse(503, { error: { code: 'unavailable', message: 'busy' } })
+		});
+		await expect(api.getSession()).resolves.toMatchObject({
+			userId: 'user-1',
+			token: 'access-1'
+		});
+		expect(storage.getItem('qingxin.session')).toContain('access-1');
+	});
+
+	it('clears the session when /v1/me is unauthenticated', async () => {
+		const storage = memoryStorage({
+			'qingxin.session': JSON.stringify({
+				userId: 'user-1',
+				displayName: 'Ada',
+				email: 'ada@qingxin.app',
+				token: 'access-1'
+			})
+		});
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage,
+			fetch: async () =>
+				jsonResponse(401, { error: { code: 'unauthenticated', message: '请先登录' } })
+		});
+		await expect(api.getSession()).resolves.toBeNull();
+		expect(storage.getItem('qingxin.session')).toBeNull();
+	});
+
 	it('maps API errors to ApiError', async () => {
 		const api = new HttpQingxinApi({
 			baseUrl: 'http://127.0.0.1:8080',
@@ -474,6 +515,270 @@ describe('HttpQingxinApi', () => {
 		});
 		await deleter.deleteAccount();
 		await expect(deleter.getSession()).resolves.toBeNull();
+	});
+
+	it('sends Bearer and text/event-stream Accept on toolbox run', async () => {
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage: memoryStorage({
+				'qingxin.session': JSON.stringify({
+					userId: 'user-1',
+					displayName: 'Ada',
+					email: 'ada@qingxin.app',
+					token: 'access-1',
+					refreshToken: 'refresh-1'
+				})
+			}),
+			fetch: async (input, init) => {
+				expect(String(input)).toBe('http://127.0.0.1:8080/v1/tools/summary/run');
+				expect(String(input)).not.toContain('access-1');
+				const headers = new Headers(init?.headers);
+				expect(headers.get('Authorization')).toBe('Bearer access-1');
+				expect(headers.get('Accept')).toBe('text/event-stream');
+				const body = JSON.parse(String(init?.body));
+				expect(body).not.toHaveProperty('signal');
+				expect(body).toMatchObject({ text: '记得喝水' });
+				return sseResponse(
+					'data: {"choices":[{"delta":{"content":"待办"}}]}\n\nevent: result\ndata: {"id":"task-1","tool_id":"summary","input_kind":"text","input_text":"记得喝水","output_text":"待办","source":"mock","created_at":"2026-10-13T03:00:00Z"}\n\ndata: [DONE]\n\n'
+				);
+			}
+		});
+		const events = [];
+		for await (const event of api.runTool({ toolId: 'summary', text: '记得喝水' })) {
+			events.push(event.type);
+		}
+		expect(events).toEqual(['delta', 'result']);
+	});
+
+	it('stops the toolbox stream when the abort signal fires', async () => {
+		const controller = new AbortController();
+		const encoder = new TextEncoder();
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage: memoryStorage({
+				'qingxin.session': JSON.stringify({
+					userId: 'user-1',
+					displayName: 'Ada',
+					email: 'ada@qingxin.app',
+					token: 'access-1',
+					refreshToken: 'refresh-1'
+				})
+			}),
+			fetch: async (_input, init) => {
+				expect(init?.signal).toBe(controller.signal);
+				return new Response(
+					new ReadableStream({
+						async start(stream) {
+							stream.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"一"}}]}\n\n'));
+							await new Promise<void>((resolve) => {
+								const signal = init?.signal;
+								if (!signal || signal.aborted) {
+									resolve();
+									return;
+								}
+								signal.addEventListener('abort', () => resolve(), { once: true });
+							});
+							try {
+								stream.close();
+							} catch {
+								/* already cancelled */
+							}
+						}
+					}),
+					{ status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+				);
+			}
+		});
+		const events: string[] = [];
+		const iterating = (async () => {
+			for await (const event of api.runTool({
+				toolId: 'summary',
+				text: '记得喝水',
+				signal: controller.signal
+			})) {
+				events.push(event.type === 'delta' ? event.text : event.type);
+				if (event.type === 'delta') controller.abort();
+			}
+		})();
+		await expect(iterating).resolves.toBeUndefined();
+		expect(events).toEqual(['一']);
+	});
+
+	it('throws unavailable when the SSE body is missing', async () => {
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage: memoryStorage({
+				'qingxin.session': JSON.stringify({
+					userId: 'user-1',
+					displayName: 'Ada',
+					email: 'ada@qingxin.app',
+					token: 'access-1',
+					refreshToken: 'refresh-1'
+				})
+			}),
+			fetch: async () =>
+				new Response(null, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+		});
+		await expect(async () => {
+			for await (const event of api.runTool({ toolId: 'summary', text: '记得喝水' })) {
+				void event;
+			}
+		}).rejects.toMatchObject({ code: 'unavailable' });
+	});
+
+	it('turns event: error frames into ApiError', async () => {
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage: memoryStorage({
+				'qingxin.session': JSON.stringify({
+					userId: 'user-1',
+					displayName: 'Ada',
+					email: 'ada@qingxin.app',
+					token: 'access-1',
+					refreshToken: 'refresh-1'
+				})
+			}),
+			fetch: async () =>
+				sseResponse(
+					'data: {"choices":[{"delta":{"content":"待办"}}]}\n\nevent: error\ndata: {"error":{"code":"unavailable","message":"保存失败"}}\n\ndata: [DONE]\n\n'
+				)
+		});
+		await expect(async () => {
+			for await (const event of api.runTool({ toolId: 'summary', text: '记得喝水' })) {
+				void event;
+			}
+		}).rejects.toMatchObject({ code: 'unavailable', message: '保存失败' });
+	});
+
+	it('maps export templates onto aiTemplates', async () => {
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage: memoryStorage({
+				'qingxin.session': JSON.stringify({
+					userId: 'user-1',
+					displayName: 'Ada',
+					email: 'ada@qingxin.app',
+					token: 'access-1',
+					refreshToken: 'refresh-1'
+				})
+			}),
+			fetch: async (input) => {
+				if (String(input).endsWith('/v1/privacy/export')) {
+					return jsonResponse(200, {
+						exported_at: '2026-10-13T04:00:00Z',
+						user: { id: 'user-1', email: 'ada@qingxin.app', display_name: 'Ada' },
+						ai_tasks: [
+							{
+								id: 'task-1',
+								tool_id: 'summary',
+								input_kind: 'text',
+								input_text: 'x',
+								output_text: 'y',
+								source: 'mock',
+								created_at: '2026-10-13T03:00:00Z'
+							}
+						],
+						templates: [
+							{
+								id: 'tpl-1',
+								tool_id: 'meeting',
+								title: '会议助手',
+								body: '',
+								favourite: true,
+								created_at: '2026-10-13T03:00:00Z',
+								updated_at: '2026-10-13T03:00:00Z'
+							}
+						]
+					});
+				}
+				return jsonResponse(404, { error: { code: 'not_found', message: 'no' } });
+			}
+		});
+		const exported = await api.exportUserData();
+		expect(exported.data.aiTasks?.some((item) => item.id === 'task-1')).toBe(true);
+		expect(exported.data.aiTemplates).toEqual([
+			{
+				id: 'tpl-1',
+				toolId: 'meeting',
+				title: '会议助手',
+				body: '',
+				favourite: true,
+				createdAt: '2026-10-13T03:00:00Z',
+				updatedAt: '2026-10-13T03:00:00Z'
+			}
+		]);
+	});
+
+	it('posts pets with avatar_url and study challenges with target_days', async () => {
+		const calls: { url: string; method?: string; body?: unknown }[] = [];
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage: memoryStorage({
+				'qingxin.session': JSON.stringify({
+					userId: 'user-1',
+					displayName: 'Ada',
+					email: 'ada@qingxin.app',
+					token: 'access-1',
+					refreshToken: 'refresh-1'
+				})
+			}),
+			fetch: async (input, init) => {
+				const url = String(input);
+				const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+				calls.push({ url, method: init?.method, body });
+				if (url.endsWith('/v1/pets') && init?.method === 'POST') {
+					return jsonResponse(201, {
+						id: 'pet-1',
+						name: '豆豆',
+						species: 'cat',
+						breed: null,
+						birthday: null,
+						avatar_url: 'https://cdn.example/doudou.png',
+						sort_order: 1,
+						created_at: '2026-10-13T00:00:00Z',
+						updated_at: '2026-10-13T00:00:00Z'
+					});
+				}
+				if (url.endsWith('/v1/study/challenges') && init?.method === 'POST') {
+					return jsonResponse(201, {
+						id: 'ch-1',
+						name: '背单词',
+						target_days: 21,
+						start_date: '2026-10-13',
+						timezone: 'Asia/Shanghai',
+						current_streak: 0,
+						progress_days: 0,
+						checked_in_today: false,
+						checkins: [],
+						created_at: '2026-10-13T00:00:00Z'
+					});
+				}
+				return jsonResponse(404, { error: { code: 'not_found', message: url } });
+			}
+		});
+		await expect(
+			api.createPet({ name: '豆豆', species: 'cat', avatarUrl: 'https://cdn.example/doudou.png' })
+		).resolves.toMatchObject({
+			id: 'pet-1',
+			avatarUrl: 'https://cdn.example/doudou.png'
+		});
+		await expect(
+			api.createStudyChallenge({ name: '背单词', targetDays: 21 })
+		).resolves.toMatchObject({
+			targetDays: 21,
+			currentStreak: 0
+		});
+		expect(calls[0]).toMatchObject({
+			url: 'http://127.0.0.1:8080/v1/pets',
+			method: 'POST',
+			body: { name: '豆豆', species: 'cat', avatar_url: 'https://cdn.example/doudou.png' }
+		});
+		expect(calls[0]?.body).not.toHaveProperty('avatarUrl');
+		expect(calls[1]).toMatchObject({
+			url: 'http://127.0.0.1:8080/v1/study/challenges',
+			method: 'POST',
+			body: { name: '背单词', target_days: 21 }
+		});
 	});
 
 	it('posts finance salary, subscription, budgets, elder reminder, job, and water as snake_case', async () => {

@@ -123,3 +123,41 @@ test('salary, subscription, job, water, and elder modal use the live API', async
 	await expect(page.locator('dialog[open]')).toHaveCount(0);
 	await expect(page.getByRole('heading', { name: '该吃药了' })).toBeHidden();
 });
+
+test('AI toolbox streams through /v1/tools and persists history', async ({ page }) => {
+	await registerFresh(page);
+	await page.goto('/modules/ai');
+	await expect(page.getByRole('heading', { name: 'AI效率工具箱' })).toBeVisible();
+	await expect(page.getByText('全部工具')).toBeVisible();
+	const summaryCard = page.locator('section').filter({ hasText: '全部工具' });
+	await summaryCard.getByRole('button', { name: '收藏' }).first().click();
+	await expect(page.getByText('已收藏')).toBeVisible({ timeout: 15_000 });
+	await page.screenshot({ path: 'screenshots/tools-http-grid-1280.png', fullPage: true });
+
+	await page.getByRole('tab', { name: '工作台' }).click();
+	await expect(page.getByRole('button', { name: '停止' })).toBeVisible();
+	await page.getByRole('button', { name: '开始' }).click();
+	await expect(page.getByText(/思考中|示意摘要|待办/).first()).toBeVisible({ timeout: 15_000 });
+	await expect(page.locator('pre')).toContainText(/示意|待办|摘要/, { timeout: 20_000 });
+	await expect(page.getByRole('button', { name: '复制' })).toBeEnabled();
+	await page.screenshot({ path: 'screenshots/tools-http-workbench-1280.png', fullPage: true });
+
+	await page.getByRole('tab', { name: '历史' }).click();
+	await expect(page.getByText('今天')).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByText(/示意|待办|摘要/).first()).toBeVisible();
+	await page.getByRole('button', { name: '摘要' }).click();
+	await expect(page.getByText('今天')).toBeVisible();
+	await page.screenshot({ path: 'screenshots/tools-http-history-1280.png', fullPage: true });
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+	await page.getByRole('tab', { name: '工具' }).click();
+	await expect(page.getByText('已收藏')).toBeVisible();
+	await page.screenshot({ path: 'screenshots/tools-http-grid-390.png', fullPage: true });
+	await page.getByRole('tab', { name: '工作台' }).click();
+	await expect(page.locator('pre')).toContainText(/示意|待办|摘要/);
+	await page.screenshot({ path: 'screenshots/tools-http-workbench-390.png', fullPage: true });
+	await page.getByRole('tab', { name: '历史' }).click();
+	await expect(page.getByText('今天')).toBeVisible();
+	await page.screenshot({ path: 'screenshots/tools-http-history-390.png', fullPage: true });
+});

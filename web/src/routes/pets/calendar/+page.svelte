@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Card from '#lib/components/Card.svelte';
 	import DisclaimerBanner from '#lib/pets/DisclaimerBanner.svelte';
 	import { calendarMarks, currentMonth, monthGrid, shiftMonth } from '#lib/pets/calendar';
@@ -7,6 +8,10 @@
 
 	const store = getPetsStore();
 	let month = $state(currentMonth());
+
+	onMount(() => {
+		void store.load();
+	});
 	const days = $derived(monthGrid(month));
 	const marks = $derived(calendarMarks(month, store.records, store.weights));
 	const weekdays = ['一', '二', '三', '四', '五', '六', '日'];

@@ -48,6 +48,25 @@ import type {
 	TodaySnapshot,
 	WaterLog
 } from '../wellness/types';
+import type {
+	CareType,
+	CreatePetInput,
+	Pet,
+	PetLog,
+	PetRecord,
+	PetWeight,
+	RecordType,
+	TodaySummary
+} from '../pets/types';
+import type {
+	Grade,
+	StudyCard,
+	StudyChallenge,
+	StudyNote,
+	StudySkill,
+	StudySkillTemplate,
+	TargetDays
+} from '../study/types';
 
 /** Access session persisted as `qingxin.session`. `refreshToken` is set by `HttpQingxinApi`. */
 export interface Session {
@@ -183,12 +202,14 @@ export interface ToolRunInput {
 	text?: string;
 	url?: string;
 	filename?: string;
+	pdfBase64?: string;
 	resume?: string;
 	jd?: string;
 	filenames?: string[];
 	tone?: PolishTone;
 	step?: MeetingStep;
 	topics?: string[];
+	signal?: AbortSignal;
 }
 
 export type ToolStreamEvent = { type: 'delta'; text: string } | { type: 'result'; task: AiTask };
@@ -462,6 +483,60 @@ export interface QingxinApi {
 		time: string;
 		daysOfWeek: number[];
 	}): Promise<ReminderLog>;
+	listPets(): Promise<Pet[]>;
+	createPet(input: CreatePetInput): Promise<Pet>;
+	getPet(id: string): Promise<Pet>;
+	getPetsToday(): Promise<TodaySummary>;
+	listPetRecords(petId: string): Promise<PetRecord[]>;
+	createPetRecord(
+		petId: string,
+		input: { type: RecordType; date: string; nextDueDate?: string | null; note?: string | null }
+	): Promise<PetRecord>;
+	listPetWeights(petId: string): Promise<PetWeight[]>;
+	createPetWeight(
+		petId: string,
+		input: { measuredOn: string; weightG: number }
+	): Promise<PetWeight>;
+	listPetLogs(petId: string): Promise<PetLog[]>;
+	createPetLog(petId: string, input: { type: CareType; value?: string | null }): Promise<PetLog>;
+	getStudyToday(): Promise<{
+		disclaimer: string;
+		date: string;
+		challenges: StudyChallenge[];
+		dueFlashcards: number;
+	}>;
+	listStudyChallenges(): Promise<StudyChallenge[]>;
+	createStudyChallenge(input: {
+		name: string;
+		targetDays: TargetDays;
+		timezone?: string;
+	}): Promise<StudyChallenge>;
+	checkinStudyChallenge(
+		id: string,
+		day?: string
+	): Promise<{ id: string; challengeId: string; day: string; createdAt: string }>;
+	listStudyFlashcards(): Promise<StudyCard[]>;
+	listDueStudyFlashcards(): Promise<StudyCard[]>;
+	createStudyFlashcard(input: {
+		front: string;
+		back: string;
+		category?: string | null;
+	}): Promise<StudyCard>;
+	reviewStudyFlashcard(id: string, grade: Grade): Promise<StudyCard>;
+	listStudyNotes(q?: string): Promise<StudyNote[]>;
+	createStudyNote(input: {
+		title: string;
+		contentMd?: string;
+		tags?: string[];
+	}): Promise<StudyNote>;
+	listStudySkills(): Promise<StudySkill[]>;
+	createStudySkill(input: { title: string; parentId?: string | null }): Promise<StudySkill>;
+	patchStudySkill(
+		id: string,
+		patch: { title?: string; parentId?: string | null; unlocked?: boolean; sortOrder?: number }
+	): Promise<StudySkill>;
+	listStudySkillTemplates(): Promise<StudySkillTemplate[]>;
+	copyStudySkillTemplate(templateId: string): Promise<StudySkill[]>;
 }
 
 export class ApiError extends Error {

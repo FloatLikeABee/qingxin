@@ -16,7 +16,7 @@ let singleton: QingxinApi | undefined;
 export function createApi(env?: { PUBLIC_API_URL?: unknown }): QingxinApi {
 	const url = readPublicApiUrl(
 		env ?? {
-			PUBLIC_API_URL: import.meta.env.PUBLIC_API_URL
+			PUBLIC_API_URL: import.meta.env.PUBLIC_API_URL as string | undefined
 		}
 	);
 	return url ? new HttpQingxinApi({ baseUrl: url }) : new MockQingxinApi();

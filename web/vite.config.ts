@@ -3,8 +3,13 @@ import { defineConfig } from 'vitest/config';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 
+const publicApiUrl = process.env.PUBLIC_API_URL ?? '';
+
 export default defineConfig({
-	envPrefix: ['VITE_', 'PUBLIC_'],
+	envPrefix: ['PUBLIC_', 'VITE_'],
+	define: {
+		'import.meta.env.PUBLIC_API_URL': JSON.stringify(publicApiUrl)
+	},
 	plugins: [
 		tailwindcss(),
 		sveltekit({

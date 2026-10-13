@@ -11,6 +11,44 @@ import type {
 	SnippetKind
 } from '../create/catalog';
 import { mergeCatalog, type ToolId } from '../tools/catalog';
+import type { CareType, CreatePetInput, RecordType } from '../pets/types';
+import {
+	mapPet,
+	mapPetList,
+	mapPetLog,
+	mapPetLogList,
+	mapPetRecord,
+	mapPetRecordList,
+	mapPetsToday,
+	mapPetWeight,
+	mapPetWeightList,
+	petLogWriteBody,
+	petRecordWriteBody,
+	petWeightWriteBody,
+	petWriteBody
+} from '../pets/http';
+import type { Grade, TargetDays } from '../study/types';
+import {
+	mapStudyCard,
+	mapStudyCardList,
+	mapStudyChallenge,
+	mapStudyChallengeList,
+	mapStudyCheckin,
+	mapStudyNote,
+	mapStudyNoteList,
+	mapStudySkill,
+	mapStudySkillList,
+	mapStudyTemplateList,
+	mapStudyToday,
+	studyChallengeWriteBody,
+	studyCheckinWriteBody,
+	studyFlashcardWriteBody,
+	studyFromTemplateBody,
+	studyNoteWriteBody,
+	studyReviewWriteBody,
+	studySkillPatchBody,
+	studySkillWriteBody
+} from '../study/http';
 import type {
 	CorrectionKind,
 	ElderTag,
@@ -24,6 +62,7 @@ import type { MoodLog } from '../mood/trends';
 import {
 	ApiError,
 	type AiTask,
+	type AiTemplate,
 	type CreateAiText,
 	type CreateMoodLogInput,
 	type CreateOutlineResult,
@@ -325,6 +364,28 @@ function mapSnippet(value: unknown): CreateSnippet {
 	};
 }
 
+function mapAiTemplate(value: unknown): AiTemplate {
+	const row = asJson(value);
+	return {
+		id: str(row.id),
+		toolId: str(row.tool_id) as ToolId,
+		title: str(row.title),
+		body: str(row.body),
+		favourite: Boolean(row.favourite),
+		createdAt: str(row.created_at),
+		updatedAt: str(row.updated_at)
+	};
+}
+
+function isAbortError(error: unknown): boolean {
+	return (
+		(typeof DOMException !== 'undefined' &&
+			error instanceof DOMException &&
+			error.name === 'AbortError') ||
+		(error instanceof Error && (error.name === 'AbortError' || /abort/i.test(error.message)))
+	);
+}
+
 function mapTask(value: unknown): AiTask {
 	const row = asJson(value);
 	return {
@@ -417,10 +478,16 @@ export class HttpQingxinApi implements QingxinApi {
 	async #raw(
 		method: string,
 		path: string,
-		options: { json?: unknown; auth?: boolean; retry?: boolean } = {}
+		options: {
+			json?: unknown;
+			auth?: boolean;
+			retry?: boolean;
+			signal?: AbortSignal;
+			accept?: string;
+		} = {}
 	): Promise<Response> {
 		const headers = new Headers();
-		headers.set('Accept', 'application/json');
+		headers.set('Accept', options.accept ?? 'application/json');
 		if (options.json !== undefined) headers.set('Content-Type', 'application/json');
 		const session = this.#currentSession();
 		if (options.auth !== false && session?.token) {
@@ -431,9 +498,11 @@ export class HttpQingxinApi implements QingxinApi {
 			response = await this.#fetch(`${this.#baseUrl}${path}`, {
 				method,
 				headers,
-				body: options.json === undefined ? undefined : JSON.stringify(options.json)
+				body: options.json === undefined ? undefined : JSON.stringify(options.json),
+				signal: options.signal
 			});
-		} catch {
+		} catch (error) {
+			if (isAbortError(error) || options.signal?.aborted) throw error;
 			throw new ApiError('unavailable', '网络不可用');
 		}
 		if (
@@ -593,7 +662,8 @@ export class HttpQingxinApi implements QingxinApi {
 					: [],
 				creations: Array.isArray(body.creations) ? body.creations.map(mapCreation) : [],
 				snippets: Array.isArray(body.snippets) ? body.snippets.map(mapSnippet) : [],
-				aiTasks: Array.isArray(body.ai_tasks) ? body.ai_tasks.map(mapTask) : []
+				aiTasks: Array.isArray(body.ai_tasks) ? body.ai_tasks.map(mapTask) : [],
+				aiTemplates: Array.isArray(body.templates) ? body.templates.map(mapAiTemplate) : []
 			}
 		};
 	}
@@ -1116,36 +1186,200 @@ export class HttpQingxinApi implements QingxinApi {
 	}
 
 	async *runTool(input: ToolRunInput): AsyncIterable<ToolStreamEvent> {
-		const response = await this.#raw('POST', `/v1/tools/${encodeURIComponent(input.toolId)}/run`, {
-			json: compact({
-				input_kind: input.inputKind,
-				text: input.text,
-				url: input.url,
-				filename: input.filename,
-				resume: input.resume,
-				jd: input.jd,
-				filenames: input.filenames,
-				tone: input.tone,
-				step: input.step,
-				topics: input.topics
-			})
-		});
+		let response: Response;
+		try {
+			response = await this.#raw('POST', `/v1/tools/${encodeURIComponent(input.toolId)}/run`, {
+				json: compact({
+					input_kind: input.inputKind,
+					text: input.text,
+					url: input.url,
+					filename: input.filename,
+					pdf_base64: input.pdfBase64,
+					resume: input.resume,
+					jd: input.jd,
+					filenames: input.filenames,
+					tone: input.tone,
+					step: input.step,
+					topics: input.topics
+				}),
+				signal: input.signal,
+				accept: 'text/event-stream'
+			});
+		} catch (error) {
+			if (isAbortError(error) || input.signal?.aborted) return;
+			throw error;
+		}
 		if (!response.ok) throw await this.#error(response);
 		const reader = response.body?.getReader();
-		if (!reader) return;
+		if (!reader) throw new ApiError('unavailable', '请求失败');
 		const decoder = new TextDecoder();
 		let buffer = '';
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
-			const blocks = buffer.split('\n\n');
-			buffer = blocks.pop() ?? '';
-			for (const block of blocks) {
-				yield* parseSseBlock(block);
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
+				const blocks = buffer.split('\n\n');
+				buffer = blocks.pop() ?? '';
+				for (const block of blocks) {
+					yield* parseSseBlock(block);
+				}
 			}
+			if (buffer.trim()) yield* parseSseBlock(buffer);
+		} catch (error) {
+			if (isAbortError(error) || input.signal?.aborted) return;
+			throw error;
 		}
-		if (buffer.trim()) yield* parseSseBlock(buffer);
+	}
+
+	async listPets() {
+		return mapPetList(await this.#json('GET', '/v1/pets'));
+	}
+
+	async createPet(input: CreatePetInput) {
+		return mapPet(await this.#json('POST', '/v1/pets', { json: petWriteBody(input) }));
+	}
+
+	async getPet(id: string) {
+		return mapPet(await this.#json('GET', `/v1/pets/${encodeURIComponent(id)}`));
+	}
+
+	async getPetsToday() {
+		return mapPetsToday(await this.#json('GET', '/v1/pets/today'));
+	}
+
+	async listPetRecords(petId: string) {
+		return mapPetRecordList(
+			await this.#json('GET', `/v1/pets/${encodeURIComponent(petId)}/records`)
+		);
+	}
+
+	async createPetRecord(
+		petId: string,
+		input: { type: RecordType; date: string; nextDueDate?: string | null; note?: string | null }
+	) {
+		return mapPetRecord(
+			await this.#json('POST', `/v1/pets/${encodeURIComponent(petId)}/records`, {
+				json: petRecordWriteBody(input)
+			})
+		);
+	}
+
+	async listPetWeights(petId: string) {
+		return mapPetWeightList(
+			await this.#json('GET', `/v1/pets/${encodeURIComponent(petId)}/weights`)
+		);
+	}
+
+	async createPetWeight(petId: string, input: { measuredOn: string; weightG: number }) {
+		return mapPetWeight(
+			await this.#json('POST', `/v1/pets/${encodeURIComponent(petId)}/weights`, {
+				json: petWeightWriteBody(input)
+			})
+		);
+	}
+
+	async listPetLogs(petId: string) {
+		return mapPetLogList(await this.#json('GET', `/v1/pets/${encodeURIComponent(petId)}/logs`));
+	}
+
+	async createPetLog(petId: string, input: { type: CareType; value?: string | null }) {
+		return mapPetLog(
+			await this.#json('POST', `/v1/pets/${encodeURIComponent(petId)}/logs`, {
+				json: petLogWriteBody(input)
+			})
+		);
+	}
+
+	async getStudyToday() {
+		return mapStudyToday(await this.#json('GET', '/v1/study/today'));
+	}
+
+	async listStudyChallenges() {
+		return mapStudyChallengeList(await this.#json('GET', '/v1/study/challenges'));
+	}
+
+	async createStudyChallenge(input: { name: string; targetDays: TargetDays; timezone?: string }) {
+		return mapStudyChallenge(
+			await this.#json('POST', '/v1/study/challenges', {
+				json: studyChallengeWriteBody(input)
+			})
+		);
+	}
+
+	async checkinStudyChallenge(id: string, day?: string) {
+		return mapStudyCheckin(
+			await this.#json('POST', `/v1/study/challenges/${encodeURIComponent(id)}/checkins`, {
+				json: studyCheckinWriteBody({ day })
+			})
+		);
+	}
+
+	async listStudyFlashcards() {
+		return mapStudyCardList(await this.#json('GET', '/v1/study/flashcards'));
+	}
+
+	async listDueStudyFlashcards() {
+		return mapStudyCardList(await this.#json('GET', '/v1/study/flashcards/due'));
+	}
+
+	async createStudyFlashcard(input: { front: string; back: string; category?: string | null }) {
+		return mapStudyCard(
+			await this.#json('POST', '/v1/study/flashcards', {
+				json: studyFlashcardWriteBody(input)
+			})
+		);
+	}
+
+	async reviewStudyFlashcard(id: string, grade: Grade) {
+		return mapStudyCard(
+			await this.#json('POST', `/v1/study/flashcards/${encodeURIComponent(id)}/review`, {
+				json: studyReviewWriteBody({ grade })
+			})
+		);
+	}
+
+	async listStudyNotes(q?: string) {
+		return mapStudyNoteList(await this.#json('GET', `/v1/study/notes${queryString({ q })}`));
+	}
+
+	async createStudyNote(input: { title: string; contentMd?: string; tags?: string[] }) {
+		return mapStudyNote(
+			await this.#json('POST', '/v1/study/notes', { json: studyNoteWriteBody(input) })
+		);
+	}
+
+	async listStudySkills() {
+		return mapStudySkillList(await this.#json('GET', '/v1/study/skills'));
+	}
+
+	async createStudySkill(input: { title: string; parentId?: string | null }) {
+		return mapStudySkill(
+			await this.#json('POST', '/v1/study/skills', { json: studySkillWriteBody(input) })
+		);
+	}
+
+	async patchStudySkill(
+		id: string,
+		patch: { title?: string; parentId?: string | null; unlocked?: boolean; sortOrder?: number }
+	) {
+		return mapStudySkill(
+			await this.#json('PATCH', `/v1/study/skills/${encodeURIComponent(id)}`, {
+				json: studySkillPatchBody(patch)
+			})
+		);
+	}
+
+	async listStudySkillTemplates() {
+		return mapStudyTemplateList(await this.#json('GET', '/v1/study/skills/templates'));
+	}
+
+	async copyStudySkillTemplate(templateId: string) {
+		return mapStudySkillList(
+			await this.#json('POST', '/v1/study/skills/from-template', {
+				json: studyFromTemplateBody({ templateId })
+			})
+		);
 	}
 
 	#modules() {
@@ -1306,6 +1540,15 @@ function* parseSseBlock(block: string): Generator<ToolStreamEvent> {
 			/* ignore malformed result */
 		}
 		return;
+	}
+	if (event === 'error') {
+		let body: unknown = data;
+		try {
+			body = JSON.parse(data);
+		} catch {
+			/* keep raw */
+		}
+		throw parseError(503, body);
 	}
 	try {
 		const parsed = JSON.parse(data) as Json;

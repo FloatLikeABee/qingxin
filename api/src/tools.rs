@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-use crate::ai::{AiError, ChatMessage, CompletionRequest, StreamChunk};
+use crate::ai::{ChatMessage, CompletionRequest, StreamChunk};
 use crate::auth::AuthUser;
 use crate::error::{map_sqlx, AppError};
 use crate::state::AppState;
@@ -191,6 +191,11 @@ fn chunk_chars(text: &str, size: usize) -> Vec<String> {
 
 fn sse_delta(text: String) -> String {
     qingxin_ai_gateway::encode_sse(&qingxin_ai_gateway::ChatChunk::Delta { text })
+}
+
+pub fn sse_error(code: &str, message: &str) -> String {
+    let payload = json!({ "error": { "code": code, "message": message } });
+    format!("event: error\ndata: {payload}\n\n")
 }
 
 fn task_public(row: &TaskRow) -> Value {
@@ -688,9 +693,9 @@ async fn run_tool(
         model: Some("qingxin-tools".into()),
     };
     let started = state.ai.stream(&user.user_id, req).await;
-    if let Err(AiError::Failed(msg)) = &started {
-        return Err(AppError::Unavailable(msg.clone()));
-    }
+    // Unconfigured *and* provider failure (Ollama down in CI) use fallback_text
+    // inside the spawn. Returning 503 here skipped the 示意 SSE the workbench
+    // and live-API Playwright expect.
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Result<String, std::io::Error>>();
     let state_clone = state.clone();
@@ -725,7 +730,7 @@ async fn run_tool(
         } else {
             json!({ "text": collected })
         };
-        if let Ok(row) = insert_task(
+        match insert_task(
             &state_clone,
             &user_id,
             &prepared,
@@ -735,11 +740,16 @@ async fn run_tool(
         )
         .await
         {
-            let mut payload = task_public(&row);
-            if let Some(obj) = payload.as_object_mut() {
-                obj.insert("disclaimer".into(), json!(DISCLAIMER));
+            Ok(row) => {
+                let mut payload = task_public(&row);
+                if let Some(obj) = payload.as_object_mut() {
+                    obj.insert("disclaimer".into(), json!(DISCLAIMER));
+                }
+                let _ = tx.send(Ok(format!("event: result\ndata: {payload}\n\n")));
             }
-            let _ = tx.send(Ok(format!("event: result\ndata: {payload}\n\n")));
+            Err(_) => {
+                let _ = tx.send(Ok(sse_error("unavailable", "保存失败")));
+            }
         }
         let _ = tx.send(Ok("data: [DONE]\n\n".into()));
     });
@@ -751,6 +761,7 @@ async fn run_tool(
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/event-stream")
         .header(header::CACHE_CONTROL, "no-cache")
+        .header("x-accel-buffering", "no")
         .body(Body::from_stream(body_stream))
         .map_err(|err| AppError::Unavailable(err.to_string()))
 }

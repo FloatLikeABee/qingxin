@@ -2,6 +2,14 @@ export type PetSpecies = 'cat' | 'dog' | 'other';
 export type RecordType = 'vaccine' | 'deworm' | 'checkup' | 'vet_visit';
 export type CareType = 'feed' | 'walk' | 'groom' | 'litter';
 
+export interface CreatePetInput {
+	name: string;
+	species: PetSpecies;
+	breed?: string | null;
+	birthday?: string | null;
+	avatarUrl?: string | null;
+}
+
 export interface Pet {
 	id: string;
 	name: string;
