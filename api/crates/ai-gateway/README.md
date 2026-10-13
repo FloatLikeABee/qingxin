@@ -33,34 +33,11 @@ Fallback order from `GatewayConfig::from_env()`:
 
 Never commit real keys. Config `Debug` prints `[redacted]`.
 
-## Hookup (Forge PR #5)
+## Hookup
 
-Forge's skeleton (issue #4 / PR #5) injects `Arc<dyn AiGateway>` and ships
-`UnconfiguredAiGateway`. Their route is `POST /v1/ai/complete`. Do **not**
-rewrite their files in this crate; after both PRs merge:
-
-1. Add a workspace member (their `api/Cargo.toml` is a package today):
-
-```toml
-[workspace]
-members = [".", "crates/ai-gateway"]
-
-[dependencies]
-qingxin-ai-gateway = { path = "crates/ai-gateway" }
-```
-
-2. In `ai_complete`, pass `user.user_id` (today it is `_user`):
-
-```rust
-state
-    .gateway // Echo's Gateway
-    .complete_for_user(&user.user_id, body)
-    .await
-```
-
-`qingxin_ai_gateway::forge` copies their request/response/error/trait names so
-the map is mechanical. `ForgeGateway` implements that trait with user
-`"anonymous"` only as a last resort.
+`api/` is a workspace. `AppState` holds `QingxinAiGateway` (Ollama from env;
+other vendors only when their keys are set). `POST /v1/ai/complete` calls
+`Gateway::complete_for_user(&user.user_id, body)` through that wrapper.
 
 ## Tests
 

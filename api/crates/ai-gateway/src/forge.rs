@@ -1,7 +1,6 @@
-//! Types that match Forge's `api/src/ai.rs` (PR #5) so hookup is a thin map.
+//! Types that match T1's `api/src/ai.rs` HTTP body so hookup is a thin map.
 //!
-//! Their HTTP route is `POST /v1/ai/complete` with `AuthUser` currently bound
-//! as `_user`. After merge, the handler should pass `user.user_id` into
+//! `POST /v1/ai/complete` passes `AuthUser.user_id` into
 //! [`Gateway::complete_for_user`].
 
 use async_trait::async_trait;
