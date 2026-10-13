@@ -350,7 +350,11 @@ async fn list_services(
         rows.retain(|row| row.category == category);
     }
     if let Some(needle) = q.as_deref() {
-        rows.retain(|row| row.name.contains(needle) || row.address.contains(needle));
+        let needle = needle.to_lowercase();
+        rows.retain(|row| {
+            row.name.to_lowercase().contains(&needle)
+                || row.address.to_lowercase().contains(&needle)
+        });
     }
     if let Some(tag) = query.tag.as_deref() {
         rows.retain(|row| {
