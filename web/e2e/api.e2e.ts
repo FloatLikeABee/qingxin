@@ -130,6 +130,69 @@ test('salary, subscription, job, water, and elder modal use the live API', async
 	await expect(page.getByRole('heading', { name: '该吃药了' })).toBeHidden();
 });
 
+test('create generate falls back to the zh-CN stub and hustle resume fits mobile', async ({
+	page
+}) => {
+	await registerFresh(page);
+
+	const generatePosted = page.waitForResponse(
+		(res) => res.url().includes('/v1/create/generate') && res.request().method() === 'POST'
+	);
+	await page.goto('/modules/create');
+	const generateRes = await generatePosted;
+	expect(generateRes.status(), await generateRes.text()).toBe(200);
+	expect(generateRes.status()).not.toBe(503);
+	const generateJson = (await generateRes.json()) as { text?: string; source?: string };
+	expect(generateJson.text?.trim()).toBeTruthy();
+	if (generateJson.source !== 'gateway') {
+		expect(generateJson.source).toBe('mock');
+		expect(generateJson.text ?? '').toContain('示意文案');
+	}
+	await expect(page.getByRole('heading', { name: '内容创作' })).toBeVisible();
+	await expect(page.locator('#create-final')).not.toHaveValue('');
+	await expect(page.getByText('示意文案暂时不可用')).toHaveCount(0);
+	await page.screenshot({ path: 'screenshots/create-http-editor-1280.png', fullPage: true });
+	await page.getByRole('button', { name: '保存作品' }).click();
+	await expect(page.getByText('已收进作品')).toBeVisible({ timeout: 15_000 });
+
+	await page.goto('/modules/hustle');
+	await expect(page.getByRole('heading', { name: '求职副业' })).toBeVisible();
+	await page.getByRole('tab', { name: '求职' }).click();
+	await page.getByRole('button', { name: '简历', exact: true }).click();
+	await expect(page.getByText('A4 预览始终浅色').first()).toBeVisible();
+	await page.screenshot({ path: 'screenshots/hustle-http-resume-1280.png', fullPage: true });
+
+	await page.evaluate(() => {
+		localStorage.setItem('qingxin.theme', 'dark');
+		document.documentElement.classList.add('dark');
+	});
+	await page.setViewportSize({ width: 390, height: 844 });
+
+	await page.goto('/modules/create');
+	await expect(page.locator('#create-final')).not.toHaveValue('', { timeout: 15_000 });
+	await expect(page.getByText('示意文案暂时不可用')).toHaveCount(0);
+	await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+	await page.screenshot({ path: 'screenshots/create-http-editor-390-dark.png', fullPage: true });
+
+	await page.goto('/modules/hustle');
+	await page.getByRole('tab', { name: '求职' }).click();
+	await page.getByRole('button', { name: '简历', exact: true }).click();
+	await expect(page.getByText('A4 预览始终浅色').first()).toBeVisible();
+	await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+	const shell = page.locator('.resume-a4-shell');
+	await expect(shell).toBeVisible();
+	const box = await shell.boundingBox();
+	expect(box, 'A4 shell should have a box').toBeTruthy();
+	expect(box!.width).toBeLessThanOrEqual(390);
+	const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+	expect(scrollWidth).toBeLessThanOrEqual(392);
+	const sheetBg = await page
+		.locator('.resume-a4')
+		.evaluate((el) => getComputedStyle(el).backgroundColor);
+	expect(sheetBg.replace(/\s/g, '')).toMatch(/rgb\(255,255,255\)|#ffffff/i);
+	await page.screenshot({ path: 'screenshots/hustle-http-resume-390-dark.png', fullPage: true });
+});
+
 test('AI toolbox streams through /v1/tools and persists history', async ({ page }) => {
 	await registerFresh(page);
 	await page.goto('/modules/ai');

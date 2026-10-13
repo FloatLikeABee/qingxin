@@ -301,8 +301,9 @@ async fn complete_or_mock(
     };
     match state.ai.complete(user_id, req).await {
         Ok(done) if !done.content.trim().is_empty() => Ok((done.content, "gateway")),
-        Ok(_) | Err(AiError::Unconfigured) => Ok((fallback, "mock")),
-        Err(AiError::Failed(msg)) => Err(AppError::Unavailable(msg)),
+        // Unconfigured *and* provider failure (Ollama down) use the zh-CN stub,
+        // same as the AI toolbox workbench — returning 503 blocked 生成/保存.
+        Ok(_) | Err(AiError::Unconfigured) | Err(AiError::Failed(_)) => Ok((fallback, "mock")),
     }
 }
 
