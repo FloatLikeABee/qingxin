@@ -11,6 +11,15 @@ async function boot(page: Page, theme: (typeof themes)[number]) {
 	await page.addInitScript((nextTheme) => {
 		localStorage.setItem('qingxin.privacyConsent', 'accepted');
 		localStorage.setItem('qingxin.theme', nextTheme);
+		localStorage.setItem(
+			'qingxin.session',
+			JSON.stringify({
+				userId: 'user-demo',
+				displayName: '轻心同学',
+				email: 'demo@qingxin.app',
+				token: 'mock-token-demo'
+			})
+		);
 	}, theme);
 }
 
@@ -60,6 +69,36 @@ test('modules 390 dark', async ({ page }) => {
 	await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
 	await page.screenshot({ path: 'screenshots/modules-390-dark.png', fullPage: true });
 });
+
+const moodTabs = [
+	{ key: 'journal', tab: '日记', ready: '示意洞察' },
+	{ key: 'trends', tab: '趋势', ready: '这个月记下了' },
+	{ key: 'meditate', tab: '冥想', ready: '4-7-8 呼吸' }
+] as const;
+
+for (const view of views) {
+	for (const theme of themes) {
+		for (const screen of moodTabs) {
+			test(`mood ${screen.key} ${view.name} ${theme}`, async ({ page }) => {
+				await page.setViewportSize({ width: view.width, height: view.height });
+				await boot(page, theme);
+				await openReady(page, '/modules/mood');
+				await expect(page.getByRole('heading', { name: '情绪日记' })).toBeVisible();
+				await expect(page.getByText('夜里醒了两次')).toBeVisible();
+				await expect(page.getByText('示意洞察')).toBeVisible({ timeout: 10_000 });
+				await page.getByRole('tab', { name: screen.tab }).click();
+				await expect(page.getByText(screen.ready).first()).toBeVisible();
+				if (view.width < 800) {
+					await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+				}
+				await page.screenshot({
+					path: `screenshots/mood-${screen.key}-${view.name}-${theme}.png`,
+					fullPage: true
+				});
+			});
+		}
+	}
+}
 
 test('settings 1280 light', async ({ page }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });

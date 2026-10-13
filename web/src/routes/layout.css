@@ -44,6 +44,22 @@
 	color-scheme: dark;
 }
 
+html.elder {
+	font-size: 18px;
+}
+
+html.elder:not(.dark) {
+	--qx-text: #111827;
+	--qx-muted: #4b5563;
+	--qx-line: #111827;
+}
+
+html.elder.dark {
+	--qx-text: #ffffff;
+	--qx-muted: #e5e7eb;
+	--qx-line: #f9fafb;
+}
+
 html,
 body {
 	min-height: 100%;

@@ -2,7 +2,6 @@ use axum::{
     body::Body,
     http::{header, Method, Request, StatusCode},
 };
-use qingxin_api::ai::{AiError, AiGateway, CompletionRequest, CompletionResponse};
 use qingxin_api::moderation::{Decision, Moderator, NoopModerator};
 use qingxin_api::{app, scheduler, AppState, Config};
 use serde_json::{json, Value};
@@ -300,52 +299,53 @@ async fn privacy_consent_export_and_delete() {
     assert_eq!(login["error"]["code"], "invalid_credentials");
 }
 
-struct FixedGateway;
-
-#[async_trait::async_trait]
-impl AiGateway for FixedGateway {
-    async fn complete(&self, _req: CompletionRequest) -> Result<CompletionResponse, AiError> {
-        Ok(CompletionResponse {
-            content: "ok-from-double".into(),
-            model: Some("fixed".into()),
-            usage: None,
-        })
-    }
-}
-
 #[tokio::test]
-async fn ai_route_uses_injected_gateway_and_defaults_to_unconfigured() {
-    let (router, _) = world().await;
-    let created = register_user(&router, "ai@qingxin.app").await;
-    let access = created["access_token"].as_str().unwrap();
+async fn ai_route_uses_mock_provider_for_authenticated_user() {
+    use qingxin_api::ai::QingxinAiGateway;
+
+    let mut state = AppState::connect(Config::test()).await.unwrap();
+    state.ai = Arc::new(QingxinAiGateway::mock_rate_limited("ok-from-mock", 1));
+    let router = app(state);
+
+    let first = register_user(&router, "ai@qingxin.app").await;
+    let second = register_user(&router, "ai2@qingxin.app").await;
+    let access_a = first["access_token"].as_str().unwrap();
+    let access_b = second["access_token"].as_str().unwrap();
     let payload = json!({"messages": [{"role": "user", "content": "hi"}]});
 
     let (status, body) = send(
         &router,
         Method::POST,
         "/v1/ai/complete",
-        Some(("Bearer", access)),
+        Some(("Bearer", access_a)),
         Some(payload.clone()),
     )
     .await;
-    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
-    assert_eq!(body["error"]["code"], "ai_unconfigured");
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["content"], "ok-from-mock");
+    assert_eq!(body["model"], "mock");
 
-    let mut state = AppState::connect(Config::test()).await.unwrap();
-    state.ai = Arc::new(FixedGateway);
-    let wired = app(state);
-    let created = register_user(&wired, "ai2@qingxin.app").await;
-    let access = created["access_token"].as_str().unwrap();
     let (status, body) = send(
-        &wired,
+        &router,
         Method::POST,
         "/v1/ai/complete",
-        Some(("Bearer", access)),
+        Some(("Bearer", access_a)),
+        Some(json!({"messages": [{"role": "user", "content": "second"}]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["error"]["code"], "unavailable");
+
+    let (status, body) = send(
+        &router,
+        Method::POST,
+        "/v1/ai/complete",
+        Some(("Bearer", access_b)),
         Some(payload),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["content"], "ok-from-double");
+    assert_eq!(body["content"], "ok-from-mock");
 }
 
 #[tokio::test]

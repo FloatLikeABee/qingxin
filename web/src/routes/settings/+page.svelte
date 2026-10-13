@@ -6,6 +6,8 @@
 	import ListItem from '#lib/components/ListItem.svelte';
 	import Modal from '#lib/components/Modal.svelte';
 	import { getApi } from '#lib/api/mock';
+	import Switch from '#lib/components/Switch.svelte';
+	import { persistElderMode, readElderMode, syncElderMode } from '#lib/elder/mode';
 	import { persistMode, readStoredMode, syncDocumentTheme } from '#lib/theme/runtime';
 	import type { ThemeMode } from '#lib/theme/resolve';
 	import { optimistic } from '#lib/optimistic';
@@ -19,6 +21,8 @@
 	];
 
 	let mode = $state<ThemeMode>('system');
+	let elderMode = $state(false);
+	let elderReady = $state(false);
 	let sessionName = $state<string | null>(null);
 	let exportOpen = $state(false);
 	let deleteOpen = $state(false);
@@ -27,11 +31,19 @@
 	$effect(() => {
 		if (!browser) return;
 		mode = readStoredMode();
+		elderMode = readElderMode();
+		elderReady = true;
 		void getApi()
 			.getSession()
 			.then((session) => {
 				sessionName = session?.displayName ?? null;
 			});
+	});
+
+	$effect(() => {
+		if (!browser || !elderReady) return;
+		persistElderMode(elderMode);
+		syncElderMode(elderMode);
 	});
 
 	function choose(next: ThemeMode) {
@@ -97,6 +109,14 @@
 	</div>
 
 	<Card>
+		<Switch
+			bind:checked={elderMode}
+			label="大字高对比（适老）"
+			description="全局加大字号并加强对比，不改组件样式。可与浅色/深色一起用。"
+		/>
+	</Card>
+
+	<Card>
 		<h2 class="mb-3 text-lg font-semibold">外观</h2>
 		<div class="grid grid-cols-2 gap-2">
 			{#each modes as item (item.id)}
@@ -115,17 +135,36 @@
 	</Card>
 
 	<Card padded={false} class="divide-y divide-[var(--qx-line)] py-1">
-		<ListItem href="/login" title="登录 / 注册" subtitle="把设置同步到账号（即将接入 T1）" icon="lock" />
-		<ListItem title="导出我的数据" subtitle="下载本地 JSON 副本" icon="download" onclick={() => (exportOpen = true)} />
-		<ListItem title="注销并删除数据" subtitle="清除本机模拟账号" icon="trash" onclick={() => (deleteOpen = true)} />
+		<ListItem
+			href="/login"
+			title="登录 / 注册"
+			subtitle="把设置同步到账号（即将接入 T1）"
+			icon="lock"
+		/>
+		<ListItem
+			title="导出我的数据"
+			subtitle="下载本地 JSON 副本"
+			icon="download"
+			onclick={() => (exportOpen = true)}
+		/>
+		<ListItem
+			title="注销并删除数据"
+			subtitle="清除本机模拟账号"
+			icon="trash"
+			onclick={() => (deleteOpen = true)}
+		/>
 		<ListItem href="/privacy" title="隐私与免责声明" subtitle="最小必要 · 非专业建议" icon="info" />
 	</Card>
 
-	<p class="text-sm text-[var(--qx-muted)]">添加到主屏幕：在浏览器菜单中选择「添加到主屏幕」，即可离线打开轻心。</p>
+	<p class="text-sm text-[var(--qx-muted)]">
+		添加到主屏幕：在浏览器菜单中选择「添加到主屏幕」，即可离线打开轻心。
+	</p>
 </section>
 
 <Drawer bind:open={exportOpen} title="导出数据">
-	<p class="text-base text-[var(--qx-muted)]">将导出本地模拟会话与模块清单。真实云端数据会在 T1 接入后补齐。</p>
+	<p class="text-base text-[var(--qx-muted)]">
+		将导出本地模拟会话与模块清单。真实云端数据会在 T1 接入后补齐。
+	</p>
 	<Button class="mt-5 w-full" disabled={pending} onclick={exportData}>下载 JSON</Button>
 </Drawer>
 

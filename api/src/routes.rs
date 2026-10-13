@@ -47,6 +47,8 @@ pub fn router() -> Router<AppState> {
         .route("/v1/jobs/{id}", delete(cancel_job))
         .route("/v1/ai/complete", post(ai_complete))
         .merge(crate::finance::router())
+        .merge(crate::elder::router())
+        .merge(crate::mood::routes())
 }
 
 #[derive(FromRow)]
@@ -550,6 +552,8 @@ async fn export_data(
     .await
     .map_err(map_sqlx)?;
     let finance = crate::finance::export_for_user(&state, &user.user_id).await?;
+    let mood_logs = crate::mood::export_mood(&state, &user.user_id).await?;
+    let meditation_sessions = crate::mood::export_sessions(&state, &user.user_id).await?;
     Ok(Json(json!({
         "exported_at": now_rfc3339(),
         "user": profile.public(&state.crypto),
@@ -558,6 +562,8 @@ async fn export_data(
         "jobs": jobs.iter().map(JobRow::public).collect::<Vec<_>>(),
         "push_subscriptions": push_subscriptions,
         "finance": finance,
+        "mood_logs": mood_logs,
+        "meditation_sessions": meditation_sessions,
     })))
 }
 
@@ -962,10 +968,10 @@ async fn cancel_job(
 
 async fn ai_complete(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Json(body): Json<CompletionRequest>,
 ) -> Result<Json<Value>, AppError> {
-    match state.ai.complete(body).await {
+    match state.ai.complete(&user.user_id, body).await {
         Ok(done) => Ok(Json(serde_json::to_value(done).unwrap_or(Value::Null))),
         Err(AiError::Unconfigured) => Err(AppError::AiUnconfigured),
         Err(AiError::Failed(msg)) => Err(AppError::Unavailable(msg)),

@@ -1,0 +1,3 @@
+schema: spec-driven
+created: 2026-10-13
+goal: "Build Qingxin M1 情绪日记+冥想 on the merged T1 API and T2 SvelteKit shell per issue #9"

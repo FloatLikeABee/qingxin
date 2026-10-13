@@ -60,20 +60,34 @@ pub async fn tick_once(state: &AppState) -> Result<usize, AppError> {
             .send(&PushMessage {
                 user_id: job.user_id.clone(),
                 job_id: job.id.clone(),
-                payload,
+                payload: payload.clone(),
             })
             .await;
 
         match result {
             Ok(()) => {
-                sqlx::query(
-                    "UPDATE scheduled_jobs SET status = 'done', last_error = NULL WHERE id = ?",
-                )
-                .bind(&job.id)
-                .execute(&state.pool)
-                .await
-                .map_err(map_sqlx)?;
-                sent += 1;
+                if let Err(err) =
+                    crate::elder::after_job(state, &job.user_id, &job.id, &payload).await
+                {
+                    tracing::error!(error = %err, job_id = %job.id, "elder after_job failed");
+                    sqlx::query(
+                        "UPDATE scheduled_jobs SET status = 'failed', last_error = ? WHERE id = ?",
+                    )
+                    .bind(err.to_string())
+                    .bind(&job.id)
+                    .execute(&state.pool)
+                    .await
+                    .map_err(map_sqlx)?;
+                } else {
+                    sqlx::query(
+                        "UPDATE scheduled_jobs SET status = 'done', last_error = NULL WHERE id = ?",
+                    )
+                    .bind(&job.id)
+                    .execute(&state.pool)
+                    .await
+                    .map_err(map_sqlx)?;
+                    sent += 1;
+                }
             }
             Err(err) => {
                 sqlx::query(
