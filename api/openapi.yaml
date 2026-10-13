@@ -1,0 +1,998 @@
+openapi: 3.1.0
+info:
+  title: Qingxin (轻心) API
+  version: 0.1.0
+  description: |
+    T1 Foundation HTTP contract for Qingxin.
+
+    The Rust service lives in `api/`. Sensitive fields (phone numbers) are
+    stored with AES-256-GCM. Access tokens are short-lived JWTs; refresh
+    tokens and caregiver-issued device sessions are opaque, hashed, and
+    revocable.
+
+    AI generation is intentionally a seam: `POST /v1/ai/complete` is reserved
+    for Echo's gateway and returns `ai_unconfigured` until that crate is
+    wired. Moderation is an in-process trait (no-op stub) and is not exposed
+    as a public route in T1.
+  license:
+    name: UNLICENSED
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local development
+security: []
+tags:
+  - name: Health
+  - name: Auth
+  - name: Me
+  - name: Privacy
+  - name: Caregiver
+  - name: Devices
+  - name: Push
+  - name: Jobs
+  - name: AI
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness and database readiness
+      operationId: getHealth
+      responses:
+        "200":
+          description: Process is up and the database answers a ping
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: Process is up but the database ping failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register with email and password
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created and tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate a refresh token
+      description: |
+        Presents a refresh token and receives a new access + refresh pair.
+        The previous refresh token is revoked. Reuse of a revoked token in
+        the same family revokes the entire family.
+      operationId: refresh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Rotated tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke a refresh token
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "204":
+          description: Token revoked or already unknown
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/sms/request:
+    post:
+      tags: [Auth]
+      summary: Request an SMS login code (stub)
+      description: |
+        T1 ships an SMS stub, not a carrier integration. When
+        `QINGXIN_SMS_STUB=1`, the response may include `dev_code` so
+        automated tests can complete the flow. Production deployments MUST
+        leave the stub disabled; the code is then only recorded through the
+        `SmsSender` trait (log/no-op).
+      operationId: requestSms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsRequest"
+      responses:
+        "200":
+          description: Code accepted for delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsRequestResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/auth/sms/verify:
+    post:
+      tags: [Auth]
+      summary: Verify an SMS code and issue tokens
+      description: Creates a user on first successful verify for that phone.
+      operationId: verifySms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsVerifyRequest"
+      responses:
+        "200":
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/me:
+    get:
+      tags: [Me]
+      summary: Current principal
+      operationId: getMe
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: The authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/privacy/consent:
+    get:
+      tags: [Privacy]
+      summary: Latest recorded privacy consent
+      operationId: getConsent
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: Latest consent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Consent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Privacy]
+      summary: Record privacy-policy acceptance
+      operationId: postConsent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsentRequest"
+      responses:
+        "201":
+          description: Consent stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Consent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/privacy/export:
+    get:
+      tags: [Privacy]
+      summary: Export the caller's data as JSON
+      operationId: exportData
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Portable export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportPayload"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/privacy/account:
+    delete:
+      tags: [Privacy]
+      summary: Delete the caller's account and personal data
+      operationId: deleteAccount
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Account erased
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/caregiver/invites:
+    post:
+      tags: [Caregiver]
+      summary: Dependent creates a one-time caregiver invite
+      operationId: createCaregiverInvite
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Invite created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaregiverInvite"
+
+  /v1/caregiver/accept:
+    post:
+      tags: [Caregiver]
+      summary: Caregiver accepts an invite and links to the dependent
+      operationId: acceptCaregiverInvite
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInviteRequest"
+      responses:
+        "201":
+          description: Link created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaregiverLink"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/caregiver/links:
+    get:
+      tags: [Caregiver]
+      summary: List caregiver links for the current user
+      operationId: listCaregiverLinks
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Links where the caller is caregiver or dependent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CaregiverLink"
+
+  /v1/caregiver/links/{id}:
+    delete:
+      tags: [Caregiver]
+      summary: Remove a caregiver link
+      operationId: deleteCaregiverLink
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Removed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/devices:
+    get:
+      tags: [Devices]
+      summary: List device sessions the caller can manage
+      operationId: listDevices
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Device sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DeviceSession"
+    post:
+      tags: [Devices]
+      summary: Issue a long-lived device session
+      description: |
+        A user may issue a device for themselves. A linked caregiver may
+        issue a device for the dependent (`user_id` of the elder). The
+        opaque token is returned once and stored only as a hash.
+      operationId: createDevice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeviceRequest"
+      responses:
+        "201":
+          description: Device created; token shown once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSessionCreated"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/devices/{id}:
+    delete:
+      tags: [Devices]
+      summary: Revoke a device session
+      operationId: revokeDevice
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/push/vapid-public-key:
+    get:
+      tags: [Push]
+      summary: Application-server VAPID public key
+      operationId: getVapidPublicKey
+      responses:
+        "200":
+          description: Public key for `pushManager.subscribe`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VapidPublicKey"
+
+  /v1/push/subscribe:
+    post:
+      tags: [Push]
+      summary: Store a Web Push subscription
+      operationId: subscribePush
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushSubscribeRequest"
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushSubscription"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/push/subscriptions/{id}:
+    delete:
+      tags: [Push]
+      summary: Remove a Web Push subscription
+      operationId: unsubscribePush
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Removed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/jobs:
+    get:
+      tags: [Jobs]
+      summary: List the caller's scheduled jobs
+      operationId: listJobs
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Job"
+    post:
+      tags: [Jobs]
+      summary: Schedule a job (typically a Web Push reminder)
+      operationId: createJob
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobRequest"
+      responses:
+        "201":
+          description: Scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/jobs/{id}:
+    delete:
+      tags: [Jobs]
+      summary: Cancel a pending job
+      operationId: cancelJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Cancelled
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/ai/complete:
+    post:
+      tags: [AI]
+      summary: Reserved AI completion seam
+      description: |
+        T1 does not implement a model gateway. The handler delegates to the
+        `AiGateway` trait. The default `UnconfiguredAiGateway` returns 501
+        `ai_unconfigured` so Echo can plug in providers later without
+        changing the route.
+      operationId: aiComplete
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiCompleteRequest"
+      responses:
+        "200":
+          description: Completion from a configured gateway (not in T1)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiCompleteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          description: Gateway not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived access JWT from login, register, refresh, or SMS verify
+    deviceAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Opaque device session token issued by `POST /v1/devices`. Send as
+        `Authorization: Device <token>` so it is not confused with a JWT.
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+    Forbidden:
+      description: Authenticated but not allowed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+    NotFound:
+      description: Resource missing
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+    Conflict:
+      description: Unique constraint or already linked
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+  schemas:
+    ErrorBody:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - invalid_request
+                - invalid_credentials
+                - unauthenticated
+                - forbidden
+                - not_found
+                - conflict
+                - ai_unconfigured
+                - unavailable
+            message:
+              type: string
+    HealthResponse:
+      type: object
+      required: [status, service, db]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        service:
+          type: string
+          example: qingxin-api
+        db:
+          type: string
+          enum: [ok, error]
+    User:
+      type: object
+      required: [id, display_name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+          nullable: true
+        display_name:
+          type: string
+        phone:
+          type: string
+          nullable: true
+          description: Decrypted E.164 phone when the caller is allowed to see it
+        created_at:
+          type: string
+          format: date-time
+    RegisterRequest:
+      type: object
+      required: [email, password, display_name, consent]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        display_name:
+          type: string
+          minLength: 1
+        consent:
+          $ref: "#/components/schemas/ConsentRequest"
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+    TokenResponse:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in, user]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Access-token lifetime in seconds
+        user:
+          $ref: "#/components/schemas/User"
+    SmsRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+          description: E.164 phone number
+          example: "+8613800138000"
+        consent:
+          $ref: "#/components/schemas/ConsentRequest"
+    SmsRequestResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [sent]
+        dev_code:
+          type: string
+          description: Present only when the SMS stub is enabled
+    SmsVerifyRequest:
+      type: object
+      required: [phone, code]
+      properties:
+        phone:
+          type: string
+        code:
+          type: string
+        display_name:
+          type: string
+        consent:
+          $ref: "#/components/schemas/ConsentRequest"
+    ConsentRequest:
+      type: object
+      required: [policy_version]
+      properties:
+        policy_version:
+          type: string
+          example: "2026-10-13"
+    Consent:
+      type: object
+      required: [id, user_id, policy_version, accepted_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        policy_version:
+          type: string
+        accepted_at:
+          type: string
+          format: date-time
+    ExportPayload:
+      type: object
+      required: [exported_at, user, consents, devices, jobs, push_subscriptions]
+      properties:
+        exported_at:
+          type: string
+          format: date-time
+        user:
+          $ref: "#/components/schemas/User"
+        consents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Consent"
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceSession"
+        jobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+        push_subscriptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PushSubscription"
+    CaregiverInvite:
+      type: object
+      required: [code, expires_at]
+      properties:
+        code:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+    AcceptInviteRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+    CaregiverLink:
+      type: object
+      required: [id, caregiver_user_id, dependent_user_id, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        caregiver_user_id:
+          type: string
+          format: uuid
+        dependent_user_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+    CreateDeviceRequest:
+      type: object
+      required: [label]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: Target user; defaults to the caller
+        label:
+          type: string
+          example: 客厅平板
+        ttl_seconds:
+          type: integer
+          description: Optional lifetime; default 31536000 (365 days)
+    DeviceSession:
+      type: object
+      required: [id, user_id, issued_by_user_id, label, expires_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        issued_by_user_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    DeviceSessionCreated:
+      allOf:
+        - $ref: "#/components/schemas/DeviceSession"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: Opaque device credential; shown once
+    VapidPublicKey:
+      type: object
+      required: [public_key]
+      properties:
+        public_key:
+          type: string
+    PushSubscribeRequest:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint:
+          type: string
+          format: uri
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+    PushSubscription:
+      type: object
+      required: [id, endpoint, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        endpoint:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    CreateJobRequest:
+      type: object
+      required: [kind, run_at]
+      properties:
+        kind:
+          type: string
+          enum: [web_push]
+        run_at:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+          description: JSON delivered to the push sender (title, body, …)
+    Job:
+      type: object
+      required: [id, user_id, kind, run_at, status, attempts, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        run_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, running, done, failed, cancelled]
+        attempts:
+          type: integer
+        payload:
+          type: object
+          additionalProperties: true
+        last_error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    AiCompleteRequest:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            type: object
+            required: [role, content]
+            properties:
+              role:
+                type: string
+                enum: [system, user, assistant]
+              content:
+                type: string
+        model:
+          type: string
+    AiCompleteResponse:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        model:
+          type: string
+        usage:
+          type: object
+          properties:
+            prompt_tokens:
+              type: integer
+            completion_tokens:
+              type: integer
