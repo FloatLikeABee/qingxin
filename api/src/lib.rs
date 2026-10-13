@@ -14,6 +14,7 @@ pub mod routes;
 pub mod scheduler;
 pub mod state;
 pub mod util;
+pub mod wellness;
 
 pub use config::Config;
 pub use state::AppState;
