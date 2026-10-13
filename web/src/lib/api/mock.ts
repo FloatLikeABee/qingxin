@@ -1281,9 +1281,11 @@ export class MockQingxinApi implements QingxinApi {
 		const list = this.#aiTasks.get(session.userId) ?? [];
 		persistUserList(this.#aiTasks, AI_TASKS_KEY, session.userId, [task, ...list]);
 		for (const text of chunkText(task.outputText, 10)) {
+			if (input.signal?.aborted) return;
 			yield { type: 'delta', text };
 			await Promise.resolve();
 		}
+		if (input.signal?.aborted) return;
 		yield { type: 'result', task };
 	}
 

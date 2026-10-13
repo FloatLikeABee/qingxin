@@ -19,7 +19,7 @@
 		type ToolId
 	} from '#lib/tools/catalog';
 	import { downloadText, taskToMarkdown } from '#lib/tools/export';
-	import { filterTasks, SHIMMER_CLASS } from '#lib/tools/history';
+	import { filterTasks, groupTasksByTime, SHIMMER_CLASS } from '#lib/tools/history';
 	import {
 		cacheCatalog,
 		cacheTasks,
@@ -48,6 +48,10 @@
 	let lastTask = $state<AiTask | null>(null);
 	let historyTool = $state<ToolId | 'all'>('all');
 	let lastInput = $state<ToolRunInput | null>(null);
+	let runError = $state('');
+	let stopped = $state(false);
+	let abortCtrl: AbortController | null = null;
+	let runGeneration = 0;
 
 	const summaryKinds: { id: InputKind; label: string }[] = [
 		{ id: 'text', label: '文本' },
@@ -56,6 +60,7 @@
 	];
 	const current = $derived(catalog.items.find((item) => item.id === toolId) ?? catalog.items[0]);
 	const history = $derived(filterTasks(tasks, historyTool));
+	const historyGroups = $derived(groupTasksByTime(history));
 	const recentTools = $derived(
 		catalog.recent
 			.map((id) => catalog.items.find((item) => item.id === id))
@@ -66,9 +71,23 @@
 	async function refresh() {
 		const api = getApi();
 		catalog = await api.listTools();
-		tasks = await api.listAiTasks();
+		tasks = await api.listAiTasks(historyTool === 'all' ? undefined : historyTool);
 		await cacheCatalog(catalog);
 		await cacheTasks(tasks);
+	}
+
+	async function selectHistoryTool(id: ToolId | 'all') {
+		historyTool = id;
+		try {
+			tasks = await getApi().listAiTasks(id === 'all' ? undefined : id);
+			await cacheTasks(tasks);
+		} catch (error) {
+			pushToast({
+				title: '没能完成',
+				body: error instanceof Error ? error.message : '请稍后再试',
+				tone: 'danger'
+			});
+		}
 	}
 
 	function openTool(id: ToolId) {
@@ -103,15 +122,26 @@
 		return input;
 	}
 
+	function stopRun() {
+		abortCtrl?.abort();
+	}
+
 	async function run(step?: 'topics' | 'decisions') {
+		abortCtrl?.abort();
+		const generation = ++runGeneration;
+		abortCtrl = new AbortController();
+		const signal = abortCtrl.signal;
 		pending = true;
 		thinking = true;
+		stopped = false;
+		runError = '';
 		output = '';
 		lastTask = null;
 		const input = buildInput(step);
 		lastInput = input;
 		try {
-			for await (const event of getApi().runTool(input)) {
+			for await (const event of getApi().runTool({ ...input, signal })) {
+				if (generation !== runGeneration) return;
 				if (event.type === 'delta') {
 					thinking = false;
 					output += event.text;
@@ -121,16 +151,28 @@
 					thinking = false;
 				}
 			}
+			if (generation !== runGeneration) return;
+			if (signal.aborted) {
+				stopped = true;
+				thinking = false;
+				return;
+			}
 			await refresh();
 		} catch (error) {
+			if (generation !== runGeneration) return;
 			thinking = false;
-			pushToast({
-				title: '没能完成',
-				body: error instanceof Error ? error.message : '请稍后再试',
-				tone: 'danger'
-			});
+			if (signal.aborted) {
+				stopped = true;
+			} else {
+				runError = error instanceof Error ? error.message : '请稍后再试';
+				pushToast({
+					title: '没能完成',
+					body: runError,
+					tone: 'danger'
+				});
+			}
 		} finally {
-			pending = false;
+			if (generation === runGeneration) pending = false;
 		}
 	}
 
@@ -296,6 +338,7 @@
 				{/if}
 				<div class="mt-4 flex flex-wrap gap-2">
 					<Button onclick={() => run()} disabled={pending}>开始</Button>
+					<Button variant="ghost" onclick={stopRun} disabled={!pending}>停止</Button>
 					{#if toolId === 'meeting'}
 						<Button variant="secondary" onclick={() => run('decisions')} disabled={pending}
 							>生成决策</Button
@@ -311,6 +354,16 @@
 							<p class="mb-3 font-medium">思考中</p>
 							<Skeleton lines={4} />
 						</div>
+					{:else if stopped}
+						<p class="text-[var(--qx-muted)]">已停止</p>
+						{#if output}
+							<pre class="mt-3 text-base whitespace-pre-wrap">{output}</pre>
+						{/if}
+					{:else if runError}
+						<p role="alert">{runError}</p>
+						{#if output}
+							<pre class="mt-3 text-base whitespace-pre-wrap">{output}</pre>
+						{/if}
 					{:else if output}
 						<pre class="text-base whitespace-pre-wrap">{output}</pre>
 					{:else}
@@ -336,7 +389,7 @@
 				class="min-h-11 rounded-xl px-3 {historyTool === 'all'
 					? 'bg-[var(--qx-primary)] text-white'
 					: 'bg-[var(--qx-surface)]'}"
-				onclick={() => (historyTool = 'all')}>全部</button
+				onclick={() => selectHistoryTool('all')}>全部</button
 			>
 			{#each TOOLS as item (item.id)}
 				<button
@@ -344,7 +397,7 @@
 					class="min-h-11 rounded-xl px-3 {historyTool === item.id
 						? 'bg-[var(--qx-primary)] text-white'
 						: 'bg-[var(--qx-surface)]'}"
-					onclick={() => (historyTool = item.id)}>{item.name}</button
+					onclick={() => selectHistoryTool(item.id)}>{item.name}</button
 				>
 			{/each}
 		</div>
@@ -355,17 +408,20 @@
 				icon="spark"
 			/>
 		{:else}
-			<ul class="space-y-3">
-				{#each history as item (item.id)}
-					<li>
-						<Card>
-							<p class="font-medium">{TOOLS.find((tool) => tool.id === item.toolId)?.name}</p>
-							<p class="mt-1 text-sm text-[var(--qx-muted)]">{item.createdAt}</p>
-							<p class="mt-2 line-clamp-3 text-base">{item.outputText}</p>
-						</Card>
-					</li>
-				{/each}
-			</ul>
+			{#each historyGroups as bucket (bucket.id)}
+				<h2 class="text-lg font-semibold">{bucket.label}</h2>
+				<ul class="space-y-3">
+					{#each bucket.items as item (item.id)}
+						<li>
+							<Card>
+								<p class="font-medium">{TOOLS.find((tool) => tool.id === item.toolId)?.name}</p>
+								<p class="mt-1 text-sm text-[var(--qx-muted)]">{item.createdAt}</p>
+								<p class="mt-2 line-clamp-3 text-base">{item.outputText}</p>
+							</Card>
+						</li>
+					{/each}
+				</ul>
+			{/each}
 		{/if}
 	{/if}
 </section>
