@@ -223,11 +223,15 @@ describe('MockQingxinApi', () => {
 		const work = await api.createCreation({
 			platform: '周报',
 			promptParams: { topic: '本周进展' },
-			generatedContent: '进展一览'
+			generatedContent: '进展一览',
+			finalContent: '润色稿'
 		});
-		expect(work.finalContent).toBe('进展一览');
+		expect(work.finalContent).toBe('润色稿');
+		expect(work.versions).toHaveLength(2);
 		const patched = await api.patchCreation(work.id, { finalContent: '定稿' });
 		expect(patched.versions.length).toBeGreaterThan(work.versions.length);
+		const same = await api.patchCreation(work.id, { finalContent: '定稿' });
+		expect(same.versions).toHaveLength(patched.versions.length);
 		const snip = await api.createSnippet({ content: '先写结论。', kind: '过渡' });
 		const used = await api.useSnippet(snip.id);
 		expect(used.usageCount).toBe(1);

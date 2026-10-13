@@ -127,7 +127,24 @@ async fn creation_create_list_patch_isolation_and_validation() {
     assert_eq!(status, StatusCode::CREATED, "{first}");
     assert_eq!(first["platform"], "小红书");
     assert_eq!(first["final_content"], "第一稿");
-    assert!(!first["versions"].as_array().unwrap().is_empty());
+    assert_eq!(first["versions"].as_array().unwrap().len(), 1);
+
+    let (status, polished_create) = send(
+        &router,
+        Method::POST,
+        "/v1/create/creations",
+        Some(("Bearer", a_tok)),
+        Some(json!({
+            "platform": "公众号",
+            "prompt_params": { "topic": "午睡十分钟" },
+            "generated_content": "第一稿",
+            "final_content": "润色稿"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{polished_create}");
+    assert_eq!(polished_create["final_content"], "润色稿");
+    assert_eq!(polished_create["versions"].as_array().unwrap().len(), 2);
 
     let id = first["id"].as_str().unwrap();
     let (status, again) = send(
@@ -188,6 +205,17 @@ async fn creation_create_list_patch_isolation_and_validation() {
     assert_eq!(status, StatusCode::OK, "{patched}");
     assert_eq!(patched["final_content"], "定稿");
     assert!(patched["versions"].as_array().unwrap().len() > 1);
+    let version_count = patched["versions"].as_array().unwrap().len();
+    let (status, same) = send(
+        &router,
+        Method::PATCH,
+        &format!("/v1/create/creations/{id}"),
+        Some(("Bearer", a_tok)),
+        Some(json!({ "final_content": "定稿" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{same}");
+    assert_eq!(same["versions"].as_array().unwrap().len(), version_count);
 
     let (status, listed) = send(
         &router,

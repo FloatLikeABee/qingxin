@@ -405,7 +405,11 @@ async fn create_creation(
                 .filter(|s| !s.is_empty())
                 .map(str::to_string)
         });
-    let versions = json!([snapshot("generate", &generated, &now)]).to_string();
+    let mut versions = vec![snapshot("generate", &generated, &now)];
+    if final_content != generated {
+        versions.push(snapshot("edit", &final_content, &now));
+    }
+    let versions = Value::Array(versions).to_string();
     let params = if body.prompt_params.is_null() {
         json!({}).to_string()
     } else {
@@ -512,13 +516,17 @@ async fn patch_creation(
     }
     if let Some(generated) = body.generated_content {
         let text = require_text(Some(&generated), "generated_content")?;
-        row.generated_content = text.clone();
-        versions.push(snapshot("generate", &text, &now));
+        if text != row.generated_content {
+            row.generated_content = text.clone();
+            versions.push(snapshot("generate", &text, &now));
+        }
     }
     if let Some(final_content) = body.final_content {
         let text = require_text(Some(&final_content), "final_content")?;
-        row.final_content = text.clone();
-        versions.push(snapshot("edit", &text, &now));
+        if text != row.final_content {
+            row.final_content = text.clone();
+            versions.push(snapshot("edit", &text, &now));
+        }
     }
     row.versions_json = Value::Array(versions).to_string();
     sqlx::query(

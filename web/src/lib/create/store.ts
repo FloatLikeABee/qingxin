@@ -56,15 +56,31 @@ export async function saveCreation(
 	apply: (work: Creation) => void,
 	revert: () => void
 ) {
+	if (input.id) {
+		const saved = await getApi().patchCreation(input.id, {
+			title: input.title,
+			generatedContent: input.generatedContent,
+			finalContent: input.finalContent,
+			promptParams: input.promptParams
+		});
+		apply(saved);
+		return saved;
+	}
 	const now = new Date().toISOString();
+	const generated = input.generatedContent;
+	const finalContent = input.finalContent ?? generated;
+	const versions = [{ at: now, kind: 'generate', content: generated }];
+	if (finalContent !== generated) {
+		versions.push({ at: now, kind: 'edit', content: finalContent });
+	}
 	const pending: Creation = {
-		id: input.id ?? crypto.randomUUID(),
+		id: crypto.randomUUID(),
 		platform: input.platform,
 		title: input.title,
 		promptParams: input.promptParams,
-		generatedContent: input.generatedContent,
-		finalContent: input.finalContent ?? input.generatedContent,
-		versions: [{ at: now, kind: 'generate', content: input.generatedContent }],
+		generatedContent: generated,
+		finalContent,
+		versions,
 		createdAt: now,
 		updatedAt: now
 	};

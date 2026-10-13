@@ -51,6 +51,51 @@ describe('create store', () => {
 		await expect(loadCachedSnippets()).resolves.toEqual(snips);
 	});
 
+	it('patches an existing work and appends a version instead of duplicating', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		resetApi(api);
+		const created = await saveCreation(
+			{
+				platform: '小红书',
+				title: '阳台种菜',
+				promptParams: { topic: '阳台种菜' },
+				generatedContent: '第一稿'
+			},
+			() => {},
+			() => {}
+		);
+		const saved = await saveCreation(
+			{
+				id: created.id,
+				platform: '小红书',
+				title: '阳台种菜',
+				promptParams: { topic: '阳台种菜' },
+				generatedContent: '第一稿',
+				finalContent: '定稿'
+			},
+			() => {},
+			() => {}
+		);
+		expect(saved.id).toBe(created.id);
+		expect(saved.finalContent).toBe('定稿');
+		expect(saved.versions.length).toBeGreaterThan(created.versions.length);
+		const listed = await api.listCreations();
+		expect(listed.filter((item) => item.id === created.id)).toHaveLength(1);
+		const same = await saveCreation(
+			{
+				id: created.id,
+				platform: '小红书',
+				title: '阳台种菜',
+				generatedContent: '第一稿',
+				finalContent: '定稿'
+			},
+			() => {},
+			() => {}
+		);
+		expect(same.versions).toHaveLength(saved.versions.length);
+	});
+
 	it('enqueues an offline create as create_work_create', async () => {
 		class OfflineApi extends MockQingxinApi {
 			override async createCreation(): Promise<Creation> {

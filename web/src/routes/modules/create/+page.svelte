@@ -149,6 +149,17 @@
 			const result = await getApi().polishCreateCopy({ text: finalContent, tone: next });
 			aiNote = result;
 			finalContent = result.text;
+			if (activeWorkId) {
+				try {
+					const saved = await getApi().patchCreation(activeWorkId, {
+						finalContent: result.text
+					});
+					works = [saved, ...works.filter((item) => item.id !== saved.id)];
+					await cacheCreations(works);
+				} catch {
+					pushToast({ title: '润色已写进编辑区，保存后会记一版', tone: 'info' });
+				}
+			}
 		} catch {
 			pushToast({ title: '润色暂时不可用', tone: 'danger' });
 		}
@@ -181,6 +192,7 @@
 		try {
 			const saved = await saveCreation(
 				{
+					id: activeWorkId || undefined,
 					platform,
 					title: topic.trim(),
 					promptParams: { topic: topic.trim(), keywords: keywordList(), tone, length },
@@ -216,6 +228,7 @@
 	function useInspiration(topicText: string, nextPlatform: CreatePlatform) {
 		topic = topicText;
 		platform = nextPlatform;
+		activeWorkId = '';
 		tab = 0;
 		void runGenerate();
 	}
@@ -250,6 +263,8 @@
 			snippets = snippets.map((item) => (item.id === id ? used : item));
 			finalContent = `${finalContent.trim()}\n${used.content}`.trim();
 			await cacheSnippets(snippets);
+			tab = 0;
+			pane = 'edit';
 		} catch {
 			pushToast({ title: '没能插入这段', tone: 'danger' });
 		}

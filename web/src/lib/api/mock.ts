@@ -913,6 +913,10 @@ export class MockQingxinApi implements QingxinApi {
 		const finalContent = input.finalContent?.trim() || generated;
 		const topic =
 			typeof input.promptParams?.topic === 'string' ? input.promptParams.topic : undefined;
+		const versions = [{ at: now, kind: 'generate', content: generated }];
+		if (finalContent !== generated) {
+			versions.push({ at: now, kind: 'edit', content: finalContent });
+		}
 		const work: Creation = {
 			id,
 			platform: input.platform,
@@ -920,7 +924,7 @@ export class MockQingxinApi implements QingxinApi {
 			promptParams: input.promptParams,
 			generatedContent: generated,
 			finalContent,
-			versions: [{ at: now, kind: 'generate', content: generated }],
+			versions,
 			createdAt: now,
 			updatedAt: now
 		};
@@ -957,14 +961,18 @@ export class MockQingxinApi implements QingxinApi {
 		if (patch.generatedContent !== undefined) {
 			const text = patch.generatedContent.trim();
 			if (!text) throw new ApiError('invalid_request', '请填写生成稿');
-			current.generatedContent = text;
-			current.versions.push({ at: now, kind: 'generate', content: text });
+			if (text !== current.generatedContent) {
+				current.generatedContent = text;
+				current.versions.push({ at: now, kind: 'generate', content: text });
+			}
 		}
 		if (patch.finalContent !== undefined) {
 			const text = patch.finalContent.trim();
 			if (!text) throw new ApiError('invalid_request', '请填写定稿');
-			current.finalContent = text;
-			current.versions.push({ at: now, kind: 'edit', content: text });
+			if (text !== current.finalContent) {
+				current.finalContent = text;
+				current.versions.push({ at: now, kind: 'edit', content: text });
+			}
 		}
 		current.updatedAt = now;
 		const next = [...list];
