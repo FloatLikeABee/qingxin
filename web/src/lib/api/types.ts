@@ -3,6 +3,15 @@ import type { MoodLog } from '../mood/trends';
 import type { InterviewQuestion, SideHustle } from '../hustle/catalog';
 import type { Application, FunnelStage } from '../hustle/funnel';
 import type { ResumeContent } from '../hustle/resume';
+import type {
+	CorrectionKind,
+	ElderTag,
+	LocalCategory,
+	LocalCorrection,
+	LocalReview,
+	LocalService
+} from '../local/catalog';
+import type { LocalSort } from '../local/geo';
 
 export interface Session {
 	userId: string;
@@ -22,6 +31,9 @@ export interface ExportPayload {
 		applications?: Application[];
 		resumes?: ResumeVersion[];
 		sideHustles?: SideHustle[];
+		localReviews?: LocalReview[];
+		localServices?: LocalService[];
+		localCorrections?: LocalCorrection[];
 	};
 }
 
@@ -165,6 +177,35 @@ export interface QingxinApi {
 		difficulty?: string;
 	}): Promise<InterviewQuestion[]>;
 	mockInterview(input: { questionId?: string; question?: string }): Promise<HustleAiText>;
+	listLocalServices(filter?: {
+		q?: string;
+		category?: LocalCategory;
+		tag?: ElderTag;
+		sort?: LocalSort;
+		lat?: number;
+		lng?: number;
+	}): Promise<LocalService[]>;
+	getLocalService(id: string): Promise<LocalService>;
+	createLocalService(input: {
+		id?: string;
+		name: string;
+		category: LocalCategory;
+		address: string;
+		latitude: number;
+		longitude: number;
+		hours?: string;
+		phone?: string;
+		tags?: ElderTag[];
+	}): Promise<LocalService>;
+	listLocalReviews(serviceId: string): Promise<LocalReview[]>;
+	createLocalReview(
+		serviceId: string,
+		input: { id?: string; content: string; rating?: number; images?: string[] }
+	): Promise<LocalReview>;
+	createLocalCorrection(
+		serviceId: string,
+		input: { id?: string; kind: CorrectionKind }
+	): Promise<LocalCorrection>;
 }
 
 export class ApiError extends Error {

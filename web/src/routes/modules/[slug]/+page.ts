@@ -3,11 +3,11 @@ import { getModule, MODULES } from '#lib/modules';
 import type { EntryGenerator, PageLoad } from './$types';
 
 export const entries: EntryGenerator = () =>
-	MODULES.filter((item) => !['mood', 'hustle', 'finance', 'pet'].includes(item.slug)).map(
-		(item) => ({
-			slug: item.slug
-		})
-	);
+	MODULES.filter(
+		(item) => !['mood', 'hustle', 'finance', 'pet', 'local', 'health'].includes(item.slug)
+	).map((item) => ({
+		slug: item.slug
+	}));
 
 export const load: PageLoad = ({ params }) => {
 	const module = getModule(params.slug);

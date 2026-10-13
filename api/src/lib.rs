@@ -7,6 +7,7 @@ pub mod elder;
 pub mod error;
 pub mod finance;
 pub mod hustle;
+pub mod local;
 pub mod moderation;
 pub mod mood;
 pub mod pets;
