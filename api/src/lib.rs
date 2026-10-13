@@ -3,6 +3,7 @@ pub mod auth;
 pub mod config;
 pub mod crypto;
 pub mod db;
+pub mod elder;
 pub mod error;
 pub mod moderation;
 pub mod push;

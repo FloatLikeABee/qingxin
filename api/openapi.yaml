@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: Qingxin (轻心) API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    T1 Foundation HTTP contract for Qingxin.
+    T1 Foundation HTTP contract for Qingxin, plus M3 elder-assistant routes.
 
     The Rust service lives in `api/`. Sensitive fields (phone numbers) are
     stored with AES-256-GCM. Access tokens are short-lived JWTs; refresh
@@ -30,6 +30,7 @@ tags:
   - name: Push
   - name: Jobs
   - name: AI
+  - name: Elder
 paths:
   /health:
     get:
@@ -576,6 +577,528 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
 
+  /v1/elder/today:
+    get:
+      tags: [Elder]
+      summary: Elder home aggregate
+      description: |
+        Returns today's reminders, due occurrences, contacts (including 120/110),
+        and a disclaimer that reminders are not alarm-reliable.
+        `elder_id` defaults to the caller (`me`). Device sessions authenticate as the elder.
+      operationId: getElderToday
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - name: elder_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Today payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElderToday"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/elder/{elder_id}/profile:
+    get:
+      tags: [Elder]
+      summary: Elder profile including activity-log opt-in
+      operationId: getElderProfile
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElderProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Elder]
+      summary: Elder updates their own profile
+      description: Only the elder may change `activity_log_opt_in`. Caregivers receive 404.
+      operationId: patchElderProfile
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ElderProfilePatch"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElderProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/elder/{elder_id}/reminders:
+    get:
+      tags: [Elder]
+      summary: List reminders
+      operationId: listElderReminders
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      responses:
+        "200":
+          description: Reminder list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElderReminderList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Elder]
+      summary: Create a time-plus-weekday reminder
+      description: Rejects `schedule_cron`. Enqueues T1 `web_push` jobs for the next occurrence and a miss-check.
+      operationId: createElderReminder
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ElderReminderCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElderReminder"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/elder/{elder_id}/reminders/{id}:
+    patch:
+      tags: [Elder]
+      operationId: patchElderReminder
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ElderReminderCreate"
+      responses:
+        "200":
+          description: Updated reminder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElderReminder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Elder]
+      operationId: deleteElderReminder
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/elder/{elder_id}/reminders/{id}/ack:
+    post:
+      tags: [Elder]
+      summary: Acknowledge a reminder occurrence (idempotent)
+      operationId: ackElderReminder
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [occurrence_at]
+              properties:
+                occurrence_at:
+                  type: string
+                  format: date-time
+      responses:
+        "200":
+          description: Ack event
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/elder/{elder_id}/contacts:
+    get:
+      tags: [Elder]
+      summary: List contacts including 120 and 110
+      operationId: listElderContacts
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      responses:
+        "200":
+          description: Contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElderContactList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Elder]
+      summary: Create a contact (phone AES-GCM at rest)
+      operationId: createElderContact
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ElderContactCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElderContact"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/elder/tutorials/system:
+    get:
+      tags: [Elder]
+      summary: System tutorials
+      operationId: listElderSystemTutorials
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: System tutorials
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/elder/{elder_id}/tutorials:
+    get:
+      tags: [Elder]
+      summary: Family-authored tutorials
+      operationId: listElderFamilyTutorials
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      responses:
+        "200":
+          description: Family tutorials
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Elder]
+      operationId: createElderTutorial
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, steps]
+              properties:
+                title:
+                  type: string
+                steps:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ElderTutorialStep"
+      responses:
+        "201":
+          description: Created
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/elder/fraud-scripts:
+    get:
+      tags: [Elder]
+      summary: Search sourced anti-fraud cards
+      operationId: listFraudScripts
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fraud scripts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FraudScriptList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/elder/fraud-scripts/{id}:
+    patch:
+      tags: [Elder]
+      summary: Editor-only update of a fraud script
+      operationId: patchFraudScript
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FraudScript"
+      responses:
+        "200":
+          description: Updated
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/elder/number-flags:
+    post:
+      tags: [Elder]
+      summary: Flag a suspicious number (stored hashed)
+      operationId: flagElderNumber
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+      responses:
+        "201":
+          description: Flagged
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/elder/number-flags/check:
+    get:
+      tags: [Elder]
+      summary: Check whether a number has been flagged
+      operationId: checkElderNumber
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - name: phone
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Flag summary without identities
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [flagged, count]
+                properties:
+                  flagged:
+                    type: boolean
+                  count:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/elder/{elder_id}/activity:
+    get:
+      tags: [Elder]
+      summary: Activity log (caregiver needs elder opt-in)
+      operationId: listElderActivity
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      responses:
+        "200":
+          description: Events
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Elder]
+      summary: Record an elder activity event
+      operationId: postElderActivity
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_type]
+              properties:
+                event_type:
+                  type: string
+                  enum: [call_tapped, tutorial_opened, reminder_acked]
+                contact_id:
+                  type: string
+                tutorial_id:
+                  type: string
+      responses:
+        "201":
+          description: Recorded
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/elder/notices:
+    get:
+      tags: [Elder]
+      summary: In-app notices for the calling caregiver
+      operationId: listElderNotices
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notices
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/elder/{elder_id}/sms-log:
+    get:
+      tags: [Elder]
+      summary: SMS-stub log for missed-dose attempts
+      operationId: listElderSmsLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ElderId"
+      responses:
+        "200":
+          description: Stub SMS rows
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/elder/ai/explain:
+    post:
+      tags: [Elder]
+      summary: Explain a scam topic through the AiGateway seam
+      description: Default process returns 501 `ai_unconfigured` until Echo wires a gateway.
+      operationId: elderAiExplain
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic]
+              properties:
+                topic:
+                  type: string
+      responses:
+        "200":
+          description: Completion from a configured gateway
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          description: Gateway not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -597,6 +1120,13 @@ components:
       schema:
         type: string
         format: uuid
+    ElderId:
+      name: elder_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Elder user id, or `me` for the caller
   responses:
     BadRequest:
       description: Validation failed
@@ -996,3 +1526,168 @@ components:
               type: integer
             completion_tokens:
               type: integer
+    ElderToday:
+      type: object
+      required: [elder_user_id, reminders, disclaimer]
+      properties:
+        elder_user_id:
+          type: string
+        reminders:
+          type: array
+          items:
+            $ref: "#/components/schemas/ElderReminder"
+        due:
+          type: array
+          items:
+            type: object
+        contacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ElderContact"
+        disclaimer:
+          type: string
+        medical_disclaimer:
+          type: string
+    ElderProfile:
+      type: object
+      required: [user_id, activity_log_opt_in, timezone]
+      properties:
+        user_id:
+          type: string
+        activity_log_opt_in:
+          type: boolean
+        timezone:
+          type: string
+    ElderProfilePatch:
+      type: object
+      properties:
+        activity_log_opt_in:
+          type: boolean
+        timezone:
+          type: string
+    ElderReminder:
+      type: object
+      required: [id, elder_user_id, created_by_user_id, title, body, kind, time, days_of_week]
+      properties:
+        id:
+          type: string
+        elder_user_id:
+          type: string
+        created_by_user_id:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        kind:
+          type: string
+          enum: [medication, general]
+        time:
+          type: string
+          example: "08:00"
+        days_of_week:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+        timezone:
+          type: string
+        voice_text:
+          type: string
+        active:
+          type: boolean
+    ElderReminderCreate:
+      type: object
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        kind:
+          type: string
+          enum: [medication, general]
+        time:
+          type: string
+        days_of_week:
+          type: array
+          items:
+            type: integer
+        timezone:
+          type: string
+        voice_text:
+          type: string
+        schedule_cron:
+          type: string
+          description: Rejected. Reminders are time plus weekdays.
+    ElderReminderList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ElderReminder"
+    ElderContact:
+      type: object
+      required: [id, name, relation, phone]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        relation:
+          type: string
+        phone:
+          type: string
+        is_emergency:
+          type: boolean
+    ElderContactCreate:
+      type: object
+      required: [name, relation, phone]
+      properties:
+        name:
+          type: string
+        relation:
+          type: string
+        phone:
+          type: string
+    ElderContactList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ElderContact"
+    ElderTutorialStep:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+        image_url:
+          type: string
+        audio_url:
+          type: string
+    FraudScript:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        source_name:
+          type: string
+        source_url:
+          type: string
+    FraudScriptList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FraudScript"

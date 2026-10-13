@@ -6,7 +6,10 @@
 		<meta name="text-scale" content="scale" />
 		<meta name="color-scheme" content="light dark" />
 		<meta name="theme-color" content="#3B82F6" />
-		<meta name="description" content="轻心 —— 把日子过轻一点。工具辅助与信息展示，非医疗、金融或法律建议。" />
+		<meta
+			name="description"
+			content="轻心 —— 把日子过轻一点。工具辅助与信息展示，非医疗、金融或法律建议。"
+		/>
 		<link rel="manifest" href="/manifest.webmanifest" />
 		<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 		<script>
@@ -23,9 +26,14 @@
 					root.classList.toggle('dark', dark);
 					root.style.colorScheme = dark ? 'dark' : 'light';
 					var meta = document.querySelector('meta[name="color-scheme"]');
-					if (meta) meta.setAttribute('content', mode === 'system' ? 'light dark' : dark ? 'dark' : 'light');
+					if (meta)
+						meta.setAttribute(
+							'content',
+							mode === 'system' ? 'light dark' : dark ? 'dark' : 'light'
+						);
 					var theme = document.querySelector('meta[name="theme-color"]');
 					if (theme) theme.setAttribute('content', dark ? '#111827' : '#3B82F6');
+					if (localStorage.getItem('qingxin.elderMode') === '1') root.classList.add('elder');
 				} catch (e) {}
 			})();
 		</script>

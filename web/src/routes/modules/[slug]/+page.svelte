@@ -23,7 +23,9 @@
 </svelte:head>
 
 <section class="mx-auto max-w-2xl space-y-5">
-	<a href="/modules" class="inline-flex min-h-11 items-center text-base text-[var(--qx-muted)]">← 返回模块中心</a>
+	<a href="/modules" class="inline-flex min-h-11 items-center text-base text-[var(--qx-muted)]"
+		>← 返回模块中心</a
+	>
 	<div class="flex items-start gap-4">
 		<div
 			class="flex h-14 w-14 items-center justify-center rounded-2xl text-white"
@@ -48,7 +50,11 @@
 				icon="spark"
 			>
 				{#snippet action()}
-					<Button href="/kit">查看设计系统</Button>
+					{#if data.module.slug === 'elder'}
+						<Button href="/elder">打开老人助手</Button>
+					{:else}
+						<Button href="/kit">查看设计系统</Button>
+					{/if}
 				{/snippet}
 			</EmptyState>
 		{/if}
