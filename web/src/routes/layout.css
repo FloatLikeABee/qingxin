@@ -178,18 +178,18 @@ dialog::backdrop {
 }
 
 .resume-a4-shell {
+	container-type: inline-size;
 	overflow: hidden;
+	width: 100%;
+	max-width: 210mm;
+	aspect-ratio: 210 / 297;
+	color-scheme: light;
 }
 
-@media (max-width: 800px) {
-	.resume-a4-shell {
-		height: calc(297mm * 0.46);
-	}
-
-	.resume-a4-fit {
-		transform: scale(0.46);
-		transform-origin: top left;
-	}
+.resume-a4-fit {
+	width: 210mm;
+	transform-origin: top left;
+	transform: scale(calc(100cqi / 210mm));
 }
 
 .dark .hustle-kanban-card {

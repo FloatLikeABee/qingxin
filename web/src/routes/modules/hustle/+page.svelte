@@ -389,7 +389,7 @@
 			</div>
 
 			{#if jobPane === 'resume'}
-				<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+				<div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
 					<Card>
 						<div class="mb-4 flex flex-wrap gap-2">
 							{#each resumes as item (item.id)}
@@ -444,11 +444,16 @@
 							<p class="mt-2 text-sm text-[var(--qx-muted)]">{optimize.disclaimer}</p>
 						{/if}
 					</Card>
-					<div>
+					<div class="w-full min-w-0">
 						<p class="mb-2 text-sm text-[var(--qx-muted)]">A4 预览始终浅色，方便对照纸质投递。</p>
-						<div class="resume-a4-shell rounded-3xl bg-[var(--qx-surface)] p-3">
-							<div class="resume-a4-fit">
-								<ResumePreview {content} />
+						<div
+							class="min-w-0 overflow-hidden rounded-3xl bg-white p-3 ring-1 ring-[var(--qx-line)]"
+							style="color-scheme: light"
+						>
+							<div class="resume-a4-shell">
+								<div class="resume-a4-fit">
+									<ResumePreview {content} />
+								</div>
 							</div>
 						</div>
 					</div>

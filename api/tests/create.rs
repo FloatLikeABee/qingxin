@@ -72,6 +72,19 @@ async fn register_user(router: &axum::Router, email: &str) -> Value {
     body
 }
 
+struct FailingGateway;
+
+#[async_trait::async_trait]
+impl AiGateway for FailingGateway {
+    async fn complete(
+        &self,
+        _user_id: &str,
+        _req: CompletionRequest,
+    ) -> Result<CompletionResponse, AiError> {
+        Err(AiError::Failed("connection refused".into()))
+    }
+}
+
 struct FixedGateway;
 
 #[async_trait::async_trait]
@@ -506,6 +519,37 @@ async fn ai_generate_titles_polish_outline_mock_and_gateway() {
     assert_eq!(status, StatusCode::OK, "{gated_outline}");
     assert_eq!(gated_outline["source"], "gateway");
     assert_eq!(gated_outline["title"], "gateway-sentence");
+}
+
+#[tokio::test]
+async fn generate_falls_back_to_stub_when_gateway_provider_fails() {
+    let (router, mut state) = world().await;
+    let created = register_user(&router, "fail-create@qingxin.app").await;
+    let access = created["access_token"].as_str().unwrap();
+    state.ai = Arc::new(FailingGateway);
+    let router = app(state);
+
+    let (status, gen) = send(
+        &router,
+        Method::POST,
+        "/v1/create/generate",
+        Some(("Bearer", access)),
+        Some(json!({
+            "platform": "小红书",
+            "topic": "阳台种菜",
+            "keywords": ["番茄"],
+            "tone": "更专业",
+            "length": "短"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{gen}");
+    assert_ne!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(gen["source"], "mock");
+    let text = gen["text"].as_str().unwrap();
+    assert!(text.contains("阳台种菜"), "{text}");
+    assert!(text.contains("示意文案"), "{text}");
+    assert!(gen["disclaimer"].as_str().unwrap().contains("不构成"));
 }
 
 #[tokio::test]

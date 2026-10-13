@@ -223,6 +223,20 @@ for (const view of views) {
 				await page.getByRole('tab', { name: screen.tab }).click();
 				await page.getByRole('button', { name: screen.chip, exact: true }).click();
 				await expect(page.getByText(screen.ready).first()).toBeVisible();
+				if (screen.key === 'resume') {
+					const shell = page.locator('.resume-a4-shell');
+					await expect(shell).toBeVisible();
+					const box = await shell.boundingBox();
+					expect(box, 'A4 shell should have a box').toBeTruthy();
+					expect(box!.width).toBeLessThanOrEqual(view.width);
+					const sheet = page.locator('.resume-a4');
+					const bg = await sheet.evaluate((el) => getComputedStyle(el).backgroundColor);
+					expect(bg.replace(/\s/g, '')).toMatch(/rgb\(255,255,255\)|#ffffff/i);
+					if (view.width <= 390) {
+						const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+						expect(scrollWidth).toBeLessThanOrEqual(view.width + 2);
+					}
+				}
 				if (view.width < 800) {
 					await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
 				}
