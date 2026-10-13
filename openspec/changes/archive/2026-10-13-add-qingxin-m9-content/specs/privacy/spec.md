@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: JSON export
-`GET /v1/privacy/export` SHALL require an access token and SHALL return a JSON document containing the user profile, consents, device sessions (no secrets), jobs, push subscriptions, the caller's mood logs with decrypted notes, meditation sessions, applications, resumes (content JSON), side hustles, creations, and snippets.
+`GET /v1/privacy/export` SHALL require an access token and SHALL return a JSON document containing the user profile, consents, device sessions (no secrets), jobs, push subscriptions, the caller's mood logs with decrypted notes, meditation sessions, applications, resumes (content JSON), side hustles, finance records, wellness records, the caller's local-life reviews, submitted services, correction flags, creations, and snippets.
 
 #### Scenario: Export requires login
 - **WHEN** a client calls `GET /v1/privacy/export` without a token
@@ -21,12 +21,16 @@
 - **WHEN** an authenticated user who created an application, a resume, and a side hustle calls export
 - **THEN** `applications`, `resumes`, and `side_hustles` arrays include those ids
 
+#### Scenario: Export contains local-life data
+- **WHEN** an authenticated user who created a review, a submitted service, and a correction calls export
+- **THEN** `local_reviews`, `local_services`, and `local_corrections` arrays include those ids
+
 #### Scenario: Export contains create data
 - **WHEN** an authenticated user who created a work and a snippet calls export
 - **THEN** `creations` and `snippets` arrays include those ids
 
 ### Requirement: Account deletion
-`DELETE /v1/privacy/account` SHALL remove the user and cascaded personal rows (tokens, consents, devices, jobs, push subscriptions, caregiver links, mood logs, meditation sessions, applications, resumes, side hustles, creations, snippets) and SHALL return 204. A later login or use of old tokens SHALL fail.
+`DELETE /v1/privacy/account` SHALL remove the user and cascaded personal rows (tokens, consents, devices, jobs, push subscriptions, caregiver links, mood logs, meditation sessions, applications, resumes, side hustles, finance records, wellness records, local-life reviews, submitted services, corrections, creations, snippets) and SHALL return 204. A later login or use of old tokens SHALL fail.
 
 #### Scenario: Delete erases the account
 - **WHEN** an authenticated user deletes their account
@@ -35,6 +39,10 @@
 #### Scenario: Delete cascades hustle rows
 - **WHEN** an authenticated user who created an application deletes their account
 - **THEN** the response is 204 and that application id is gone from the database
+
+#### Scenario: Delete cascades local-life rows
+- **WHEN** an authenticated user who created a review deletes their account
+- **THEN** the response is 204 and that review id is gone from the database
 
 #### Scenario: Delete cascades create rows
 - **WHEN** an authenticated user who created a work and a snippet deletes their account

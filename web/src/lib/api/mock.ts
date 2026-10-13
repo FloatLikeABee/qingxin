@@ -245,26 +245,6 @@ function seedSnippets(userId: string): CreateSnippet[] {
 	];
 }
 
-function seedResumes(userId: string): ResumeVersion[] {
-	const now = new Date().toISOString();
-	return [
-		{
-			id: `seed-resume-${userId}`,
-			version: 1,
-			title: '投前端',
-			content: DEFAULT_RESUME,
-			pdfUrl: null,
-			createdAt: now,
-			updatedAt: now
-		}
-	];
-}
-
-function requireSession(session: Session | null): Session {
-	if (!session) throw new ApiError('unauthenticated', '请先登录');
-	return session;
-}
-
 function seedLogs(userId: string): MoodLog[] {
 	const days = [
 		{ emoji: '😔', score: 2, tags: ['睡眠'], note: '夜里醒了两次' },
