@@ -284,4 +284,82 @@ describe('MockQingxinApi', () => {
 		expect(exported.data.localCorrections?.some((item) => item.id === flag.id)).toBe(true);
 		expect(exported.data.localServices?.some((item) => item.id === published.id)).toBe(true);
 	});
+
+	it('covers toolbox catalog, favourite, run stream, history, and export', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		const catalog = await api.listTools();
+		expect(catalog.items).toHaveLength(8);
+		expect(catalog.items.map((item) => item.id)).toContain('summary');
+		await api.setToolFavourite('meeting', true);
+		const favoured = await api.listTools();
+		expect(favoured.favourites).toContain('meeting');
+		await expect(async () => {
+			for await (const _event of api.runTool({ toolId: 'translate' as 'summary', text: 'x' })) {
+				void _event;
+			}
+		}).rejects.toMatchObject({
+			code: 'invalid_request'
+		});
+		let streamed = '';
+		let taskId = '';
+		for await (const event of api.runTool({
+			toolId: 'summary',
+			inputKind: 'text',
+			text: '明天交周报，并回复客户邮件。'
+		})) {
+			if (event.type === 'delta') streamed += event.text;
+			if (event.type === 'result') {
+				taskId = event.task.id;
+				expect(event.task.outputJson.todos).toBeTruthy();
+				expect(event.task.disclaimer).toContain('不构成');
+			}
+		}
+		expect(streamed.length).toBeGreaterThan(0);
+		const topics: string[] = [];
+		for await (const event of api.runTool({
+			toolId: 'meeting',
+			text: 'Alice 决定下周一发布。Bob 负责测试。'
+		})) {
+			if (event.type === 'result') {
+				topics.push(...((event.task.outputJson.topics as string[]) ?? []));
+			}
+		}
+		expect(topics.length).toBeGreaterThan(0);
+		for await (const event of api.runTool({
+			toolId: 'meeting',
+			step: 'decisions',
+			text: 'Alice 决定下周一发布。Bob 负责测试。'
+		})) {
+			if (event.type === 'result') {
+				expect((event.task.outputJson.decisions as string[]).length).toBeGreaterThan(0);
+			}
+		}
+		for await (const event of api.runTool({
+			toolId: 'resume_jd',
+			resume: '熟悉 Rust 与前端',
+			jd: '招聘全栈，要求 Rust'
+		})) {
+			if (event.type === 'result') {
+				expect(event.task.outputJson.score).toBeGreaterThanOrEqual(0);
+			}
+		}
+		for await (const event of api.runTool({
+			toolId: 'rename',
+			filenames: ['会议 最终 final (1).docx', 'IMG_0001.jpg']
+		})) {
+			if (event.type === 'result') {
+				expect((event.task.outputJson.suggestions as unknown[]).length).toBe(2);
+			}
+		}
+		const tasks = await api.listAiTasks('summary');
+		expect(tasks.every((item) => item.toolId === 'summary')).toBe(true);
+		expect(tasks.some((item) => item.id === taskId)).toBe(true);
+		const exported = await api.exportUserData();
+		expect(exported.data.aiTasks?.some((item) => item.id === taskId)).toBe(true);
+		expect(exported.data.aiTemplates?.some((item) => item.toolId === 'meeting')).toBe(true);
+		const other = new MockQingxinApi();
+		await other.register('乙', 'b-tools@qingxin.app', 'qingxin1');
+		expect(await other.listAiTasks()).toEqual([]);
+	});
 });

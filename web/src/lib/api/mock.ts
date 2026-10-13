@@ -40,6 +40,8 @@ import {
 	mockPolish,
 	mockTitles
 } from '../create/ai';
+import { chunkText, DISCLAIMER as TOOLS_DISCLAIMER, mockRun } from '../tools/ai';
+import { isToolId, mergeCatalog, POLISH_TONES, type ToolId } from '../tools/catalog';
 import {
 	filterTemplates,
 	INSPIRATION,
@@ -68,10 +70,15 @@ import {
 	type MeditationKind,
 	type MeditationSession,
 	type MoodInsight,
+	type AiTask,
+	type AiTemplate,
 	type QingxinApi,
 	type ResumeVersion,
 	type Session,
-	type SideHustleSuggest
+	type SideHustleSuggest,
+	type ToolCatalog,
+	type ToolRunInput,
+	type ToolStreamEvent
 } from './types';
 
 export { ApiError } from './types';
@@ -87,6 +94,8 @@ const RESUMES_KEY = 'qingxin.hustleResumes';
 const HUSTLES_KEY = 'qingxin.sideHustles';
 const CREATIONS_KEY = 'qingxin.creations';
 const SNIPPETS_KEY = 'qingxin.createSnippets';
+const AI_TASKS_KEY = 'qingxin.aiTasks';
+const AI_TEMPLATES_KEY = 'qingxin.aiTemplates';
 
 const KINDS: MeditationKind[] = ['breathe', 'noise', 'story', 'timer'];
 
@@ -163,6 +172,8 @@ function forgetUserLists(
 	hustles: Map<string, SideHustle[]>,
 	creations: Map<string, Creation[]>,
 	snippets: Map<string, CreateSnippet[]>,
+	aiTasks: Map<string, AiTask[]>,
+	aiTemplates: Map<string, AiTemplate[]>,
 	userId: string
 ) {
 	logs.delete(userId);
@@ -172,6 +183,8 @@ function forgetUserLists(
 	hustles.delete(userId);
 	creations.delete(userId);
 	snippets.delete(userId);
+	aiTasks.delete(userId);
+	aiTemplates.delete(userId);
 	for (const key of [
 		LOGS_KEY,
 		SESSIONS_KEY,
@@ -179,7 +192,9 @@ function forgetUserLists(
 		RESUMES_KEY,
 		HUSTLES_KEY,
 		CREATIONS_KEY,
-		SNIPPETS_KEY
+		SNIPPETS_KEY,
+		AI_TASKS_KEY,
+		AI_TEMPLATES_KEY
 	]) {
 		const stored = readUserMap(key);
 		delete stored[userId];
@@ -275,6 +290,8 @@ export class MockQingxinApi implements QingxinApi {
 	#hustles = new Map<string, SideHustle[]>();
 	#creations = new Map<string, Creation[]>();
 	#snippets = new Map<string, CreateSnippet[]>();
+	#aiTasks = new Map<string, AiTask[]>();
+	#aiTemplates = new Map<string, AiTemplate[]>();
 	#services: LocalService[] = SEED_SERVICES.map((item) => ({ ...item, tags: [...item.tags] }));
 	#reviews: LocalReview[] = SEED_REVIEWS.map((item) => ({ ...item }));
 	#corrections: LocalCorrection[] = [];
@@ -290,6 +307,11 @@ export class MockQingxinApi implements QingxinApi {
 		hydrateUserList(this.#snippets, SNIPPETS_KEY, userId, seedSnippets(userId));
 	}
 
+	#hydrateTools(userId: string) {
+		hydrateUserList(this.#aiTasks, AI_TASKS_KEY, userId, []);
+		hydrateUserList(this.#aiTemplates, AI_TEMPLATES_KEY, userId, []);
+	}
+
 	async getSession(): Promise<Session | null> {
 		this.#session ??= readStoredSession();
 		if (this.#session) {
@@ -297,6 +319,7 @@ export class MockQingxinApi implements QingxinApi {
 			hydrateUserList(this.#sessions, SESSIONS_KEY, this.#session.userId, []);
 			this.#hydrateHustle(this.#session.userId);
 			this.#hydrateCreate(this.#session.userId);
+			this.#hydrateTools(this.#session.userId);
 		}
 		return this.#session;
 	}
@@ -319,6 +342,7 @@ export class MockQingxinApi implements QingxinApi {
 		hydrateUserList(this.#sessions, SESSIONS_KEY, this.#session.userId, []);
 		this.#hydrateHustle(this.#session.userId);
 		this.#hydrateCreate(this.#session.userId);
+		this.#hydrateTools(this.#session.userId);
 		return this.#session;
 	}
 
@@ -340,6 +364,8 @@ export class MockQingxinApi implements QingxinApi {
 		persistUserList(this.#hustles, HUSTLES_KEY, this.#session.userId, []);
 		persistUserList(this.#creations, CREATIONS_KEY, this.#session.userId, []);
 		persistUserList(this.#snippets, SNIPPETS_KEY, this.#session.userId, []);
+		persistUserList(this.#aiTasks, AI_TASKS_KEY, this.#session.userId, []);
+		persistUserList(this.#aiTemplates, AI_TEMPLATES_KEY, this.#session.userId, []);
 		return this.#session;
 	}
 
@@ -369,7 +395,9 @@ export class MockQingxinApi implements QingxinApi {
 				localServices: this.#services.filter((item) => item.createdBy === session.userId),
 				localCorrections: this.#corrections.filter((item) => item.userId === session.userId),
 				creations: [...(this.#creations.get(session.userId) ?? [])],
-				snippets: [...(this.#snippets.get(session.userId) ?? [])]
+				snippets: [...(this.#snippets.get(session.userId) ?? [])],
+				aiTasks: [...(this.#aiTasks.get(session.userId) ?? [])],
+				aiTemplates: [...(this.#aiTemplates.get(session.userId) ?? [])]
 			}
 		};
 	}
@@ -385,6 +413,8 @@ export class MockQingxinApi implements QingxinApi {
 				this.#hustles,
 				this.#creations,
 				this.#snippets,
+				this.#aiTasks,
+				this.#aiTemplates,
 				userId
 			);
 			this.#reviews = this.#reviews.filter((item) => item.userId !== userId);
@@ -1112,6 +1142,141 @@ export class MockQingxinApi implements QingxinApi {
 		};
 		persistUserList(this.#snippets, SNIPPETS_KEY, session.userId, next);
 		return next[index];
+	}
+
+	async listTools(): Promise<ToolCatalog> {
+		const session = requireSession(this.#session);
+		this.#hydrateTools(session.userId);
+		const templates = this.#aiTemplates.get(session.userId) ?? [];
+		const tasks = this.#aiTasks.get(session.userId) ?? [];
+		const favourites = templates.filter((item) => item.favourite).map((item) => item.toolId);
+		const seen = new Set<ToolId>();
+		const recent: ToolId[] = [];
+		for (const task of [...tasks].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))) {
+			if (!seen.has(task.toolId)) {
+				seen.add(task.toolId);
+				recent.push(task.toolId);
+			}
+		}
+		return mergeCatalog(favourites, recent);
+	}
+
+	async setToolFavourite(toolId: ToolId, favourite: boolean) {
+		const session = requireSession(this.#session);
+		if (!isToolId(toolId)) throw new ApiError('invalid_request', '未知工具');
+		this.#hydrateTools(session.userId);
+		const list = this.#aiTemplates.get(session.userId) ?? [];
+		const now = new Date().toISOString();
+		const index = list.findIndex((item) => item.toolId === toolId);
+		if (index >= 0) {
+			const next = [...list];
+			next[index] = { ...next[index], favourite, updatedAt: now };
+			persistUserList(this.#aiTemplates, AI_TEMPLATES_KEY, session.userId, next);
+		} else {
+			persistUserList(this.#aiTemplates, AI_TEMPLATES_KEY, session.userId, [
+				{
+					id: crypto.randomUUID(),
+					toolId,
+					title: toolId,
+					body: '',
+					favourite,
+					createdAt: now,
+					updatedAt: now
+				},
+				...list
+			]);
+		}
+		return { toolId, favourite };
+	}
+
+	async listAiTasks(toolId?: ToolId): Promise<AiTask[]> {
+		const session = requireSession(this.#session);
+		if (toolId && !isToolId(toolId)) throw new ApiError('invalid_request', '未知工具');
+		this.#hydrateTools(session.userId);
+		const list = [...(this.#aiTasks.get(session.userId) ?? [])].sort((a, b) =>
+			a.createdAt < b.createdAt ? 1 : -1
+		);
+		return toolId ? list.filter((item) => item.toolId === toolId) : list;
+	}
+
+	async getAiTask(id: string): Promise<AiTask> {
+		const session = requireSession(this.#session);
+		this.#hydrateTools(session.userId);
+		const found = (this.#aiTasks.get(session.userId) ?? []).find((item) => item.id === id);
+		if (!found) throw new ApiError('not_found', '未找到记录');
+		return found;
+	}
+
+	async *runTool(input: ToolRunInput): AsyncIterable<ToolStreamEvent> {
+		const session = requireSession(this.#session);
+		if (!isToolId(input.toolId)) throw new ApiError('invalid_request', '未知工具');
+		this.#hydrateTools(session.userId);
+		if (input.toolId === 'summary') {
+			const kind = input.inputKind ?? 'text';
+			if (kind === 'text' && !(input.text ?? '').trim() && !input.url) {
+				throw new ApiError('invalid_request', '请输入内容');
+			}
+			if (kind === 'url' && !(input.url ?? '').trim()) {
+				throw new ApiError('invalid_request', '请输入链接');
+			}
+		}
+		if (input.toolId === 'meeting' && !(input.text ?? '').trim()) {
+			throw new ApiError('invalid_request', '请输入会议记录');
+		}
+		if (
+			['writing.weekly', 'writing.daily', 'writing.xhs', 'polish'].includes(input.toolId) &&
+			!(input.text ?? '').trim()
+		) {
+			throw new ApiError('invalid_request', '请输入内容');
+		}
+		if (input.toolId === 'polish' && input.tone && !POLISH_TONES.includes(input.tone)) {
+			throw new ApiError('invalid_request', '未知语气');
+		}
+		if (
+			input.toolId === 'resume_jd' &&
+			(!(input.resume ?? '').trim() || !(input.jd ?? '').trim())
+		) {
+			throw new ApiError('invalid_request', '请同时提供简历和职位');
+		}
+		if (input.toolId === 'rename' && !(input.filenames ?? []).some((name) => name.trim())) {
+			throw new ApiError('invalid_request', '请提供文件名');
+		}
+		if (input.toolId === 'meeting' && input.step === 'decisions') {
+			const prior = (this.#aiTasks.get(session.userId) ?? []).find(
+				(item) => item.toolId === 'meeting'
+			);
+			const topics = input.topics?.length
+				? input.topics
+				: ((prior?.outputJson.topics as string[] | undefined) ?? []);
+			if (!topics.length) throw new ApiError('invalid_request', '请先生成议题');
+			input = { ...input, topics };
+		}
+		const generated = mockRun(input.toolId, input);
+		const now = new Date().toISOString();
+		const task: AiTask = {
+			id: crypto.randomUUID(),
+			toolId: input.toolId,
+			inputKind: input.inputKind ?? 'text',
+			inputText: input.text ?? input.resume ?? (input.filenames ?? []).join('\n'),
+			inputMeta: {
+				url: input.url,
+				filename: input.filename,
+				tone: input.tone,
+				step: input.step
+			},
+			outputText: generated.outputText,
+			outputJson: generated.outputJson,
+			source: 'mock',
+			disclaimer: TOOLS_DISCLAIMER,
+			createdAt: now
+		};
+		const list = this.#aiTasks.get(session.userId) ?? [];
+		persistUserList(this.#aiTasks, AI_TASKS_KEY, session.userId, [task, ...list]);
+		for (const text of chunkText(task.outputText, 10)) {
+			yield { type: 'delta', text };
+			await Promise.resolve();
+		}
+		yield { type: 'result', task };
 	}
 }
 

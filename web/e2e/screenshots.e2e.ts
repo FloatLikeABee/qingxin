@@ -177,6 +177,35 @@ for (const view of views) {
 	}
 }
 
+const toolsScreens = [
+	{ key: 'grid', tab: '工具', ready: '全部工具' },
+	{ key: 'workbench', tab: '工作台', ready: '结果会出现在这里' },
+	{ key: 'history', tab: '历史', ready: '还没有记录' }
+] as const;
+
+for (const view of views) {
+	for (const theme of themes) {
+		for (const screen of toolsScreens) {
+			test(`tools ${screen.key} ${view.name} ${theme}`, async ({ page }) => {
+				await page.setViewportSize({ width: view.width, height: view.height });
+				await boot(page, theme);
+				await openReady(page, '/modules/ai');
+				await expect(page.getByRole('heading', { name: 'AI效率工具箱' })).toBeVisible();
+				await expect(page.getByText('摘要').first()).toBeVisible();
+				await page.getByRole('tab', { name: screen.tab }).click();
+				await expect(page.getByText(screen.ready).first()).toBeVisible();
+				if (view.width < 800) {
+					await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+				}
+				await page.screenshot({
+					path: `screenshots/tools-${screen.key}-${view.name}-${theme}.png`,
+					fullPage: true
+				});
+			});
+		}
+	}
+}
+
 const hustleScreens = [
 	{ key: 'resume', tab: '求职', chip: '简历', ready: 'A4 预览始终浅色' },
 	{ key: 'kanban', tab: '求职', chip: '看板', ready: '投递漏斗' },

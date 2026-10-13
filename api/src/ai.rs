@@ -1,4 +1,8 @@
+use std::pin::Pin;
+
 use async_trait::async_trait;
+use futures::Stream;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -26,6 +30,14 @@ pub struct CompletionResponse {
     pub usage: Option<TokenUsage>,
 }
 
+#[derive(Debug, Clone)]
+pub enum StreamChunk {
+    Delta { text: String },
+    End,
+}
+
+pub type CompletionStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, AiError>> + Send>>;
+
 #[derive(Debug, thiserror::Error)]
 pub enum AiError {
     #[error("ai gateway is not configured")]
@@ -41,6 +53,19 @@ pub trait AiGateway: Send + Sync {
         user_id: &str,
         req: CompletionRequest,
     ) -> Result<CompletionResponse, AiError>;
+
+    async fn stream(
+        &self,
+        user_id: &str,
+        req: CompletionRequest,
+    ) -> Result<CompletionStream, AiError> {
+        let done = self.complete(user_id, req).await?;
+        let chunks = vec![
+            Ok(StreamChunk::Delta { text: done.content }),
+            Ok(StreamChunk::End),
+        ];
+        Ok(Box::pin(futures::stream::iter(chunks)))
+    }
 }
 
 /// Default production gateway: Ollama first, then any vendor that has an env key.
@@ -82,6 +107,27 @@ impl QingxinAiGateway {
     }
 }
 
+fn map_forge_request(req: CompletionRequest) -> qingxin_ai_gateway::forge::CompletionRequest {
+    qingxin_ai_gateway::forge::CompletionRequest {
+        messages: req
+            .messages
+            .into_iter()
+            .map(|m| qingxin_ai_gateway::forge::ChatMessage {
+                role: m.role,
+                content: m.content,
+            })
+            .collect(),
+        model: req.model,
+    }
+}
+
+fn map_forge_error(err: qingxin_ai_gateway::forge::AiError) -> AiError {
+    match err {
+        qingxin_ai_gateway::forge::AiError::Unconfigured => AiError::Unconfigured,
+        qingxin_ai_gateway::forge::AiError::Failed(msg) => AiError::Failed(msg),
+    }
+}
+
 #[async_trait]
 impl AiGateway for QingxinAiGateway {
     async fn complete(
@@ -89,18 +135,11 @@ impl AiGateway for QingxinAiGateway {
         user_id: &str,
         req: CompletionRequest,
     ) -> Result<CompletionResponse, AiError> {
-        let mapped = qingxin_ai_gateway::forge::CompletionRequest {
-            messages: req
-                .messages
-                .into_iter()
-                .map(|m| qingxin_ai_gateway::forge::ChatMessage {
-                    role: m.role,
-                    content: m.content,
-                })
-                .collect(),
-            model: req.model,
-        };
-        match self.inner.complete_for_user(user_id, mapped).await {
+        match self
+            .inner
+            .complete_for_user(user_id, map_forge_request(req))
+            .await
+        {
             Ok(done) => Ok(CompletionResponse {
                 content: done.content,
                 model: done.model,
@@ -109,9 +148,25 @@ impl AiGateway for QingxinAiGateway {
                     completion_tokens: u.completion_tokens,
                 }),
             }),
-            Err(qingxin_ai_gateway::forge::AiError::Unconfigured) => Err(AiError::Unconfigured),
-            Err(qingxin_ai_gateway::forge::AiError::Failed(msg)) => Err(AiError::Failed(msg)),
+            Err(err) => Err(map_forge_error(err)),
         }
+    }
+
+    async fn stream(
+        &self,
+        user_id: &str,
+        req: CompletionRequest,
+    ) -> Result<CompletionStream, AiError> {
+        let inner = self
+            .inner
+            .stream_for_user(user_id, map_forge_request(req))
+            .await
+            .map_err(map_forge_error)?;
+        Ok(Box::pin(inner.map(|item| match item {
+            Ok(qingxin_ai_gateway::ChatChunk::Delta { text }) => Ok(StreamChunk::Delta { text }),
+            Ok(qingxin_ai_gateway::ChatChunk::End { .. }) => Ok(StreamChunk::End),
+            Err(err) => Err(AiError::Failed(err.to_string())),
+        })))
     }
 }
 

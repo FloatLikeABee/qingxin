@@ -3,6 +3,7 @@
 	import { drainSync, openQingxinDb } from '../offline/cache';
 	import { ApiError, getApi } from '../api/mock';
 	import { pushToast } from '../toast';
+	import type { ToolId } from '../tools/catalog';
 	import Icon from './Icon.svelte';
 
 	let online = $state(true);
@@ -103,6 +104,10 @@
 							finalContent?: string;
 						};
 						await getApi().createCreation(payload);
+					}
+					if (op.type === 'tools_favourite') {
+						const payload = op.payload as { toolId: ToolId; favourite: boolean };
+						await getApi().setToolFavourite(payload.toolId, payload.favourite);
 					}
 				} catch (error) {
 					if (error instanceof ApiError && error.code === 'conflict') return;

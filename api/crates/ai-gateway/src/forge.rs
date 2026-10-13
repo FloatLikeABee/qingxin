@@ -123,6 +123,17 @@ impl crate::Gateway {
         let response = Ai::complete(self, seam).await?;
         Ok(map_response(response))
     }
+
+    /// Streaming hook for M5 toolbox runs. Same mapping as [`Self::complete_for_user`].
+    pub async fn stream_for_user(
+        &self,
+        user_id: impl AsRef<str>,
+        request: CompletionRequest,
+    ) -> Result<crate::ChatStream, AiError> {
+        let user_id = UserId::new(user_id.as_ref()).map_err(AiError::from)?;
+        let seam = request.into_seam(user_id)?;
+        Ai::stream(self, seam).await.map_err(AiError::from)
+    }
 }
 
 /// `Arc<dyn crate::forge::AiGateway>` stand-in. Uses `"anonymous"` when the

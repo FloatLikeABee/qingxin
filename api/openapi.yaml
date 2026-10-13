@@ -16,6 +16,7 @@ info:
     M6 pets lives at `/v1/pets` (weights stay plaintext grams).
     M7 wellness lives at `/v1/wellness` (owner-only; caregivers never see it).
     M9 content studio lives at `/v1/create` (generate/titles/polish/outline use the AI gateway seam).
+    M5 AI toolbox lives at `/v1/tools` (catalog, SSE run, history; uses the AI gateway stream seam).
     Cycle symptoms, sleep notes and report metrics use `*_encrypted` BLOB columns
     (`symptoms_encrypted`, `note_encrypted`, `metrics_encrypted`).
     M8 study lives at `/v1/study` (owner-only). Flashcard fronts/backs and
@@ -52,6 +53,7 @@ tags:
   - name: Local
   - name: Create
   - name: Study
+  - name: Tools
 paths:
   /health:
     get:
@@ -4355,6 +4357,144 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /v1/tools:
+    get:
+      tags: [Tools]
+      summary: List toolbox catalog, recents, and favourites
+      operationId: listTools
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolCatalog"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/tools/tasks:
+    get:
+      tags: [Tools]
+      summary: List the caller's AI tasks newest first
+      operationId: listAiTasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tool_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiTaskList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/tools/tasks/{id}:
+    get:
+      tags: [Tools]
+      summary: Get one AI task
+      operationId: getAiTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiTask"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/tools/{tool_id}/favourite:
+    put:
+      tags: [Tools]
+      summary: Toggle a tool favourite
+      operationId: setToolFavourite
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tool_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [favourite]
+              properties:
+                favourite:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/tools/{tool_id}/run:
+    post:
+      tags: [Tools]
+      summary: Run a toolbox tool as SSE
+      description: |
+        Returns `text/event-stream` with OpenAI-compatible `data:` deltas,
+        then `event: result` (saved task) and `data: [DONE]`.
+        Calls `AiGateway::stream`. Unconfigured gateways stream mock copy.
+      operationId: runTool
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tool_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToolRunRequest"
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Gateway failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
 
 components:
   securitySchemes:
@@ -4654,6 +4794,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CreateSnippet"
+        ai_tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiTask"
+        templates:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiTemplate"
     CaregiverInvite:
       type: object
       required: [code, expires_at]
@@ -6914,3 +7062,76 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/StudyReminder"
+    ToolCatalog:
+      type: object
+      required: [items, recent, favourites]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolItem"
+        recent:
+          type: array
+          items:
+            type: string
+        favourites:
+          type: array
+          items:
+            type: string
+    ToolItem:
+      type: object
+      required: [id, name, favourite]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        favourite: { type: boolean }
+    AiTaskList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiTask"
+    AiTask:
+      type: object
+      required: [id, tool_id, input_kind, input_text, output_text, source, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        tool_id: { type: string }
+        input_kind: { type: string }
+        input_text: { type: string }
+        input_meta: { type: object }
+        output_text: { type: string }
+        output_json: { type: object }
+        source: { type: string, enum: [mock, gateway] }
+        disclaimer: { type: string }
+        created_at: { type: string, format: date-time }
+    AiTemplate:
+      type: object
+      required: [id, tool_id, title, favourite]
+      properties:
+        id: { type: string, format: uuid }
+        tool_id: { type: string }
+        title: { type: string }
+        body: { type: string }
+        favourite: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ToolRunRequest:
+      type: object
+      properties:
+        input_kind: { type: string, enum: [text, url, pdf] }
+        text: { type: string }
+        url: { type: string }
+        filename: { type: string }
+        resume: { type: string }
+        jd: { type: string }
+        filenames:
+          type: array
+          items: { type: string }
+        tone: { type: string }
+        step: { type: string, enum: [topics, decisions] }
+        topics:
+          type: array
+          items: { type: string }
