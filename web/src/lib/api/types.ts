@@ -12,6 +12,7 @@ import type {
 	Inspiration,
 	SnippetKind
 } from '../create/catalog';
+import type { InputKind, MeetingStep, PolishTone, ToolId, ToolItem } from '../tools/catalog';
 import type {
 	CorrectionKind,
 	ElderTag,
@@ -45,6 +46,8 @@ export interface ExportPayload {
 		localCorrections?: LocalCorrection[];
 		creations?: Creation[];
 		snippets?: CreateSnippet[];
+		aiTasks?: AiTask[];
+		aiTemplates?: AiTemplate[];
 	};
 }
 
@@ -116,6 +119,51 @@ export interface CreateOutlineResult extends CreateOutline {
 	source: 'mock' | 'gateway';
 	markdown: string;
 }
+
+export interface AiTask {
+	id: string;
+	toolId: ToolId;
+	inputKind: string;
+	inputText: string;
+	inputMeta: Record<string, unknown>;
+	outputText: string;
+	outputJson: Record<string, unknown>;
+	source: 'mock' | 'gateway';
+	disclaimer: string;
+	createdAt: string;
+}
+
+export interface AiTemplate {
+	id: string;
+	toolId: ToolId;
+	title: string;
+	body: string;
+	favourite: boolean;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface ToolCatalog {
+	items: ToolItem[];
+	recent: ToolId[];
+	favourites: ToolId[];
+}
+
+export interface ToolRunInput {
+	toolId: ToolId;
+	inputKind?: InputKind;
+	text?: string;
+	url?: string;
+	filename?: string;
+	resume?: string;
+	jd?: string;
+	filenames?: string[];
+	tone?: PolishTone;
+	step?: MeetingStep;
+	topics?: string[];
+}
+
+export type ToolStreamEvent = { type: 'delta'; text: string } | { type: 'result'; task: AiTask };
 
 export interface MoodInsight {
 	text: string;
@@ -303,6 +351,14 @@ export interface QingxinApi {
 		tags?: string[];
 	}): Promise<CreateSnippet>;
 	useSnippet(id: string): Promise<CreateSnippet>;
+	listTools(): Promise<ToolCatalog>;
+	setToolFavourite(
+		toolId: ToolId,
+		favourite: boolean
+	): Promise<{ toolId: ToolId; favourite: boolean }>;
+	listAiTasks(toolId?: ToolId): Promise<AiTask[]>;
+	getAiTask(id: string): Promise<AiTask>;
+	runTool(input: ToolRunInput): AsyncIterable<ToolStreamEvent>;
 }
 
 export class ApiError extends Error {

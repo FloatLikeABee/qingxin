@@ -13,7 +13,7 @@ The system SHALL persist each accepted `policy_version` with a timestamp and use
 - **THEN** `GET /v1/privacy/consent` with their access token returns that policy version
 
 ### Requirement: JSON export
-`GET /v1/privacy/export` SHALL require an access token and SHALL return a JSON document containing the user profile, consents, device sessions (no secrets), jobs, push subscriptions, the caller's mood logs with decrypted notes, meditation sessions, applications, resumes (content JSON), side hustles, finance records, wellness records, the caller's local-life reviews, submitted services, correction flags, creations, and snippets.
+`GET /v1/privacy/export` SHALL require an access token and SHALL return a JSON document containing the user profile, consents, device sessions (no secrets), jobs, push subscriptions, the caller's mood logs with decrypted notes, meditation sessions, applications, resumes (content JSON), side hustles, finance records, wellness records, the caller's local-life reviews, submitted services, correction flags, creations, snippets, ai_tasks, and templates.
 
 #### Scenario: Export requires login
 - **WHEN** a client calls `GET /v1/privacy/export` without a token
@@ -39,8 +39,12 @@ The system SHALL persist each accepted `policy_version` with a timestamp and use
 - **WHEN** an authenticated user who created a work and a snippet calls export
 - **THEN** `creations` and `snippets` arrays include those ids
 
+#### Scenario: Export contains toolbox data
+- **WHEN** an authenticated user who ran a summary task and favourited a tool calls export
+- **THEN** `ai_tasks` and `templates` arrays include those ids
+
 ### Requirement: Account deletion
-`DELETE /v1/privacy/account` SHALL remove the user and cascaded personal rows (tokens, consents, devices, jobs, push subscriptions, caregiver links, mood logs, meditation sessions, applications, resumes, side hustles, finance records, wellness records, local-life reviews, submitted services, corrections, creations, snippets) and SHALL return 204. A later login or use of old tokens SHALL fail.
+`DELETE /v1/privacy/account` SHALL remove the user and cascaded personal rows (tokens, consents, devices, jobs, push subscriptions, caregiver links, mood logs, meditation sessions, applications, resumes, side hustles, finance records, wellness records, local-life reviews, submitted services, corrections, creations, snippets, ai_tasks, templates) and SHALL return 204. A later login or use of old tokens SHALL fail.
 
 #### Scenario: Delete erases the account
 - **WHEN** an authenticated user deletes their account
@@ -56,6 +60,10 @@ The system SHALL persist each accepted `policy_version` with a timestamp and use
 
 #### Scenario: Delete cascades create rows
 - **WHEN** an authenticated user who created a work and a snippet deletes their account
+- **THEN** the response is 204 and those ids are gone from the database
+
+#### Scenario: Delete cascades toolbox rows
+- **WHEN** an authenticated user who created an ai_task and a template deletes their account
 - **THEN** the response is 204 and those ids are gone from the database
 
 ### Requirement: Export includes finance records
