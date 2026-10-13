@@ -47,6 +47,7 @@ pub fn router() -> Router<AppState> {
         .route("/v1/jobs/{id}", delete(cancel_job))
         .route("/v1/ai/complete", post(ai_complete))
         .merge(crate::elder::router())
+        .merge(crate::mood::routes())
 }
 
 #[derive(FromRow)]
@@ -549,6 +550,8 @@ async fn export_data(
     .fetch_all(&state.pool)
     .await
     .map_err(map_sqlx)?;
+    let mood_logs = crate::mood::export_mood(&state, &user.user_id).await?;
+    let meditation_sessions = crate::mood::export_sessions(&state, &user.user_id).await?;
     Ok(Json(json!({
         "exported_at": now_rfc3339(),
         "user": profile.public(&state.crypto),
@@ -556,6 +559,8 @@ async fn export_data(
         "devices": devices,
         "jobs": jobs.iter().map(JobRow::public).collect::<Vec<_>>(),
         "push_subscriptions": push_subscriptions,
+        "mood_logs": mood_logs,
+        "meditation_sessions": meditation_sessions,
     })))
 }
 

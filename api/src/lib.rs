@@ -6,6 +6,7 @@ pub mod db;
 pub mod elder;
 pub mod error;
 pub mod moderation;
+pub mod mood;
 pub mod push;
 pub mod routes;
 pub mod scheduler;

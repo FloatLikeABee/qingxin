@@ -33,6 +33,10 @@
 				if (op.type === 'export') {
 					await getApi().exportUserData();
 				}
+				if (op.type === 'mood_log_create') {
+					const payload = op.payload as { id?: string; emoji: string; tags: string[]; note?: string };
+					await getApi().createMoodLog(payload);
+				}
 			});
 			db.close();
 		} catch {

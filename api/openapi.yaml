@@ -3,7 +3,7 @@ info:
   title: Qingxin (轻心) API
   version: 0.2.0
   description: |
-    T1 Foundation HTTP contract for Qingxin, plus M3 elder-assistant routes.
+    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation and M3 elder-assistant routes.
 
     The Rust service lives in `api/`. Sensitive fields (phone numbers) are
     stored with AES-256-GCM. Access tokens are short-lived JWTs; refresh
@@ -31,6 +31,8 @@ tags:
   - name: Jobs
   - name: AI
   - name: Elder
+  - name: Mood
+  - name: Meditation
 paths:
   /health:
     get:
@@ -1099,6 +1101,196 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
 
+  /v1/mood/logs:
+    get:
+      tags: [Mood]
+      summary: List the caller's mood logs
+      operationId: listMoodLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoodLogList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Mood]
+      summary: Create a mood check-in
+      operationId: createMoodLog
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMoodLogRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoodLog"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/mood/trends:
+    get:
+      tags: [Mood]
+      summary: Weekly or monthly mood trend points
+      operationId: getMoodTrends
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [week, month]
+        - name: tag
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ordered points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoodTrendResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/mood/insights:
+    post:
+      tags: [Mood]
+      summary: Empathetic insight via AiGateway or deterministic mock
+      operationId: createMoodInsight
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoodInsightRequest"
+      responses:
+        "200":
+          description: Insight text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoodInsight"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/mood/summaries/monthly:
+    get:
+      tags: [Mood]
+      summary: Monthly mood summary
+      operationId: getMonthlyMoodSummary
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "2026-10"
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoodInsight"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/meditation/catalog:
+    get:
+      tags: [Meditation]
+      summary: Sound presets and bedtime stories
+      operationId: getMeditationCatalog
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Closed catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeditationCatalog"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/meditation/sessions:
+    get:
+      tags: [Meditation]
+      summary: List meditation sessions
+      operationId: listMeditationSessions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeditationSessionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Meditation]
+      summary: Record a meditation session
+      operationId: createMeditationSession
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMeditationSessionRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeditationSession"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1691,3 +1883,165 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FraudScript"
+    MoodLog:
+      type: object
+      required: [id, emoji, score, tags, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        emoji:
+          type: string
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        tags:
+          type: array
+          items:
+            type: string
+        note:
+          type: string
+          nullable: true
+          maxLength: 99
+        created_at:
+          type: string
+          format: date-time
+    MoodLogList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoodLog"
+    CreateMoodLogRequest:
+      type: object
+      required: [emoji]
+      properties:
+        id:
+          type: string
+          format: uuid
+        emoji:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        note:
+          type: string
+          maxLength: 99
+    MoodTrendPoint:
+      type: object
+      required: [date, average_score, count]
+      properties:
+        date:
+          type: string
+        average_score:
+          type: number
+        count:
+          type: integer
+    MoodTrendResponse:
+      type: object
+      required: [period, points]
+      properties:
+        period:
+          type: string
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoodTrendPoint"
+    MoodInsightRequest:
+      type: object
+      properties:
+        mood_log_id:
+          type: string
+          format: uuid
+        emoji:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        note:
+          type: string
+    MoodInsight:
+      type: object
+      required: [text, disclaimer, source]
+      properties:
+        text:
+          type: string
+        disclaimer:
+          type: string
+        source:
+          type: string
+          enum: [gateway, mock]
+        month:
+          type: string
+    MeditationCatalog:
+      type: object
+      required: [sounds, stories]
+      properties:
+        sounds:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+        stories:
+          type: array
+          items:
+            type: object
+            required: [id, title, body]
+            properties:
+              id:
+                type: string
+              title:
+                type: string
+              body:
+                type: string
+    CreateMeditationSessionRequest:
+      type: object
+      required: [kind, duration_sec]
+      properties:
+        kind:
+          type: string
+          enum: [breathe, noise, story, timer]
+        duration_sec:
+          type: integer
+          minimum: 0
+        payload:
+          type: object
+          additionalProperties: true
+    MeditationSession:
+      type: object
+      required: [id, kind, duration_sec]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        duration_sec:
+          type: integer
+        payload:
+          type: object
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+    MeditationSessionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeditationSession"
