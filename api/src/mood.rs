@@ -242,10 +242,20 @@ struct MonthQuery {
 
 #[derive(Deserialize)]
 struct CreateSessionBody {
+    id: Option<String>,
     kind: String,
     duration_sec: i64,
     #[serde(default)]
     payload: Value,
+}
+
+fn client_or_new_id(raw: Option<&str>) -> Result<String, AppError> {
+    match raw {
+        Some(value) if !value.trim().is_empty() => Uuid::parse_str(value.trim())
+            .map(|id| id.to_string())
+            .map_err(|_| AppError::InvalidRequest("id must be a uuid".into())),
+        _ => Ok(new_id()),
+    }
 }
 
 async fn create_log(
@@ -256,22 +266,17 @@ async fn create_log(
     let score = score_for(&body.emoji)?;
     validate_tags(&body.tags)?;
     let note = normalize_note(body.note.as_deref())?;
-    let id =
-        match body.id.as_deref() {
-            Some(raw) if !raw.trim().is_empty() => Uuid::parse_str(raw.trim())
-                .map(|u| u.to_string())
-                .map_err(|_| AppError::InvalidRequest("id must be a uuid".into()))?,
-            _ => new_id(),
-        };
+    let id = client_or_new_id(body.id.as_deref())?;
     let blob = match note.as_deref() {
         Some(text) => Some(state.crypto.encrypt(text.as_bytes())?),
         None => None,
     };
     let now = now_rfc3339();
     let tags_json = serde_json::to_string(&body.tags).unwrap_or_else(|_| "[]".into());
-    sqlx::query(
+    let inserted = sqlx::query(
         "INSERT INTO mood_logs (id, user_id, emoji, score, tags_json, note_encrypted, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO NOTHING",
     )
     .bind(&id)
     .bind(&user.user_id)
@@ -283,6 +288,12 @@ async fn create_log(
     .execute(&state.pool)
     .await
     .map_err(map_sqlx)?;
+    if inserted.rows_affected() == 0 {
+        if let Ok(row) = load_log(&state, &user.user_id, &id).await {
+            return Ok((StatusCode::CREATED, Json(row.public(&state.crypto)?)));
+        }
+        return Err(AppError::Conflict);
+    }
     let row = load_log(&state, &user.user_id, &id).await?;
     Ok((StatusCode::CREATED, Json(row.public(&state.crypto)?)))
 }
@@ -392,12 +403,24 @@ fn trend_points(logs: &[MoodLogPublic], period: &str) -> Result<Vec<TrendPoint>,
         entry.0 += log.score as f64;
         entry.1 += 1;
     }
-    Ok(buckets
-        .into_iter()
-        .map(|(date, (sum, count))| TrendPoint {
-            date,
-            average_score: sum / count as f64,
-            count,
+    Ok((0..days)
+        .map(|offset| {
+            let date = (start + Duration::days(offset))
+                .date_naive()
+                .format("%Y-%m-%d")
+                .to_string();
+            match buckets.get(&date) {
+                Some((sum, count)) => TrendPoint {
+                    date,
+                    average_score: sum / *count as f64,
+                    count: *count,
+                },
+                None => TrendPoint {
+                    date,
+                    average_score: 0.0,
+                    count: 0,
+                },
+            }
         })
         .collect())
 }
@@ -537,17 +560,18 @@ async fn create_session(
     if body.duration_sec < 0 {
         return Err(AppError::InvalidRequest("duration_sec must be >= 0".into()));
     }
-    let id = new_id();
+    let id = client_or_new_id(body.id.as_deref())?;
     let now = now_rfc3339();
     let payload = if body.payload.is_null() {
         json!({})
     } else {
         body.payload
     };
-    sqlx::query(
+    let inserted = sqlx::query(
         "INSERT INTO meditation_sessions
             (id, user_id, kind, duration_sec, payload_json, started_at, ended_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO NOTHING",
     )
     .bind(&id)
     .bind(&user.user_id)
@@ -559,6 +583,16 @@ async fn create_session(
     .execute(&state.pool)
     .await
     .map_err(map_sqlx)?;
+    if inserted.rows_affected() == 0 {
+        let existing = export_sessions(&state, &user.user_id)
+            .await?
+            .into_iter()
+            .find(|row| row["id"] == id);
+        if let Some(row) = existing {
+            return Ok((StatusCode::CREATED, Json(row)));
+        }
+        return Err(AppError::Conflict);
+    }
     Ok((
         StatusCode::CREATED,
         Json(json!({

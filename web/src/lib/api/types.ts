@@ -81,6 +81,7 @@ export interface QingxinApi {
 	getMonthlyMoodSummary(month: string): Promise<MoodInsight>;
 	getMeditationCatalog(): Promise<MeditationCatalog>;
 	createMeditationSession(input: {
+		id?: string;
 		kind: MeditationKind;
 		durationSec: number;
 		payload?: Record<string, unknown>;

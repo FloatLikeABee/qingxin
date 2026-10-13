@@ -269,6 +269,50 @@ async fn mood_trends_average_and_tag_filter() {
     assert_eq!(bad["error"]["code"], "invalid_request");
 }
 
+#[tokio::test]
+async fn mood_check_in_client_id_is_idempotent() {
+    let (router, state) = world().await;
+    let created = register_user(&router, "idempotent@qingxin.app").await;
+    let access = created["access_token"].as_str().unwrap();
+    let id = "11111111-1111-4111-8111-111111111111";
+    let body = json!({
+        "id": id,
+        "emoji": "😔",
+        "tags": ["睡眠"],
+        "note": "夜里醒了两次"
+    });
+
+    let (status, first) = send(
+        &router,
+        Method::POST,
+        "/v1/mood/logs",
+        Some(("Bearer", access)),
+        Some(body.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{first}");
+    assert_eq!(first["id"], id);
+
+    let (status, second) = send(
+        &router,
+        Method::POST,
+        "/v1/mood/logs",
+        Some(("Bearer", access)),
+        Some(body),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{second}");
+    assert_eq!(second["id"], id);
+    assert_eq!(second["note"], "夜里醒了两次");
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mood_logs WHERE id = ?")
+        .bind(id)
+        .fetch_one(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+}
+
 struct FixedGateway;
 
 #[async_trait::async_trait]

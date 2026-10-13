@@ -97,4 +97,35 @@ describe('MockQingxinApi', () => {
 		const session = await api.createMeditationSession({ kind: 'breathe', durationSec: 76 });
 		expect(session.kind).toBe('breathe');
 	});
+
+	it('keeps a new check-in after a fresh client restores the session', async () => {
+		const memory = new Map<string, string>();
+		const fake = {
+			getItem: (key: string) => memory.get(key) ?? null,
+			setItem: (key: string, value: string) => {
+				memory.set(key, value);
+			},
+			removeItem: (key: string) => {
+				memory.delete(key);
+			}
+		};
+		Object.defineProperty(globalThis, 'localStorage', { value: fake, configurable: true });
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		const saved = await api.createMoodLog({ emoji: '😔', tags: ['睡眠'], note: '刚写下的一笔' });
+		const restored = new MockQingxinApi();
+		await restored.getSession();
+		const listed = await restored.listMoodLogs();
+		expect(listed.some((item) => item.id === saved.id && item.note === '刚写下的一笔')).toBe(true);
+	});
+
+	it('returns the existing row when the same client id is posted twice', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		const id = '11111111-1111-4111-8111-111111111111';
+		const first = await api.createMoodLog({ id, emoji: '😔', tags: ['睡眠'], note: '夜里醒了两次' });
+		const second = await api.createMoodLog({ id, emoji: '😔', tags: ['睡眠'], note: '夜里醒了两次' });
+		expect(second.id).toBe(first.id);
+		expect((await api.listMoodLogs()).filter((item) => item.id === id)).toHaveLength(1);
+	});
 });

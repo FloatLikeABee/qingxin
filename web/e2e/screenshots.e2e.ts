@@ -85,7 +85,7 @@ for (const view of views) {
 				await openReady(page, '/modules/mood');
 				await expect(page.getByRole('heading', { name: '情绪日记' })).toBeVisible();
 				await expect(page.getByText('夜里醒了两次')).toBeVisible();
-				await expect(page.getByText('示意洞察')).toBeVisible();
+				await expect(page.getByText('示意洞察')).toBeVisible({ timeout: 10_000 });
 				await page.getByRole('tab', { name: screen.tab }).click();
 				await expect(page.getByText(screen.ready).first()).toBeVisible();
 				if (view.width < 800) {

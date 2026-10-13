@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/env';
 	import { drainSync, openQingxinDb } from '../offline/cache';
-	import { getApi } from '../api/mock';
+	import { ApiError, getApi } from '../api/mock';
 	import { pushToast } from '../toast';
 	import Icon from './Icon.svelte';
 
@@ -30,12 +30,26 @@
 		try {
 			const db = await openQingxinDb();
 			await drainSync(db, async (op) => {
-				if (op.type === 'export') {
-					await getApi().exportUserData();
-				}
-				if (op.type === 'mood_log_create') {
-					const payload = op.payload as { id?: string; emoji: string; tags: string[]; note?: string };
-					await getApi().createMoodLog(payload);
+				try {
+					if (op.type === 'export') {
+						await getApi().exportUserData();
+					}
+					if (op.type === 'mood_log_create') {
+						const payload = op.payload as { id?: string; emoji: string; tags: string[]; note?: string };
+						await getApi().createMoodLog(payload);
+					}
+					if (op.type === 'meditation_session_create') {
+						const payload = op.payload as {
+							id?: string;
+							kind: 'breathe' | 'noise' | 'story' | 'timer';
+							durationSec: number;
+							payload?: Record<string, unknown>;
+						};
+						await getApi().createMeditationSession(payload);
+					}
+				} catch (error) {
+					if (error instanceof ApiError && error.code === 'conflict') return;
+					throw error;
 				}
 			});
 			db.close();

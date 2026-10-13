@@ -19,6 +19,8 @@ export type { QingxinApi, Session } from './types';
 const DEMO_EMAIL = 'demo@qingxin.app';
 const DEMO_PASSWORD = 'qingxin';
 const SESSION_KEY = 'qingxin.session';
+const LOGS_KEY = 'qingxin.moodLogs';
+const SESSIONS_KEY = 'qingxin.meditationSessions';
 
 const KINDS: MeditationKind[] = ['breathe', 'noise', 'story', 'timer'];
 
@@ -41,6 +43,56 @@ function writeStoredSession(session: Session | null): void {
 	} catch {
 		// Private mode: keep the in-memory session only.
 	}
+}
+
+function readUserMap<T>(key: string): Record<string, T[]> {
+	try {
+		const raw = globalThis.localStorage?.getItem(key);
+		if (!raw) return {};
+		const parsed = JSON.parse(raw) as Record<string, T[]>;
+		return parsed && typeof parsed === 'object' ? parsed : {};
+	} catch {
+		return {};
+	}
+}
+
+function writeUserMap<T>(key: string, value: Record<string, T[]>): void {
+	try {
+		globalThis.localStorage?.setItem(key, JSON.stringify(value));
+	} catch {
+		// Private mode: keep the in-memory copy only.
+	}
+}
+
+function persistUserList<T>(mem: Map<string, T[]>, key: string, userId: string, items: T[]): T[] {
+	mem.set(userId, items);
+	const all = readUserMap<T>(key);
+	all[userId] = items;
+	writeUserMap(key, all);
+	return items;
+}
+
+function hydrateUserList<T>(mem: Map<string, T[]>, key: string, userId: string, fallback: T[]): T[] {
+	const cached = mem.get(userId);
+	if (cached) return cached;
+	const all = readUserMap<T>(key);
+	if (Object.prototype.hasOwnProperty.call(all, userId)) {
+		const stored = all[userId] ?? [];
+		mem.set(userId, stored);
+		return stored;
+	}
+	return persistUserList(mem, key, userId, fallback);
+}
+
+function forgetUserLists(logs: Map<string, MoodLog[]>, sessions: Map<string, MeditationSession[]>, userId: string) {
+	logs.delete(userId);
+	sessions.delete(userId);
+	const storedLogs = readUserMap<MoodLog>(LOGS_KEY);
+	delete storedLogs[userId];
+	writeUserMap(LOGS_KEY, storedLogs);
+	const storedSessions = readUserMap<MeditationSession>(SESSIONS_KEY);
+	delete storedSessions[userId];
+	writeUserMap(SESSIONS_KEY, storedSessions);
 }
 
 function requireSession(session: Session | null): Session {
@@ -76,8 +128,9 @@ export class MockQingxinApi implements QingxinApi {
 
 	async getSession(): Promise<Session | null> {
 		this.#session ??= readStoredSession();
-		if (this.#session && !this.#logs.has(this.#session.userId)) {
-			this.#logs.set(this.#session.userId, seedLogs(this.#session.userId));
+		if (this.#session) {
+			hydrateUserList(this.#logs, LOGS_KEY, this.#session.userId, seedLogs(this.#session.userId));
+			hydrateUserList(this.#sessions, SESSIONS_KEY, this.#session.userId, []);
 		}
 		return this.#session;
 	}
@@ -96,9 +149,8 @@ export class MockQingxinApi implements QingxinApi {
 			token: 'mock-token-demo'
 		};
 		writeStoredSession(this.#session);
-		if (!this.#logs.has(this.#session.userId)) {
-			this.#logs.set(this.#session.userId, seedLogs(this.#session.userId));
-		}
+		hydrateUserList(this.#logs, LOGS_KEY, this.#session.userId, seedLogs(this.#session.userId));
+		hydrateUserList(this.#sessions, SESSIONS_KEY, this.#session.userId, []);
 		return this.#session;
 	}
 
@@ -113,8 +165,8 @@ export class MockQingxinApi implements QingxinApi {
 			token: 'mock-token-new'
 		};
 		writeStoredSession(this.#session);
-		this.#logs.set(this.#session.userId, []);
-		this.#sessions.set(this.#session.userId, []);
+		persistUserList(this.#logs, LOGS_KEY, this.#session.userId, []);
+		persistUserList(this.#sessions, SESSIONS_KEY, this.#session.userId, []);
 		return this.#session;
 	}
 
@@ -143,8 +195,7 @@ export class MockQingxinApi implements QingxinApi {
 
 	async deleteAccount(): Promise<void> {
 		if (this.#session) {
-			this.#logs.delete(this.#session.userId);
-			this.#sessions.delete(this.#session.userId);
+			forgetUserLists(this.#logs, this.#sessions, this.#session.userId);
 		}
 		this.#session = null;
 		writeStoredSession(null);
@@ -159,16 +210,19 @@ export class MockQingxinApi implements QingxinApi {
 		const session = requireSession(this.#session);
 		const checked = validateCheckIn(input);
 		if (!checked.ok) throw new ApiError(checked.code, checked.message);
+		const list = hydrateUserList(this.#logs, LOGS_KEY, session.userId, []);
+		const id = input.id ?? crypto.randomUUID();
+		const existing = list.find((item) => item.id === id);
+		if (existing) return existing;
 		const log: MoodLog = {
-			id: input.id ?? crypto.randomUUID(),
+			id,
 			emoji: checked.value.emoji,
 			score: checked.value.score,
 			tags: checked.value.tags,
 			note: checked.value.note,
 			createdAt: new Date().toISOString()
 		};
-		const list = this.#logs.get(session.userId) ?? [];
-		this.#logs.set(session.userId, [log, ...list]);
+		persistUserList(this.#logs, LOGS_KEY, session.userId, [log, ...list]);
 		return log;
 	}
 
@@ -224,6 +278,7 @@ export class MockQingxinApi implements QingxinApi {
 	}
 
 	async createMeditationSession(input: {
+		id?: string;
 		kind: MeditationKind;
 		durationSec: number;
 		payload?: Record<string, unknown>;
@@ -232,16 +287,19 @@ export class MockQingxinApi implements QingxinApi {
 		if (!KINDS.includes(input.kind) || input.durationSec < 0) {
 			throw new ApiError('invalid_request', '无法保存这次练习');
 		}
+		const list = hydrateUserList(this.#sessions, SESSIONS_KEY, session.userId, []);
+		const id = input.id ?? crypto.randomUUID();
+		const existing = list.find((item) => item.id === id);
+		if (existing) return existing;
 		const row: MeditationSession = {
-			id: crypto.randomUUID(),
+			id,
 			kind: input.kind,
 			durationSec: input.durationSec,
 			payload: input.payload ?? {},
 			startedAt: new Date().toISOString(),
 			endedAt: new Date().toISOString()
 		};
-		const list = this.#sessions.get(session.userId) ?? [];
-		this.#sessions.set(session.userId, [row, ...list]);
+		persistUserList(this.#sessions, SESSIONS_KEY, session.userId, [row, ...list]);
 		return row;
 	}
 

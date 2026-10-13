@@ -11,11 +11,11 @@
 	import Tag from '#lib/components/Tag.svelte';
 	import Textarea from '#lib/components/Textarea.svelte';
 	import { MOOD_EMOJIS, MOOD_TAGS, SOUND_PRESETS } from '#lib/mood/catalog';
-	import { breathePhase, CYCLE_SECONDS } from '#lib/mood/breathe';
+	import { breathePhase, breatheScale, CYCLE_SECONDS } from '#lib/mood/breathe';
 	import { chunkInsight, DISCLAIMER } from '#lib/mood/insight';
 	import { HOTLINE_NAME, HOTLINE_NUMBER, hotlineHref } from '#lib/mood/hotline';
 	import { NoiseMixer } from '#lib/mood/noise';
-	import { cacheLogs, saveCheckIn } from '#lib/mood/store';
+	import { cacheLogs, cacheSessions, loadCachedLogs, saveCheckIn, saveMeditationSession } from '#lib/mood/store';
 	import TrendChart from '#lib/mood/TrendChart.svelte';
 	import type { MoodLog, TrendPoint } from '#lib/mood/trends';
 	import { validateCheckIn } from '#lib/mood/validate';
@@ -49,11 +49,11 @@
 	let timerTotal = $state(180);
 	let timerRunning = $state(false);
 	let levels = $state<Record<string, number>>({
-		rain: 0,
+		rain: 0.4,
 		waves: 0,
 		fan: 0,
 		fire: 0,
-		white: 0
+		white: 0.15
 	});
 	let mixerOn = $state(false);
 
@@ -87,7 +87,20 @@
 			return;
 		}
 		needLogin = false;
-		logs = await getApi().listMoodLogs();
+		let listed: MoodLog[] = [];
+		try {
+			listed = await getApi().listMoodLogs();
+		} catch {
+			listed = [];
+		}
+		const cached = await loadCachedLogs();
+		const nextLogs = listed.length ? listed : cached;
+		try {
+			if (nextLogs.length) await cacheLogs(nextLogs);
+		} catch {
+			/* insight and list still work without a cache write */
+		}
+		logs = nextLogs;
 		try {
 			summary = await getApi().getMonthlyMoodSummary(monthKey);
 		} catch {
@@ -100,10 +113,14 @@
 				/* keep the page usable */
 			}
 		}
-		await cacheLogs(logs);
 		await refreshTrends();
-		const catalog = await getApi().getMeditationCatalog();
-		stories = catalog.stories;
+		try {
+			const catalog = await getApi().getMeditationCatalog();
+			stories = catalog.stories;
+			await cacheSessions(await getApi().listMeditationSessions());
+		} catch {
+			/* catalog stays empty offline */
+		}
 	}
 
 	async function refreshTrends() {
@@ -123,8 +140,9 @@
 		}
 		pending = true;
 		const previous = logs;
+		let saved;
 		try {
-			const saved = await saveCheckIn(
+			saved = await saveCheckIn(
 				{ emoji: checked.value.emoji, tags: checked.value.tags, note: checked.value.note ?? undefined },
 				(log) => {
 					logs = [log, ...logs];
@@ -133,18 +151,26 @@
 					logs = previous;
 				}
 			);
-			logs = [saved, ...previous.filter((item) => item.id !== saved.id)];
-			await cacheLogs(logs);
+		} catch {
+			pushToast({ title: '没能记下，请再试一次', tone: 'danger' });
+			pending = false;
+			return;
+		}
+		logs = [saved, ...previous.filter((item) => item.id !== saved.id)];
+		await cacheLogs(logs);
+		try {
 			await revealInsight(await getApi().createMoodInsight({ moodLogId: saved.id }));
 			await refreshTrends();
 			summary = await getApi().getMonthlyMoodSummary(monthKey);
-			pushToast({ title: '已记下这一刻', tone: 'success' });
-			note = '';
 		} catch {
-			pushToast({ title: '先存在本地，网络恢复后会同步', tone: 'info' });
-		} finally {
-			pending = false;
+			/* the check-in is already saved */
 		}
+		pushToast({
+			title: typeof navigator !== 'undefined' && !navigator.onLine ? '先存在本地，网络恢复后会同步' : '已记下这一刻',
+			tone: 'success'
+		});
+		note = '';
+		pending = false;
 	}
 
 	function revealInsight(insight: MoodInsight) {
@@ -166,6 +192,10 @@
 		}, 28);
 	}
 
+	function prefersReducedMotion() {
+		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	}
+
 	function openBreath() {
 		overlay = 'breathe';
 		breathStarted = performance.now();
@@ -174,31 +204,52 @@
 			const elapsed = (performance.now() - breathStarted) / 1000;
 			const phase = breathePhase(elapsed);
 			breathLabel = phase.label;
-			breathScale = phase.id === 'hold' ? 1.08 : phase.id === 'inhale' ? 0.78 + phase.progress * 0.3 : 1.08 - phase.progress * 0.32;
+			breathScale = breatheScale(phase, prefersReducedMotion());
 		}, 80);
 	}
 
 	async function closeOverlay() {
-		if (overlay === 'breathe') {
+		const kind = overlay;
+		if (kind === 'breathe') {
 			window.clearInterval(breathTimer);
 			const seconds = Math.round((performance.now() - breathStarted) / 1000);
 			try {
-				await getApi().createMeditationSession({
+				await saveMeditationSession({
 					kind: 'breathe',
 					durationSec: seconds,
 					payload: { cycles: Math.floor(seconds / CYCLE_SECONDS) }
 				});
 			} catch {
-				/* offline */
+				/* keep the overlay closable */
 			}
 		}
-		if (overlay === 'timer') {
+		if (kind === 'timer') {
 			window.clearInterval(clockTimer);
+			const elapsed = timerTotal - timerLeft;
 			timerRunning = false;
+			try {
+				await saveMeditationSession({
+					kind: 'timer',
+					durationSec: elapsed,
+					payload: { preset: timerTotal }
+				});
+			} catch {
+				/* keep the overlay closable */
+			}
 		}
-		if (overlay === 'mixer') {
+		if (kind === 'mixer') {
+			const seconds = Math.round((performance.now() - breathStarted) / 1000);
 			await mixer.stop();
 			mixerOn = false;
+			try {
+				await saveMeditationSession({
+					kind: 'noise',
+					durationSec: seconds,
+					payload: { levels: { ...levels } }
+				});
+			} catch {
+				/* keep the overlay closable */
+			}
 		}
 		overlay = null;
 	}
@@ -269,7 +320,9 @@
 			<h1 class="mt-3 font-[Outfit] text-3xl font-semibold tracking-tight">情绪日记</h1>
 			<p class="mt-2 text-base text-[var(--qx-muted)]">用一枚表情、几片标签，把今天轻轻放下。</p>
 		</div>
-		<Button variant="ghost" class="min-h-11 shrink-0" onclick={() => (hotlineOpen = true)}>援助热线</Button>
+		<Button variant="ghost" class="min-h-11 shrink-0" onclick={() => (hotlineOpen = true)}
+			>心理援助热线 12356</Button
+		>
 	</div>
 
 	<Tabs bind:value={tab} tabs={['日记', '趋势', '冥想']} />
@@ -392,7 +445,14 @@
 					<p class="text-base text-[var(--qx-muted)]">吸气四、屏息七、呼气八。</p>
 				</Card>
 			</button>
-			<button type="button" class="text-left" onclick={() => (overlay = 'mixer')}>
+			<button
+				type="button"
+				class="text-left"
+				onclick={() => {
+					overlay = 'mixer';
+					breathStarted = performance.now();
+				}}
+			>
 				<Card class="h-full space-y-2">
 					<Icon name="pulse" />
 					<h2 class="text-lg font-semibold">白噪音混合</h2>
@@ -448,7 +508,7 @@
 			onclick={async () => {
 				if (story) {
 					try {
-						await getApi().createMeditationSession({
+						await saveMeditationSession({
 							kind: 'story',
 							durationSec: 60,
 							payload: { id: story.id }

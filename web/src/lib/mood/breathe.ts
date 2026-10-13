@@ -29,3 +29,10 @@ export function breathePhase(elapsedSeconds: number): BreathePhase {
 		progress: (t - INHALE_SECONDS - HOLD_SECONDS) / EXHALE_SECONDS
 	};
 }
+
+export function breatheScale(phase: BreathePhase, reduceMotion: boolean): number {
+	if (reduceMotion) return 1;
+	if (phase.id === 'hold') return 1.08;
+	if (phase.id === 'inhale') return 0.78 + phase.progress * 0.3;
+	return 1.08 - phase.progress * 0.32;
+}
