@@ -68,6 +68,7 @@ test('modules 390 dark', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: '模块中心' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: '情绪日记+冥想' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: '本地生活' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: '健康' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: '求职副业' })).toBeVisible();
 	await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
 	await page.screenshot({ path: 'screenshots/modules-390-dark.png', fullPage: true });

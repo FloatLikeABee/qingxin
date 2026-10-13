@@ -10,7 +10,7 @@
 
 ## 2. Backend implementation
 
-- [x] 2.1 Add `0006_local.sql` (tables + seed neighborhood; 0005 is M2 finance) and `api/src/local.rs`; implement validation, haversine, CRUD, moderation hook, and rating recompute until API tests pass
+- [x] 2.1 Add `0007_local.sql` (tables + seed neighborhood; 0005 is M2 finance, 0006 is M7 wellness) and `api/src/local.rs`; implement validation, haversine, CRUD, moderation hook, and rating recompute until API tests pass
 - [x] 2.2 Wire routes, extend `export_data`, and extend `api/openapi.yaml` for `/v1/local/*`
 - [x] 2.3 Run `cargo fmt`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and `cargo test --workspace` in `api/` until green
 
