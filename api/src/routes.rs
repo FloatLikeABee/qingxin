@@ -959,10 +959,10 @@ async fn cancel_job(
 
 async fn ai_complete(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Json(body): Json<CompletionRequest>,
 ) -> Result<Json<Value>, AppError> {
-    match state.ai.complete(body).await {
+    match state.ai.complete(&user.user_id, body).await {
         Ok(done) => Ok(Json(serde_json::to_value(done).unwrap_or(Value::Null))),
         Err(AiError::Unconfigured) => Err(AppError::AiUnconfigured),
         Err(AiError::Failed(msg)) => Err(AppError::Unavailable(msg)),

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use sqlx::SqlitePool;
 
-use crate::ai::{AiGateway, UnconfiguredAiGateway};
+use crate::ai::{AiGateway, QingxinAiGateway};
 use crate::config::Config;
 use crate::crypto::FieldCrypto;
 use crate::db;
@@ -35,7 +35,7 @@ impl AppState {
             pool,
             config,
             crypto,
-            ai: Arc::new(UnconfiguredAiGateway),
+            ai: Arc::new(QingxinAiGateway::from_env()),
             moderator: Arc::new(NoopModerator),
             push,
         })
