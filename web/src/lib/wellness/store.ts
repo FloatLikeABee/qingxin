@@ -24,6 +24,7 @@ export class WellnessStore {
 	plans: PlanLog[] = [];
 	reminders: ReminderLog[] = [];
 	snapshot: TodaySnapshot | null = null;
+	#loadGen = 0;
 
 	today(date: string): TodaySnapshot {
 		const totalMl = this.water
@@ -43,6 +44,7 @@ export class WellnessStore {
 	}
 
 	async hydrate(): Promise<void> {
+		const gen = this.#loadGen;
 		try {
 			const api = getApi();
 			await api.getSession();
@@ -55,6 +57,7 @@ export class WellnessStore {
 				api.listWellnessPlans(),
 				api.listWellnessReminders()
 			]);
+			if (gen !== this.#loadGen) return;
 			this.snapshot = today;
 			this.waterTargetMl = today.water.targetMl;
 			this.cycleConsent = today.cycleConsent;
@@ -66,11 +69,13 @@ export class WellnessStore {
 			this.reminders = reminders;
 			await this.persist();
 		} catch {
+			if (gen !== this.#loadGen) return;
 			await this.loadCache();
 		}
 	}
 
 	async addWater(ml = DEFAULT_CUP_ML, loggedOn: string): Promise<WaterLog> {
+		this.#loadGen += 1;
 		const pending: WaterLog = {
 			id: crypto.randomUUID(),
 			loggedOn,

@@ -18,6 +18,27 @@ afterEach(() => {
 });
 
 describe('WellnessStore', () => {
+	it('does not let a stale hydrate wipe a cup posted while loading', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		resetApi(api);
+		const store = resetWellnessStore(new WellnessStore());
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const listWater = api.listWellnessWater.bind(api);
+		api.listWellnessWater = async () => {
+			await gate;
+			return listWater();
+		};
+		const hydrating = store.hydrate();
+		await store.addWater(250, '2026-10-13');
+		release();
+		await hydrating;
+		expect(store.today('2026-10-13').water.totalMl).toBe(250);
+	});
+
 	it('adds four cups toward the 2000 ml ring', async () => {
 		const store = await loggedStore();
 		for (let i = 0; i < 4; i += 1) {

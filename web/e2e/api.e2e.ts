@@ -114,7 +114,13 @@ test('salary, subscription, job, water, and elder modal use the live API', async
 
 	await page.goto('/wellness');
 	await expect(page.getByRole('heading', { name: '健康' })).toBeVisible();
+	await expect(page.getByText('0 / 2000 ml')).toBeVisible({ timeout: 15_000 });
+	const waterPosted = page.waitForResponse(
+		(res) => res.url().includes('/v1/wellness/water') && res.request().method() === 'POST'
+	);
 	await page.getByRole('button', { name: '+1 杯（250 ml）' }).click();
+	const waterRes = await waterPosted;
+	expect(waterRes.ok(), await waterRes.text()).toBeTruthy();
 	await expect(page.getByText('250 / 2000 ml')).toBeVisible({ timeout: 15_000 });
 
 	await page.goto('/elder');
