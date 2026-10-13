@@ -1,30 +1,39 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Input from '#lib/components/Input.svelte';
 	import Disclaimer from '#lib/study/Disclaimer.svelte';
 	import { getStudyStore } from '#lib/study/store';
-	import { shanghaiToday } from '#lib/study/streak';
 	import type { Grade } from '#lib/study/review';
+	import { pushToast } from '#lib/toast';
 
 	const store = getStudyStore();
 	let front = $state('');
 	let back = $state('');
-	let tick = $state(0);
-	const today = shanghaiToday();
 
-	function add() {
+	onMount(() => {
+		void store.load();
+	});
+
+	async function add() {
 		if (!front.trim() || !back.trim()) return;
-		store.addCard({ front: front.trim(), back: back.trim() });
-		front = '';
-		back = '';
-		tick += 1;
+		try {
+			await store.addCard({ front: front.trim(), back: back.trim() });
+			front = '';
+			back = '';
+		} catch (error) {
+			pushToast({ title: '没有保存', body: String(error), tone: 'danger' });
+		}
 	}
 
-	function grade(id: string, value: Grade) {
-		store.review(id, value, today);
-		tick += 1;
+	async function grade(id: string, value: Grade) {
+		try {
+			await store.review(id, value);
+		} catch (error) {
+			pushToast({ title: '复习失败', body: String(error), tone: 'danger' });
+		}
 	}
 </script>
 
@@ -40,28 +49,26 @@
 	<Button class="mt-4 w-full" onclick={add}>加入卡片</Button>
 </Card>
 
-{#key tick}
-	{#if store.cards.length === 0}
+{#if store.cards.length === 0}
+	<Card>
+		<EmptyState title="还没有卡片" body="把容易忘的词或题记在这里，到期再翻。" icon="spark" />
+	</Card>
+{:else}
+	{#each store.cards as item (item.id)}
 		<Card>
-			<EmptyState title="还没有卡片" body="把容易忘的词或题记在这里，到期再翻。" icon="spark" />
+			<p class="text-lg font-semibold">{item.front}</p>
+			<p class="mt-2 text-base text-[var(--qx-muted)]">{item.back}</p>
+			<p class="mt-2 text-sm text-[var(--qx-muted)]">
+				下次 {item.nextReviewDate} · 间隔 {item.intervalDays} 天
+			</p>
+			<div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+				<Button variant="secondary" onclick={() => grade(item.id, 'again')}>重来</Button>
+				<Button variant="secondary" onclick={() => grade(item.id, 'hard')}>较难</Button>
+				<Button onclick={() => grade(item.id, 'good')}>记得</Button>
+				<Button variant="ghost" onclick={() => grade(item.id, 'easy')}>简单</Button>
+			</div>
 		</Card>
-	{:else}
-		{#each store.cards as item (item.id)}
-			<Card>
-				<p class="text-lg font-semibold">{item.front}</p>
-				<p class="mt-2 text-base text-[var(--qx-muted)]">{item.back}</p>
-				<p class="mt-2 text-sm text-[var(--qx-muted)]">
-					下次 {item.nextReviewDate} · 间隔 {item.intervalDays} 天
-				</p>
-				<div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-					<Button variant="secondary" onclick={() => grade(item.id, 'again')}>重来</Button>
-					<Button variant="secondary" onclick={() => grade(item.id, 'hard')}>较难</Button>
-					<Button onclick={() => grade(item.id, 'good')}>记得</Button>
-					<Button variant="ghost" onclick={() => grade(item.id, 'easy')}>简单</Button>
-				</div>
-			</Card>
-		{/each}
-	{/if}
-{/key}
+	{/each}
+{/if}
 
 <Disclaimer />

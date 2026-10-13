@@ -11,6 +11,44 @@ import type {
 	SnippetKind
 } from '../create/catalog';
 import { mergeCatalog, type ToolId } from '../tools/catalog';
+import type { CareType, CreatePetInput, RecordType } from '../pets/types';
+import {
+	mapPet,
+	mapPetList,
+	mapPetLog,
+	mapPetLogList,
+	mapPetRecord,
+	mapPetRecordList,
+	mapPetsToday,
+	mapPetWeight,
+	mapPetWeightList,
+	petLogWriteBody,
+	petRecordWriteBody,
+	petWeightWriteBody,
+	petWriteBody
+} from '../pets/http';
+import type { Grade, TargetDays } from '../study/types';
+import {
+	mapStudyCard,
+	mapStudyCardList,
+	mapStudyChallenge,
+	mapStudyChallengeList,
+	mapStudyCheckin,
+	mapStudyNote,
+	mapStudyNoteList,
+	mapStudySkill,
+	mapStudySkillList,
+	mapStudyTemplateList,
+	mapStudyToday,
+	studyChallengeWriteBody,
+	studyCheckinWriteBody,
+	studyFlashcardWriteBody,
+	studyFromTemplateBody,
+	studyNoteWriteBody,
+	studyReviewWriteBody,
+	studySkillPatchBody,
+	studySkillWriteBody
+} from '../study/http';
 import type {
 	CorrectionKind,
 	ElderTag,
@@ -1134,6 +1172,156 @@ export class HttpQingxinApi implements QingxinApi {
 			}
 		}
 		if (buffer.trim()) yield* parseSseBlock(buffer);
+	}
+
+	async listPets() {
+		return mapPetList(await this.#json('GET', '/v1/pets'));
+	}
+
+	async createPet(input: CreatePetInput) {
+		return mapPet(await this.#json('POST', '/v1/pets', { json: petWriteBody(input) }));
+	}
+
+	async getPet(id: string) {
+		return mapPet(await this.#json('GET', `/v1/pets/${encodeURIComponent(id)}`));
+	}
+
+	async getPetsToday() {
+		return mapPetsToday(await this.#json('GET', '/v1/pets/today'));
+	}
+
+	async listPetRecords(petId: string) {
+		return mapPetRecordList(
+			await this.#json('GET', `/v1/pets/${encodeURIComponent(petId)}/records`)
+		);
+	}
+
+	async createPetRecord(
+		petId: string,
+		input: { type: RecordType; date: string; nextDueDate?: string | null; note?: string | null }
+	) {
+		return mapPetRecord(
+			await this.#json('POST', `/v1/pets/${encodeURIComponent(petId)}/records`, {
+				json: petRecordWriteBody(input)
+			})
+		);
+	}
+
+	async listPetWeights(petId: string) {
+		return mapPetWeightList(
+			await this.#json('GET', `/v1/pets/${encodeURIComponent(petId)}/weights`)
+		);
+	}
+
+	async createPetWeight(petId: string, input: { measuredOn: string; weightG: number }) {
+		return mapPetWeight(
+			await this.#json('POST', `/v1/pets/${encodeURIComponent(petId)}/weights`, {
+				json: petWeightWriteBody(input)
+			})
+		);
+	}
+
+	async listPetLogs(petId: string) {
+		return mapPetLogList(await this.#json('GET', `/v1/pets/${encodeURIComponent(petId)}/logs`));
+	}
+
+	async createPetLog(petId: string, input: { type: CareType; value?: string | null }) {
+		return mapPetLog(
+			await this.#json('POST', `/v1/pets/${encodeURIComponent(petId)}/logs`, {
+				json: petLogWriteBody(input)
+			})
+		);
+	}
+
+	async getStudyToday() {
+		return mapStudyToday(await this.#json('GET', '/v1/study/today'));
+	}
+
+	async listStudyChallenges() {
+		return mapStudyChallengeList(await this.#json('GET', '/v1/study/challenges'));
+	}
+
+	async createStudyChallenge(input: { name: string; targetDays: TargetDays; timezone?: string }) {
+		return mapStudyChallenge(
+			await this.#json('POST', '/v1/study/challenges', {
+				json: studyChallengeWriteBody(input)
+			})
+		);
+	}
+
+	async checkinStudyChallenge(id: string, day?: string) {
+		return mapStudyCheckin(
+			await this.#json('POST', `/v1/study/challenges/${encodeURIComponent(id)}/checkins`, {
+				json: studyCheckinWriteBody({ day })
+			})
+		);
+	}
+
+	async listStudyFlashcards() {
+		return mapStudyCardList(await this.#json('GET', '/v1/study/flashcards'));
+	}
+
+	async listDueStudyFlashcards() {
+		return mapStudyCardList(await this.#json('GET', '/v1/study/flashcards/due'));
+	}
+
+	async createStudyFlashcard(input: { front: string; back: string; category?: string | null }) {
+		return mapStudyCard(
+			await this.#json('POST', '/v1/study/flashcards', {
+				json: studyFlashcardWriteBody(input)
+			})
+		);
+	}
+
+	async reviewStudyFlashcard(id: string, grade: Grade) {
+		return mapStudyCard(
+			await this.#json('POST', `/v1/study/flashcards/${encodeURIComponent(id)}/review`, {
+				json: studyReviewWriteBody({ grade })
+			})
+		);
+	}
+
+	async listStudyNotes(q?: string) {
+		return mapStudyNoteList(await this.#json('GET', `/v1/study/notes${queryString({ q })}`));
+	}
+
+	async createStudyNote(input: { title: string; contentMd?: string; tags?: string[] }) {
+		return mapStudyNote(
+			await this.#json('POST', '/v1/study/notes', { json: studyNoteWriteBody(input) })
+		);
+	}
+
+	async listStudySkills() {
+		return mapStudySkillList(await this.#json('GET', '/v1/study/skills'));
+	}
+
+	async createStudySkill(input: { title: string; parentId?: string | null }) {
+		return mapStudySkill(
+			await this.#json('POST', '/v1/study/skills', { json: studySkillWriteBody(input) })
+		);
+	}
+
+	async patchStudySkill(
+		id: string,
+		patch: { title?: string; parentId?: string | null; unlocked?: boolean; sortOrder?: number }
+	) {
+		return mapStudySkill(
+			await this.#json('PATCH', `/v1/study/skills/${encodeURIComponent(id)}`, {
+				json: studySkillPatchBody(patch)
+			})
+		);
+	}
+
+	async listStudySkillTemplates() {
+		return mapStudyTemplateList(await this.#json('GET', '/v1/study/skills/templates'));
+	}
+
+	async copyStudySkillTemplate(templateId: string) {
+		return mapStudySkillList(
+			await this.#json('POST', '/v1/study/skills/from-template', {
+				json: studyFromTemplateBody({ templateId })
+			})
+		);
 	}
 }
 

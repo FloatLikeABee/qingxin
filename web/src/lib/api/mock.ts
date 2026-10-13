@@ -58,6 +58,9 @@ import { BEDTIME_STORIES, SOUND_PRESETS } from '../mood/catalog';
 import { DISCLAIMER, mockInsight } from '../mood/insight';
 import { aggregateTrends, type MoodLog } from '../mood/trends';
 import { validateCheckIn } from '../mood/validate';
+import { MockPetsStudy } from './mock-life';
+import type { CareType, CreatePetInput, RecordType } from '../pets/types';
+import type { Grade, TargetDays } from '../study/types';
 import {
 	ApiError,
 	type CreateAiText,
@@ -295,6 +298,7 @@ export class MockQingxinApi implements QingxinApi {
 	#services: LocalService[] = SEED_SERVICES.map((item) => ({ ...item, tags: [...item.tags] }));
 	#reviews: LocalReview[] = SEED_REVIEWS.map((item) => ({ ...item }));
 	#corrections: LocalCorrection[] = [];
+	#life = new MockPetsStudy();
 
 	#hydrateHustle(userId: string) {
 		hydrateUserList(this.#apps, APPS_KEY, userId, seedApplications());
@@ -320,6 +324,7 @@ export class MockQingxinApi implements QingxinApi {
 			this.#hydrateHustle(this.#session.userId);
 			this.#hydrateCreate(this.#session.userId);
 			this.#hydrateTools(this.#session.userId);
+			this.#life.hydrate(this.#session.userId);
 		}
 		return this.#session;
 	}
@@ -343,6 +348,7 @@ export class MockQingxinApi implements QingxinApi {
 		this.#hydrateHustle(this.#session.userId);
 		this.#hydrateCreate(this.#session.userId);
 		this.#hydrateTools(this.#session.userId);
+		this.#life.hydrate(this.#session.userId);
 		return this.#session;
 	}
 
@@ -366,6 +372,7 @@ export class MockQingxinApi implements QingxinApi {
 		persistUserList(this.#snippets, SNIPPETS_KEY, this.#session.userId, []);
 		persistUserList(this.#aiTasks, AI_TASKS_KEY, this.#session.userId, []);
 		persistUserList(this.#aiTemplates, AI_TEMPLATES_KEY, this.#session.userId, []);
+		this.#life.hydrate(this.#session.userId);
 		return this.#session;
 	}
 
@@ -420,6 +427,7 @@ export class MockQingxinApi implements QingxinApi {
 			this.#reviews = this.#reviews.filter((item) => item.userId !== userId);
 			this.#corrections = this.#corrections.filter((item) => item.userId !== userId);
 			this.#services = this.#services.filter((item) => item.createdBy !== userId);
+			this.#life.forget(userId);
 		}
 		this.#session = null;
 		writeStoredSession(null);
@@ -1277,5 +1285,111 @@ export class MockQingxinApi implements QingxinApi {
 			await Promise.resolve();
 		}
 		yield { type: 'result', task };
+	}
+
+	async listPets() {
+		return this.#life.listPets(requireSession(this.#session));
+	}
+
+	async createPet(input: CreatePetInput) {
+		return this.#life.createPet(requireSession(this.#session), input);
+	}
+
+	async getPet(id: string) {
+		return this.#life.getPet(requireSession(this.#session), id);
+	}
+
+	async getPetsToday() {
+		return this.#life.getPetsToday(requireSession(this.#session));
+	}
+
+	async listPetRecords(petId: string) {
+		return this.#life.listPetRecords(requireSession(this.#session), petId);
+	}
+
+	async createPetRecord(
+		petId: string,
+		input: { type: RecordType; date: string; nextDueDate?: string | null; note?: string | null }
+	) {
+		return this.#life.createPetRecord(requireSession(this.#session), petId, input);
+	}
+
+	async listPetWeights(petId: string) {
+		return this.#life.listPetWeights(requireSession(this.#session), petId);
+	}
+
+	async createPetWeight(petId: string, input: { measuredOn: string; weightG: number }) {
+		return this.#life.createPetWeight(requireSession(this.#session), petId, input);
+	}
+
+	async listPetLogs(petId: string) {
+		return this.#life.listPetLogs(requireSession(this.#session), petId);
+	}
+
+	async createPetLog(petId: string, input: { type: CareType; value?: string | null }) {
+		return this.#life.createPetLog(requireSession(this.#session), petId, input);
+	}
+
+	async getStudyToday() {
+		return this.#life.getStudyToday(requireSession(this.#session));
+	}
+
+	async listStudyChallenges() {
+		return this.#life.listStudyChallenges(requireSession(this.#session));
+	}
+
+	async createStudyChallenge(input: { name: string; targetDays: TargetDays; timezone?: string }) {
+		return this.#life.createStudyChallenge(requireSession(this.#session), input);
+	}
+
+	async checkinStudyChallenge(id: string, day?: string) {
+		return this.#life.checkinStudyChallenge(requireSession(this.#session), id, day);
+	}
+
+	async listStudyFlashcards() {
+		return this.#life.listStudyFlashcards(requireSession(this.#session));
+	}
+
+	async listDueStudyFlashcards() {
+		return this.#life.listDueStudyFlashcards(requireSession(this.#session));
+	}
+
+	async createStudyFlashcard(input: { front: string; back: string; category?: string | null }) {
+		return this.#life.createStudyFlashcard(requireSession(this.#session), input);
+	}
+
+	async reviewStudyFlashcard(id: string, grade: Grade) {
+		return this.#life.reviewStudyFlashcard(requireSession(this.#session), id, grade);
+	}
+
+	async listStudyNotes(q?: string) {
+		return this.#life.listStudyNotes(requireSession(this.#session), q);
+	}
+
+	async createStudyNote(input: { title: string; contentMd?: string; tags?: string[] }) {
+		return this.#life.createStudyNote(requireSession(this.#session), input);
+	}
+
+	async listStudySkills() {
+		return this.#life.listStudySkills(requireSession(this.#session));
+	}
+
+	async createStudySkill(input: { title: string; parentId?: string | null }) {
+		return this.#life.createStudySkill(requireSession(this.#session), input);
+	}
+
+	async patchStudySkill(
+		id: string,
+		patch: { title?: string; parentId?: string | null; unlocked?: boolean; sortOrder?: number }
+	) {
+		return this.#life.patchStudySkill(requireSession(this.#session), id, patch);
+	}
+
+	async listStudySkillTemplates() {
+		return this.#life.listStudySkillTemplates(requireSession(this.#session));
+	}
+
+	async copyStudySkillTemplate(templateId: string) {
+		return this.#life.copyStudySkillTemplate(requireSession(this.#session), templateId);
 	}
 }

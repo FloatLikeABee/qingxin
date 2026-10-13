@@ -11,6 +11,6 @@ export default defineConfig({
 		env: { PUBLIC_API_URL: apiUrl }
 	},
 	use: { baseURL: 'http://127.0.0.1:4173', viewport: { width: 1280, height: 800 } },
-	testMatch: '**/api.e2e.ts',
+	testMatch: ['**/api.e2e.ts', '**/pets-study.e2e.ts'],
 	timeout: 60_000
 });

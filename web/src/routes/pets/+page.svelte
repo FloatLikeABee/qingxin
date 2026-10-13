@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
@@ -12,39 +13,50 @@
 		type CareType,
 		type PetSpecies
 	} from '#lib/pets/types';
+	import { pushToast } from '#lib/toast';
 
 	const store = getPetsStore();
 	let selected = $state(0);
-	let summary = $state(store.today());
 	let name = $state('');
 	let species = $state<PetSpecies>('cat');
 	let avatarUrl = $state('');
+	let busy = $state(false);
 
-	function refresh() {
-		summary = store.today();
-		if (selected >= store.pets.length) selected = 0;
-	}
-
-	function addPet() {
-		if (!name.trim()) return;
-		store.createPet({
-			name: name.trim(),
-			species,
-			avatarUrl: avatarUrl.trim() || null
+	onMount(() => {
+		void store.load().catch((error) => {
+			pushToast({ title: '无法加载宠物', body: String(error), tone: 'danger' });
 		});
-		name = '';
-		avatarUrl = '';
-		selected = store.pets.length - 1;
-		refresh();
+	});
+
+	async function addPet() {
+		if (!name.trim() || busy) return;
+		busy = true;
+		try {
+			await store.createPet({
+				name: name.trim(),
+				species,
+				avatarUrl: avatarUrl.trim() || null
+			});
+			name = '';
+			avatarUrl = '';
+			selected = store.pets.length - 1;
+		} catch (error) {
+			pushToast({ title: '没有保存', body: String(error), tone: 'danger' });
+		} finally {
+			busy = false;
+		}
 	}
 
-	function checkIn(petId: string, type: CareType) {
-		store.addLog(petId, { type });
-		refresh();
+	async function checkIn(petId: string, type: CareType) {
+		try {
+			await store.addLog(petId, { type });
+		} catch (error) {
+			pushToast({ title: '打卡失败', body: String(error), tone: 'danger' });
+		}
 	}
 
 	const current = $derived(store.pets[selected]);
-	const todayItem = $derived(summary.items.find((item) => item.petId === current?.id));
+	const todayItem = $derived(store.summary.items.find((item) => item.petId === current?.id));
 </script>
 
 <svelte:head>
@@ -72,7 +84,7 @@
 						</select>
 					</label>
 					<Input label="头像链接（可选）" bind:value={avatarUrl} placeholder="https://" />
-					<Button onclick={addPet}>添加宠物</Button>
+					<Button onclick={addPet} disabled={busy}>添加宠物</Button>
 				</div>
 			{/snippet}
 		</EmptyState>
