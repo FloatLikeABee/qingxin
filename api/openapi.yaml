@@ -3,7 +3,7 @@ info:
   title: Qingxin (轻心) API
   version: 0.2.0
   description: |
-    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation and M3 elder-assistant routes.
+    T1 Foundation HTTP contract for Qingxin, plus M1 mood/meditation, M3 elder-assistant, and M10 hustle routes.
 
     The Rust service lives in `api/`. Sensitive fields (phone numbers) are
     stored with AES-256-GCM. Access tokens are short-lived JWTs; refresh
@@ -33,6 +33,7 @@ tags:
   - name: Elder
   - name: Mood
   - name: Meditation
+  - name: Hustle
 paths:
   /health:
     get:
@@ -1290,6 +1291,322 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /v1/hustle/applications:
+    get:
+      tags: [Hustle]
+      summary: List the caller's job applications
+      operationId: listHustleApplications
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HustleApplicationList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Hustle]
+      summary: Create a job application
+      operationId: createHustleApplication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHustleApplicationRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HustleApplication"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/hustle/applications/{id}:
+    patch:
+      tags: [Hustle]
+      summary: Update status, interview date, or 复盘 notes
+      operationId: patchHustleApplication
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchHustleApplicationRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HustleApplication"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/hustle/funnel:
+    get:
+      tags: [Hustle]
+      summary: Application counts by 投递 / 面试 / Offer
+      operationId: getHustleFunnel
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Three stages, zeros included
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HustleFunnel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/hustle/resumes:
+    get:
+      tags: [Hustle]
+      summary: List resume versions
+      operationId: listHustleResumes
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Newest version first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HustleResumeList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Hustle]
+      summary: Create a resume version
+      operationId: createHustleResume
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHustleResumeRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HustleResume"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/hustle/resumes/{id}:
+    patch:
+      tags: [Hustle]
+      summary: Update resume content
+      operationId: patchHustleResume
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchHustleResumeRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HustleResume"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/hustle/resumes/{id}/optimize:
+    post:
+      tags: [Hustle]
+      summary: Stubbed resume rewrite via AiGateway
+      operationId: optimizeHustleResume
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Rewrite text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HustleAiText"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/hustle/side-hustles:
+    get:
+      tags: [Hustle]
+      summary: List side hustles
+      operationId: listSideHustles
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [线上, 线下, 技能型]
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SideHustleList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Hustle]
+      summary: Create a side hustle card
+      operationId: createSideHustle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSideHustleRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SideHustle"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/hustle/side-hustles/suggest:
+    post:
+      tags: [Hustle]
+      summary: Stubbed side-hustle suggestions via AiGateway
+      operationId: suggestSideHustles
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuggestSideHustlesRequest"
+      responses:
+        "200":
+          description: Suggestion list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SideHustleSuggestResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/hustle/questions:
+    get:
+      tags: [Hustle]
+      summary: Closed interview question catalog
+      operationId: listHustleQuestions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [前端, 后端, 产品, 运营]
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [基础, 进阶, 困难]
+      responses:
+        "200":
+          description: Filtered catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HustleQuestionList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/hustle/interviews/mock:
+    post:
+      tags: [Hustle]
+      summary: Stubbed mock interviewer via AiGateway
+      operationId: mockHustleInterview
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MockInterviewRequest"
+      responses:
+        "200":
+          description: Follow-up question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HustleAiText"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
 components:
   securitySchemes:
@@ -2045,3 +2362,242 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MeditationSession"
+    HustleApplication:
+      type: object
+      required: [id, company, position, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        company:
+          type: string
+        position:
+          type: string
+        status:
+          type: string
+          enum: [投递, 面试, Offer]
+        interview_date:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    HustleApplicationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/HustleApplication"
+    CreateHustleApplicationRequest:
+      type: object
+      required: [company, position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        company:
+          type: string
+        position:
+          type: string
+        status:
+          type: string
+          enum: [投递, 面试, Offer]
+        interview_date:
+          type: string
+        notes:
+          type: string
+    PatchHustleApplicationRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [投递, 面试, Offer]
+        interview_date:
+          type: string
+        notes:
+          type: string
+    HustleFunnel:
+      type: object
+      required: [stages]
+      properties:
+        stages:
+          type: array
+          items:
+            type: object
+            required: [status, count]
+            properties:
+              status:
+                type: string
+              count:
+                type: integer
+    HustleResume:
+      type: object
+      required: [id, version, content]
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        title:
+          type: string
+        content:
+          type: object
+        pdf_url:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    HustleResumeList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/HustleResume"
+    CreateHustleResumeRequest:
+      type: object
+      required: [content]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: object
+    PatchHustleResumeRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: object
+    HustleAiText:
+      type: object
+      required: [text, disclaimer, source]
+      properties:
+        text:
+          type: string
+        disclaimer:
+          type: string
+        source:
+          type: string
+          enum: [gateway, mock]
+        question:
+          type: string
+    SideHustle:
+      type: object
+      required: [id, title, platform, estimated_income, skills_required, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        platform:
+          type: string
+        estimated_income:
+          type: integer
+        skills_required:
+          type: array
+          items:
+            type: string
+        kind:
+          type: string
+          enum: [线上, 线下, 技能型]
+        hours_per_week:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    SideHustleList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SideHustle"
+    CreateSideHustleRequest:
+      type: object
+      required: [title, platform, estimated_income, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        platform:
+          type: string
+        estimated_income:
+          type: integer
+        skills_required:
+          type: array
+          items:
+            type: string
+        kind:
+          type: string
+          enum: [线上, 线下, 技能型]
+        hours_per_week:
+          type: integer
+    SuggestSideHustlesRequest:
+      type: object
+      properties:
+        skills:
+          type: array
+          items:
+            type: string
+        hours_per_week:
+          type: integer
+    SideHustleSuggestResponse:
+      type: object
+      required: [items, disclaimer, source]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        disclaimer:
+          type: string
+        source:
+          type: string
+          enum: [gateway, mock]
+    HustleQuestionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, role, difficulty, prompt]
+            properties:
+              id:
+                type: string
+              role:
+                type: string
+              difficulty:
+                type: string
+              prompt:
+                type: string
+    MockInterviewRequest:
+      type: object
+      properties:
+        question_id:
+          type: string
+        question:
+          type: string

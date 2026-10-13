@@ -57,6 +57,9 @@ describe('MockQingxinApi', () => {
 		const exported = await api.exportUserData();
 		expect(exported.exportedAt).toBeTruthy();
 		expect(exported.data).toMatchObject({ email: 'demo@qingxin.app' });
+		expect(exported.data.applications?.length).toBeGreaterThan(0);
+		expect(exported.data.resumes?.length).toBeGreaterThan(0);
+		expect(exported.data.sideHustles?.length).toBeGreaterThan(0);
 	});
 
 	it('clears the session after account deletion', async () => {
@@ -92,7 +95,13 @@ describe('MockQingxinApi', () => {
 		const api = new MockQingxinApi();
 		await api.login('demo@qingxin.app', 'qingxin');
 		const catalog = await api.getMeditationCatalog();
-		expect(catalog.sounds.map((item) => item.id)).toEqual(['rain', 'waves', 'fan', 'fire', 'white']);
+		expect(catalog.sounds.map((item) => item.id)).toEqual([
+			'rain',
+			'waves',
+			'fan',
+			'fire',
+			'white'
+		]);
 		expect(catalog.stories.length).toBeGreaterThanOrEqual(2);
 		const session = await api.createMeditationSession({ kind: 'breathe', durationSec: 76 });
 		expect(session.kind).toBe('breathe');
@@ -123,9 +132,66 @@ describe('MockQingxinApi', () => {
 		const api = new MockQingxinApi();
 		await api.login('demo@qingxin.app', 'qingxin');
 		const id = '11111111-1111-4111-8111-111111111111';
-		const first = await api.createMoodLog({ id, emoji: '😔', tags: ['睡眠'], note: '夜里醒了两次' });
-		const second = await api.createMoodLog({ id, emoji: '😔', tags: ['睡眠'], note: '夜里醒了两次' });
+		const first = await api.createMoodLog({
+			id,
+			emoji: '😔',
+			tags: ['睡眠'],
+			note: '夜里醒了两次'
+		});
+		const second = await api.createMoodLog({
+			id,
+			emoji: '😔',
+			tags: ['睡眠'],
+			note: '夜里醒了两次'
+		});
 		expect(second.id).toBe(first.id);
 		expect((await api.listMoodLogs()).filter((item) => item.id === id)).toHaveLength(1);
+	});
+
+	it('moves an application on the kanban and rejects an unknown status', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		const created = await api.createApplication({ company: '轻心实验室', position: '前端工程师' });
+		expect(created.status).toBe('投递');
+		const moved = await api.patchApplication(created.id, { status: '面试', notes: '问了盒模型' });
+		expect(moved.status).toBe('面试');
+		await expect(
+			api.patchApplication(created.id, { status: '归档' as '投递' })
+		).rejects.toMatchObject({
+			code: 'invalid_request'
+		});
+		const funnel = await api.getHustleFunnel();
+		expect(funnel.stages.map((item) => item.status)).toEqual(['投递', '面试', 'Offer']);
+	});
+
+	it('creates resume versions and stubs optimize behind a disclaimer', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		const resume = await api.createResume({
+			title: '投后端',
+			content: { name: '林轻心', title: '后端工程师' }
+		});
+		expect(resume.version).toBeGreaterThanOrEqual(2);
+		await expect(api.createResume({ content: { title: '没有姓名' } })).rejects.toMatchObject({
+			code: 'invalid_request'
+		});
+		const insight = await api.optimizeResume(resume.id);
+		expect(insight.source).toBe('mock');
+		expect(insight.disclaimer).toContain('不构成');
+		expect(insight.text).toContain('林轻心');
+	});
+
+	it('filters questions and returns a mock interviewer follow-up', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		const front = await api.listHustleQuestions({ role: '前端' });
+		expect(front.length).toBeGreaterThan(0);
+		expect(front.every((item) => item.role === '前端')).toBe(true);
+		const reply = await api.mockInterview({ questionId: front[0]?.id });
+		expect(reply.source).toBe('mock');
+		expect(reply.text.length).toBeGreaterThan(4);
+		const ideas = await api.suggestSideHustles({ skills: ['设计'], hoursPerWeek: 6 });
+		expect(ideas.items.length).toBeGreaterThanOrEqual(2);
+		expect(ideas.source).toBe('mock');
 	});
 });

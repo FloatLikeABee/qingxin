@@ -37,6 +37,8 @@ for (const view of views) {
 			await boot(page, theme);
 			await openReady(page, '/');
 			await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+			await expect(page.getByRole('heading', { name: '求职概览' })).toBeVisible();
+			await expect(page.getByText('轻心实验室').first()).toBeVisible();
 			if (view.width < 800) {
 				await expect(page.locator('nav.fixed')).toBeVisible();
 			} else {
@@ -93,6 +95,35 @@ for (const view of views) {
 				}
 				await page.screenshot({
 					path: `screenshots/mood-${screen.key}-${view.name}-${theme}.png`,
+					fullPage: true
+				});
+			});
+		}
+	}
+}
+
+const hustleScreens = [
+	{ key: 'resume', tab: '求职', chip: '简历', ready: 'A4 预览始终浅色' },
+	{ key: 'kanban', tab: '求职', chip: '看板', ready: '投递漏斗' },
+	{ key: 'ideas', tab: '副业', chip: '灵感', ready: '示意收入' }
+] as const;
+
+for (const view of views) {
+	for (const theme of themes) {
+		for (const screen of hustleScreens) {
+			test(`hustle ${screen.key} ${view.name} ${theme}`, async ({ page }) => {
+				await page.setViewportSize({ width: view.width, height: view.height });
+				await boot(page, theme);
+				await openReady(page, '/modules/hustle');
+				await expect(page.getByRole('heading', { name: '求职副业' })).toBeVisible();
+				await page.getByRole('tab', { name: screen.tab }).click();
+				await page.getByRole('button', { name: screen.chip, exact: true }).click();
+				await expect(page.getByText(screen.ready).first()).toBeVisible();
+				if (view.width < 800) {
+					await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+				}
+				await page.screenshot({
+					path: `screenshots/hustle-${screen.key}-${view.name}-${theme}.png`,
 					fullPage: true
 				});
 			});

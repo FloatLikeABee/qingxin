@@ -1,5 +1,8 @@
 import type { ModuleInfo } from '../modules';
 import type { MoodLog } from '../mood/trends';
+import type { InterviewQuestion, SideHustle } from '../hustle/catalog';
+import type { Application, FunnelStage } from '../hustle/funnel';
+import type { ResumeContent } from '../hustle/resume';
 
 export interface Session {
 	userId: string;
@@ -16,7 +19,33 @@ export interface ExportPayload {
 		modules: string[];
 		moodLogs?: MoodLog[];
 		meditationSessions?: MeditationSession[];
+		applications?: Application[];
+		resumes?: ResumeVersion[];
+		sideHustles?: SideHustle[];
 	};
+}
+
+export interface ResumeVersion {
+	id: string;
+	version: number;
+	title?: string | null;
+	content: ResumeContent;
+	pdfUrl?: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface HustleAiText {
+	text: string;
+	disclaimer: string;
+	source: 'mock' | 'gateway';
+	question?: string;
+}
+
+export interface SideHustleSuggest {
+	items: SideHustle[];
+	disclaimer: string;
+	source: 'mock' | 'gateway';
 }
 
 export interface MoodInsight {
@@ -76,8 +105,16 @@ export interface QingxinApi {
 	deleteAccount(): Promise<void>;
 	createMoodLog(input: CreateMoodLogInput): Promise<MoodLog>;
 	listMoodLogs(filter?: { tag?: string }): Promise<MoodLog[]>;
-	getMoodTrends(period: 'week' | 'month', tag?: string): Promise<{ period: string; points: MoodTrendPoint[] }>;
-	createMoodInsight(input: { moodLogId?: string; emoji?: string; tags?: string[]; note?: string }): Promise<MoodInsight>;
+	getMoodTrends(
+		period: 'week' | 'month',
+		tag?: string
+	): Promise<{ period: string; points: MoodTrendPoint[] }>;
+	createMoodInsight(input: {
+		moodLogId?: string;
+		emoji?: string;
+		tags?: string[];
+		note?: string;
+	}): Promise<MoodInsight>;
 	getMonthlyMoodSummary(month: string): Promise<MoodInsight>;
 	getMeditationCatalog(): Promise<MeditationCatalog>;
 	createMeditationSession(input: {
@@ -87,6 +124,47 @@ export interface QingxinApi {
 		payload?: Record<string, unknown>;
 	}): Promise<MeditationSession>;
 	listMeditationSessions(): Promise<MeditationSession[]>;
+	createApplication(input: {
+		id?: string;
+		company: string;
+		position: string;
+		status?: Application['status'];
+		interviewDate?: string;
+		notes?: string;
+	}): Promise<Application>;
+	listApplications(): Promise<Application[]>;
+	patchApplication(
+		id: string,
+		patch: { status?: Application['status']; interviewDate?: string; notes?: string }
+	): Promise<Application>;
+	getHustleFunnel(): Promise<{ stages: FunnelStage[] }>;
+	createResume(input: {
+		id?: string;
+		title?: string;
+		content: ResumeContent;
+	}): Promise<ResumeVersion>;
+	listResumes(): Promise<ResumeVersion[]>;
+	patchResume(
+		id: string,
+		patch: { title?: string; content?: ResumeContent }
+	): Promise<ResumeVersion>;
+	optimizeResume(id: string): Promise<HustleAiText>;
+	createSideHustle(input: {
+		id?: string;
+		title: string;
+		platform: string;
+		estimatedIncome: number;
+		skillsRequired: string[];
+		kind: SideHustle['kind'];
+		hoursPerWeek?: number;
+	}): Promise<SideHustle>;
+	listSideHustles(kind?: SideHustle['kind']): Promise<SideHustle[]>;
+	suggestSideHustles(input: { skills: string[]; hoursPerWeek: number }): Promise<SideHustleSuggest>;
+	listHustleQuestions(filter?: {
+		role?: string;
+		difficulty?: string;
+	}): Promise<InterviewQuestion[]>;
+	mockInterview(input: { questionId?: string; question?: string }): Promise<HustleAiText>;
 }
 
 export class ApiError extends Error {
