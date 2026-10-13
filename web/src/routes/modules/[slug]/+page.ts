@@ -9,7 +9,8 @@ export const entries: EntryGenerator = () =>
 			item.slug !== 'hustle' &&
 			item.slug !== 'local' &&
 			item.slug !== 'health' &&
-			item.slug !== 'finance'
+			item.slug !== 'finance' &&
+			item.slug !== 'study'
 	).map((item) => ({
 		slug: item.slug
 	}));

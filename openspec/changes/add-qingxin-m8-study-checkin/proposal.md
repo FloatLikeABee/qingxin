@@ -2,11 +2,11 @@
 
 ## Why
 
-Issue #19 (M8 学习与技能打卡) needs a private habit toolkit — 7/14/21-day challenges with derived streaks, a text 错题本 with simple spaced review, encrypted Markdown notes, a user-built skill tree, and a browser-only focus timer — after T1 (`api/`), T2 (`web/`), M2 finance, M3 elder, M7 wellness, and M10 hustle merged. The uploaded draft assumed `qingxin/server` and `qingxin/web` and left OPEN-QUESTIONS.md; this change maps it onto the live tree and locks PO answers (no community/leaderboard, no photo capture, study notes stay separate and encrypted, skill tree is user-built with optional templates, streaks derived from at most one check-in per day, SM-2-lite review, missed-day reminders skip if already checked in, focus timer is client-only, migration `0008_study.sql` because main has `0006_wellness.sql` and in-flight M6 takes `0007`).
+Issue #19 (M8 学习与技能打卡) needs a private habit toolkit — 7/14/21-day challenges with derived streaks, a text 错题本 with simple spaced review, encrypted Markdown notes, a user-built skill tree, and a browser-only focus timer — after T1 (`api/`), T2 (`web/`), M2 finance, M3 elder, M7 wellness, and M10 hustle merged. The uploaded draft assumed `qingxin/server` and `qingxin/web` and left OPEN-QUESTIONS.md; this change maps it onto the live tree and locks PO answers (no community/leaderboard, no photo capture, study notes stay separate and encrypted, skill tree is user-built with optional templates, streaks derived from at most one check-in per day, SM-2-lite review, missed-day reminders skip if already checked in, focus timer is client-only, migration `0009_study.sql` because main has `0007_local.sql` and in-flight M6 pets will take `0008`).
 
 ## What Changes
 
-- Additive SQLx migration `api/migrations/0008_study.sql` for `study_challenges`, `study_checkins`, `study_flashcards`, `study_notes`, `study_skill_nodes`, `study_reminders`.
+- Additive SQLx migration `api/migrations/0009_study.sql` for `study_challenges`, `study_checkins`, `study_flashcards`, `study_notes`, `study_skill_nodes`, `study_reminders`.
 - Axum `api/src/study/` mounted at `/v1/study/*` behind T1 `AuthUser`. Cross-user ids return 404; missing tokens return 401 `unauthenticated`. Caregiver links MUST NOT grant study access.
 - Challenge `target_days` MUST be 7, 14, or 21. Check-in is idempotent per `(challenge_id, day)` in the challenge timezone. `current_streak` is derived at read time from consecutive local days, not stored.
 - Flashcard front/back and note Markdown stored with T1 `FieldCrypto` AES-256-GCM (`*_encrypted` BLOB). Titles, tags, dates, ease, and interval stay plaintext so lists and search work. Note search covers title and tags only.
@@ -33,4 +33,4 @@ Issue #19 (M8 学习与技能打卡) needs a private habit toolkit — 7/14/21-d
 - Web: new `web/src/lib/study/` and `web/src/routes/study/`; `web/src/routes/modules/study/+page.ts` redirect only. No T2 tab or theme-token rewrite; do not restyle kit primitives.
 - Contract: `api/openapi.yaml` Study tag and `ExportPayload.study`.
 - CI: existing `.github/workflows/qingxin.yml` (`api/**`, `web/**`).
-- Parallel M6 pets: keep shared-file hunks tiny; M6 takes `0007`, this change uses `0008`.
+- Parallel M6 pets: keep shared-file hunks tiny; M4 took `0007_local.sql`, M6 takes `0008`, this change uses `0009`.

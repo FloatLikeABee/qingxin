@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md — Why. T1 lives at `api/` (`qingxin-api`, Axum 0.8, SQLx SQLite, `AuthUser`, `AppError`, `FieldCrypto`, `scheduled_jobs` + `PushSender`, `AiGateway`). T2 lives at `web/` (SvelteKit 5, Quill kit, CSS tokens). Latest main is `29b24e4` (M7 wellness). M2 finance already has savings challenges with idempotent daily check-ins; M3 elder already owns `parse_hhmm` / `validate_days` / `next_occurrence`; M7 wellness already has 21-day plans, encrypted free text, and `maintain_reminders` on the scheduler tick. The draft still said `qingxin/server`, `qingxin/web`, provisional `0008`, community 氛围, photo 错题, and Morph notes; PO decisions override those.
+See proposal.md — Why. T1 lives at `api/` (`qingxin-api`, Axum 0.8, SQLx SQLite, `AuthUser`, `AppError`, `FieldCrypto`, `scheduled_jobs` + `PushSender`, `AiGateway`). T2 lives at `web/` (SvelteKit 5, Quill kit, CSS tokens). Latest main is `ddb795c` (M4 local life on top of M7). M2 finance already has savings challenges with idempotent daily check-ins; M3 elder already owns `parse_hhmm` / `validate_days` / `next_occurrence`; M7 wellness already has 21-day plans, encrypted free text, and `maintain_reminders` on the scheduler tick. The draft still said `qingxin/server`, `qingxin/web`, provisional `0008`, community 氛围, photo 错题, and Morph notes; PO decisions override those.
 
 Superpowers self-grill (required): proposer and skeptical reviewer, at least three alternatives per major decision, checked against the live tree.
 
@@ -109,7 +109,7 @@ Superpowers self-grill (required): proposer and skeptical reviewer, at least thr
 
 ### D7 — API shape, 404, timezone, files
 
-**Chosen:** `/v1/study/...`. Cross-owner 404, missing token 401. Challenge timezone defaults to `Asia/Shanghai` (`UTC` accepted). Migration `0008_study.sql`. New files for almost everything; shared hunks: `lib.rs` (`pub mod study`), `routes.rs` (merge + export), `scheduler.rs` (skip + maintain), OpenAPI append, modules redirect.
+**Chosen:** `/v1/study/...`. Cross-owner 404, missing token 401. Challenge timezone defaults to `Asia/Shanghai` (`UTC` accepted). Migration `0009_study.sql`. New files for almost everything; shared hunks: `lib.rs` (`pub mod study`), `routes.rs` (merge + export), `scheduler.rs` (skip + maintain), OpenAPI append, modules redirect.
 
 **Rejected:**
 
@@ -118,7 +118,7 @@ Superpowers self-grill (required): proposer and skeptical reviewer, at least thr
 3. **Reuse `fin_savings_challenges`** — different rules (7/14/21, timezone, study reminders).
 4. **Append handlers to `routes.rs`** — M6 conflict magnet.
 
-**Grill:** *Why 0008 not 0007?* User/PO: main has 0006, M6 pets takes 0007.
+**Grill:** *Why 0009?* Main has `0007_local.sql` after M4; unmerged M6 PR #22 has `0008_pets.sql`.
 
 ### D8 — AI
 
@@ -145,7 +145,7 @@ Superpowers self-grill (required): proposer and skeptical reviewer, at least thr
 
 **Revisions after grilling:**
 
-- Locked migration to `0008_study.sql`.
+- Locked migration to `0009_study.sql`.
 - Streak derived, not stored.
 - Skip-if-checked-in at tick time, not only at check-in.
 - Notes are `study_notes` with encrypted Markdown.
@@ -154,7 +154,7 @@ Superpowers self-grill (required): proposer and skeptical reviewer, at least thr
 
 ## Risks / Trade-offs
 
-- **[Risk] Migration/OpenAPI conflict with M6** → `0008` reserved; append-only OpenAPI; tiny scheduler/routes hunks.
+- **[Risk] Migration/OpenAPI conflict with M6** → `0009` reserved after M4 `0007` and M6 `0008`; append-only OpenAPI; tiny scheduler/routes hunks.
 - **[Risk] Timezone off-by-one on streaks** → store `day` as `YYYY-MM-DD` in the challenge tz; tests for UTC vs Shanghai and a missed-day gap.
 - **[Risk] AuthZ leaks another user's 错题** → `user_id` on every table; load_one by `(id, user_id)`; 404 tests per resource.
 - **[Risk] PWA reminders silently fail** → same T1 Web Push path as M7; skip avoids nagging people who already did the work.
@@ -162,7 +162,7 @@ Superpowers self-grill (required): proposer and skeptical reviewer, at least thr
 
 ## Migration Plan
 
-1. Additive `0008_study.sql`. Down is drop those tables (dev only).
+1. Additive `0009_study.sql`. Down is drop those tables (dev only).
 2. Ship `/v1/study/*` and web pages.
 3. Rollback: revert the PR; T1 tables unchanged.
 4. Account delete: `ON DELETE CASCADE` from `users` clears M8 rows.

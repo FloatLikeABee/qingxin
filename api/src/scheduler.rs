@@ -55,6 +55,16 @@ pub async fn tick_once(state: &AppState) -> Result<usize, AppError> {
         }
 
         let payload = serde_json::from_str::<Value>(&job.payload_json).unwrap_or(Value::Null);
+        if crate::study::should_skip_push(state, &job.user_id, &payload).await? {
+            sqlx::query(
+                "UPDATE scheduled_jobs SET status = 'done', last_error = NULL WHERE id = ?",
+            )
+            .bind(&job.id)
+            .execute(&state.pool)
+            .await
+            .map_err(map_sqlx)?;
+            continue;
+        }
         let result = state
             .push
             .send(&PushMessage {
@@ -103,5 +113,6 @@ pub async fn tick_once(state: &AppState) -> Result<usize, AppError> {
     }
     crate::finance::maintain_reminders(state).await?;
     crate::wellness::maintain_reminders(state).await?;
+    crate::study::maintain_reminders(state).await?;
     Ok(sent)
 }

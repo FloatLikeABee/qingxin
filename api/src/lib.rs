@@ -14,6 +14,7 @@ pub mod push;
 pub mod routes;
 pub mod scheduler;
 pub mod state;
+pub mod study;
 pub mod util;
 pub mod wellness;
 
