@@ -87,5 +87,6 @@ pub async fn tick_once(state: &AppState) -> Result<usize, AppError> {
             }
         }
     }
+    crate::finance::maintain_reminders(state).await?;
     Ok(sent)
 }

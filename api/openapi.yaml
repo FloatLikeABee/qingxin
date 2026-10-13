@@ -5,10 +5,11 @@ info:
   description: |
     T1 Foundation HTTP contract for Qingxin.
 
-    The Rust service lives in `api/`. Sensitive fields (phone numbers) are
-    stored with AES-256-GCM. Access tokens are short-lived JWTs; refresh
-    tokens and caregiver-issued device sessions are opaque, hashed, and
-    revocable.
+    The Rust service lives in `api/`. Sensitive fields (phone numbers and
+    finance transaction notes) are stored with AES-256-GCM. Access tokens
+    are short-lived JWTs; refresh tokens and caregiver-issued device
+    sessions are opaque, hashed, and revocable. M2 finance lives at
+    `/v1/finance` (CNY fen amounts stay plaintext).
 
     AI generation is intentionally a seam: `POST /v1/ai/complete` is reserved
     for Echo's gateway and returns `ai_unconfigured` until that crate is
@@ -30,6 +31,7 @@ tags:
   - name: Push
   - name: Jobs
   - name: AI
+  - name: Finance
 paths:
   /health:
     get:
@@ -576,6 +578,523 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
 
+  /v1/finance/categories:
+    get:
+      tags: [Finance]
+      summary: List system and user categories
+      operationId: listFinanceCategories
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceCategoryList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Finance]
+      summary: Create a custom category
+      operationId: createFinanceCategory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceCategoryWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceCategory"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/finance/categories/{id}:
+    patch:
+      tags: [Finance]
+      summary: Rename a user-owned category
+      operationId: patchFinanceCategory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FinanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceCategoryPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceCategory"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Finance]
+      summary: Delete a unused user-owned category
+      operationId: deleteFinanceCategory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FinanceId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/finance/transactions:
+    get:
+      tags: [Finance]
+      summary: List transactions
+      operationId: listFinanceTransactions
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-10" }
+        - in: query
+          name: type
+          schema: { type: string, enum: [income, expense] }
+        - in: query
+          name: category_id
+          schema: { type: string }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+      responses:
+        "200":
+          description: Page of transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceTransactionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Finance]
+      summary: Create a transaction (idempotent on client_id)
+      operationId: createFinanceTransaction
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceTransactionWrite"
+      responses:
+        "200":
+          description: Existing row for the same client_id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceTransaction"
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceTransaction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/finance/transactions/{id}:
+    get:
+      tags: [Finance]
+      summary: Get one transaction
+      operationId: getFinanceTransaction
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FinanceId"
+      responses:
+        "200":
+          description: Transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceTransaction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Finance]
+      summary: Update a transaction
+      operationId: patchFinanceTransaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FinanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceTransactionPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceTransaction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Finance]
+      summary: Soft-delete a transaction
+      operationId: deleteFinanceTransaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FinanceId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/finance/summary:
+    get:
+      tags: [Finance]
+      summary: Monthly income, expense, budgets and recent entries
+      operationId: getFinanceSummary
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-10" }
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/finance/report:
+    get:
+      tags: [Finance]
+      summary: Category or month report with MoM and YoY
+      operationId: getFinanceReport
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - in: query
+          name: from
+          required: true
+          schema: { type: string, example: "2026-10" }
+        - in: query
+          name: to
+          required: true
+          schema: { type: string, example: "2026-10" }
+        - in: query
+          name: group
+          schema: { type: string, enum: [category, month] }
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceReport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/finance/budgets:
+    get:
+      tags: [Finance]
+      summary: List budgets
+      operationId: listFinanceBudgets
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: Budgets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceBudgetList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Finance]
+      summary: Bulk upsert budgets
+      operationId: putFinanceBudgets
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceBudgetWrite"
+      responses:
+        "200":
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceBudgetList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/finance/subscriptions:
+    get:
+      tags: [Finance]
+      summary: List subscriptions
+      operationId: listFinanceSubscriptions
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: Subscriptions with annualised CNY cost
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceSubscriptionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Finance]
+      summary: Create a subscription and schedule a web_push reminder
+      operationId: createFinanceSubscription
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceSubscriptionWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceSubscription"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/finance/subscriptions/upcoming:
+    get:
+      tags: [Finance]
+      summary: Subscriptions due inside their reminder window
+      operationId: listUpcomingFinanceSubscriptions
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      parameters:
+        - in: query
+          name: days
+          schema: { type: integer, default: 7 }
+      responses:
+        "200":
+          description: Upcoming renewals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceSubscriptionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/finance/subscriptions/{id}:
+    patch:
+      tags: [Finance]
+      summary: Update a subscription
+      operationId: patchFinanceSubscription
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FinanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceSubscriptionPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceSubscription"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Finance]
+      summary: Delete a subscription
+      operationId: deleteFinanceSubscription
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FinanceId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/finance/challenges:
+    get:
+      tags: [Finance]
+      summary: List savings challenges
+      operationId: listFinanceChallenges
+      security:
+        - bearerAuth: []
+        - deviceAuth: []
+      responses:
+        "200":
+          description: Challenges
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceChallengeList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Finance]
+      summary: Create a manual savings challenge
+      operationId: createFinanceChallenge
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceChallengeWrite"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceChallenge"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/finance/challenges/{id}:
+    delete:
+      tags: [Finance]
+      summary: Delete a challenge
+      operationId: deleteFinanceChallenge
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FinanceId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/finance/challenges/{id}/checkins:
+    post:
+      tags: [Finance]
+      summary: Manual daily check-in (idempotent per day)
+      operationId: checkinFinanceChallenge
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FinanceId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceCheckinWrite"
+      responses:
+        "200":
+          description: Already checked in that day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceCheckin"
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceCheckin"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/finance/export.csv:
+    get:
+      tags: [Finance]
+      summary: CSV export of the caller's ledger
+      operationId: exportFinanceCsv
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -597,6 +1116,12 @@ components:
       schema:
         type: string
         format: uuid
+    FinanceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
   responses:
     BadRequest:
       description: Validation failed
@@ -785,7 +1310,7 @@ components:
           format: date-time
     ExportPayload:
       type: object
-      required: [exported_at, user, consents, devices, jobs, push_subscriptions]
+      required: [exported_at, user, consents, devices, jobs, push_subscriptions, finance]
       properties:
         exported_at:
           type: string
@@ -808,6 +1333,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PushSubscription"
+        finance:
+          $ref: "#/components/schemas/FinanceExport"
     CaregiverInvite:
       type: object
       required: [code, expires_at]
@@ -996,3 +1523,265 @@ components:
               type: integer
             completion_tokens:
               type: integer
+    FinanceCategory:
+      type: object
+      required: [id, name, kind, sort_order, system]
+      properties:
+        id: { type: string }
+        user_id: { type: string, nullable: true }
+        name: { type: string }
+        kind: { type: string, enum: [income, expense] }
+        sort_order: { type: integer }
+        system: { type: boolean }
+    FinanceCategoryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceCategory"
+    FinanceCategoryWrite:
+      type: object
+      required: [name, kind]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [income, expense] }
+    FinanceCategoryPatch:
+      type: object
+      properties:
+        name: { type: string }
+    FinanceTransaction:
+      type: object
+      required: [id, amount_fen, currency, type, category_id, occurred_on, client_id]
+      properties:
+        id: { type: string }
+        amount_fen: { type: integer }
+        currency: { type: string, enum: [CNY] }
+        type: { type: string, enum: [income, expense] }
+        category_id: { type: string }
+        category_name: { type: string }
+        note: { type: string, nullable: true }
+        occurred_on: { type: string, format: date }
+        client_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    FinanceTransactionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceTransaction"
+        next_cursor: { type: string, nullable: true }
+    FinanceTransactionWrite:
+      type: object
+      required: [amount_fen, type, category_id, occurred_on, client_id]
+      properties:
+        amount_fen: { type: integer, exclusiveMinimum: 0 }
+        currency: { type: string, enum: [CNY] }
+        type: { type: string, enum: [income, expense] }
+        category_id: { type: string }
+        note: { type: string, maxLength: 200 }
+        occurred_on: { type: string, format: date }
+        client_id: { type: string, format: uuid }
+    FinanceTransactionPatch:
+      type: object
+      properties:
+        amount_fen: { type: integer, exclusiveMinimum: 0 }
+        type: { type: string, enum: [income, expense] }
+        category_id: { type: string }
+        note: { type: string, maxLength: 200 }
+        occurred_on: { type: string, format: date }
+    FinanceBudget:
+      type: object
+      required: [id, monthly_limit_fen, alert_threshold_pct, currency]
+      properties:
+        id: { type: string }
+        category_id: { type: string, nullable: true }
+        category_name: { type: string, nullable: true }
+        monthly_limit_fen: { type: integer }
+        alert_threshold_pct: { type: integer }
+        spent_fen: { type: integer }
+        pct: { type: integer }
+        alert: { type: boolean }
+        currency: { type: string, enum: [CNY] }
+    FinanceBudgetList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceBudget"
+    FinanceBudgetWrite:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [monthly_limit_fen]
+            properties:
+              category_id: { type: string, nullable: true }
+              monthly_limit_fen: { type: integer, exclusiveMinimum: 0 }
+              alert_threshold_pct: { type: integer, minimum: 1, maximum: 100 }
+    FinanceSummary:
+      type: object
+      required: [month, currency, income_fen, expense_fen, balance_fen, by_category, budgets, recent]
+      properties:
+        month: { type: string }
+        currency: { type: string, enum: [CNY] }
+        income_fen: { type: integer }
+        expense_fen: { type: integer }
+        balance_fen: { type: integer }
+        by_category:
+          type: array
+          items:
+            type: object
+        budgets:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceBudget"
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceTransaction"
+    FinanceReport:
+      type: object
+      required: [from, to, currency, mom, yoy]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        group: { type: string }
+        currency: { type: string, enum: [CNY] }
+        income_fen: { type: integer }
+        expense_fen: { type: integer }
+        mom:
+          type: object
+          required: [expense_delta_fen]
+          properties:
+            expense_fen: { type: integer }
+            expense_delta_fen: { type: integer }
+            expense_delta_pct: { type: integer }
+        yoy:
+          type: object
+          required: [expense_delta_fen]
+          properties:
+            expense_fen: { type: integer }
+            expense_delta_fen: { type: integer }
+            expense_delta_pct: { type: integer }
+        slices:
+          type: array
+          items:
+            type: object
+    FinanceSubscription:
+      type: object
+      required: [id, name, price_fen, currency, cycle, next_billing_date, annual_cost_fen]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        price_fen: { type: integer }
+        currency: { type: string, enum: [CNY] }
+        cycle: { type: string, enum: [weekly, monthly, quarterly, yearly] }
+        next_billing_date: { type: string, format: date }
+        remind_days_before: { type: integer }
+        active: { type: boolean }
+        annual_cost_fen: { type: integer }
+    FinanceSubscriptionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceSubscription"
+    FinanceSubscriptionWrite:
+      type: object
+      required: [name, price_fen, cycle, next_billing_date]
+      properties:
+        name: { type: string }
+        price_fen: { type: integer, exclusiveMinimum: 0 }
+        currency: { type: string, enum: [CNY] }
+        cycle: { type: string, enum: [weekly, monthly, quarterly, yearly] }
+        next_billing_date: { type: string, format: date }
+        remind_days_before: { type: integer }
+        active: { type: boolean }
+    FinanceSubscriptionPatch:
+      type: object
+      properties:
+        name: { type: string }
+        price_fen: { type: integer, exclusiveMinimum: 0 }
+        cycle: { type: string, enum: [weekly, monthly, quarterly, yearly] }
+        next_billing_date: { type: string, format: date }
+        remind_days_before: { type: integer }
+        active: { type: boolean }
+    FinanceChallenge:
+      type: object
+      required: [id, name, target_days, start_date, progress_days]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        target_days: { type: integer }
+        target_amount_fen: { type: integer, nullable: true }
+        start_date: { type: string, format: date }
+        progress_days: { type: integer }
+        created_at: { type: string, format: date-time }
+        checkins:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceCheckin"
+    FinanceChallengeList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceChallenge"
+    FinanceChallengeWrite:
+      type: object
+      required: [name, target_days]
+      properties:
+        name: { type: string }
+        target_days: { type: integer, exclusiveMinimum: 0 }
+        target_amount_fen: { type: integer }
+        start_date: { type: string, format: date }
+    FinanceCheckin:
+      type: object
+      required: [id, challenge_id, day]
+      properties:
+        id: { type: string }
+        challenge_id: { type: string }
+        day: { type: string, format: date }
+        created_at: { type: string, format: date-time }
+    FinanceCheckinWrite:
+      type: object
+      properties:
+        day: { type: string, format: date }
+    FinanceExport:
+      type: object
+      required: [categories, transactions, budgets, subscriptions, challenges]
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceCategory"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceTransaction"
+        budgets:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceBudget"
+        subscriptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceSubscription"
+        challenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceChallenge"

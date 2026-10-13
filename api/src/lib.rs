@@ -4,6 +4,7 @@ pub mod config;
 pub mod crypto;
 pub mod db;
 pub mod error;
+pub mod finance;
 pub mod moderation;
 pub mod push;
 pub mod routes;
