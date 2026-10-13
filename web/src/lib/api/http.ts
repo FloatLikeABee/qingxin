@@ -24,6 +24,7 @@ import type { MoodLog } from '../mood/trends';
 import {
 	ApiError,
 	type AiTask,
+	type AiTemplate,
 	type CreateAiText,
 	type CreateMoodLogInput,
 	type CreateOutlineResult,
@@ -316,6 +317,28 @@ function mapSnippet(value: unknown): CreateSnippet {
 	};
 }
 
+function mapAiTemplate(value: unknown): AiTemplate {
+	const row = asJson(value);
+	return {
+		id: str(row.id),
+		toolId: str(row.tool_id) as ToolId,
+		title: str(row.title),
+		body: str(row.body),
+		favourite: Boolean(row.favourite),
+		createdAt: str(row.created_at),
+		updatedAt: str(row.updated_at)
+	};
+}
+
+function isAbortError(error: unknown): boolean {
+	return (
+		(typeof DOMException !== 'undefined' &&
+			error instanceof DOMException &&
+			error.name === 'AbortError') ||
+		(error instanceof Error && (error.name === 'AbortError' || /abort/i.test(error.message)))
+	);
+}
+
 function mapTask(value: unknown): AiTask {
 	const row = asJson(value);
 	return {
@@ -408,10 +431,16 @@ export class HttpQingxinApi implements QingxinApi {
 	async #raw(
 		method: string,
 		path: string,
-		options: { json?: unknown; auth?: boolean; retry?: boolean } = {}
+		options: {
+			json?: unknown;
+			auth?: boolean;
+			retry?: boolean;
+			signal?: AbortSignal;
+			accept?: string;
+		} = {}
 	): Promise<Response> {
 		const headers = new Headers();
-		headers.set('Accept', 'application/json');
+		headers.set('Accept', options.accept ?? 'application/json');
 		if (options.json !== undefined) headers.set('Content-Type', 'application/json');
 		const session = this.#currentSession();
 		if (options.auth !== false && session?.token) {
@@ -422,9 +451,11 @@ export class HttpQingxinApi implements QingxinApi {
 			response = await this.#fetch(`${this.#baseUrl}${path}`, {
 				method,
 				headers,
-				body: options.json === undefined ? undefined : JSON.stringify(options.json)
+				body: options.json === undefined ? undefined : JSON.stringify(options.json),
+				signal: options.signal
 			});
-		} catch {
+		} catch (error) {
+			if (isAbortError(error) || options.signal?.aborted) throw error;
 			throw new ApiError('unavailable', '网络不可用');
 		}
 		if (
@@ -581,7 +612,8 @@ export class HttpQingxinApi implements QingxinApi {
 					: [],
 				creations: Array.isArray(body.creations) ? body.creations.map(mapCreation) : [],
 				snippets: Array.isArray(body.snippets) ? body.snippets.map(mapSnippet) : [],
-				aiTasks: Array.isArray(body.ai_tasks) ? body.ai_tasks.map(mapTask) : []
+				aiTasks: Array.isArray(body.ai_tasks) ? body.ai_tasks.map(mapTask) : [],
+				aiTemplates: Array.isArray(body.templates) ? body.templates.map(mapAiTemplate) : []
 			}
 		};
 	}
@@ -1104,36 +1136,50 @@ export class HttpQingxinApi implements QingxinApi {
 	}
 
 	async *runTool(input: ToolRunInput): AsyncIterable<ToolStreamEvent> {
-		const response = await this.#raw('POST', `/v1/tools/${encodeURIComponent(input.toolId)}/run`, {
-			json: compact({
-				input_kind: input.inputKind,
-				text: input.text,
-				url: input.url,
-				filename: input.filename,
-				resume: input.resume,
-				jd: input.jd,
-				filenames: input.filenames,
-				tone: input.tone,
-				step: input.step,
-				topics: input.topics
-			})
-		});
+		let response: Response;
+		try {
+			response = await this.#raw('POST', `/v1/tools/${encodeURIComponent(input.toolId)}/run`, {
+				json: compact({
+					input_kind: input.inputKind,
+					text: input.text,
+					url: input.url,
+					filename: input.filename,
+					pdf_base64: input.pdfBase64,
+					resume: input.resume,
+					jd: input.jd,
+					filenames: input.filenames,
+					tone: input.tone,
+					step: input.step,
+					topics: input.topics
+				}),
+				signal: input.signal,
+				accept: 'text/event-stream'
+			});
+		} catch (error) {
+			if (isAbortError(error) || input.signal?.aborted) return;
+			throw error;
+		}
 		if (!response.ok) throw await this.#error(response);
 		const reader = response.body?.getReader();
-		if (!reader) return;
+		if (!reader) throw new ApiError('unavailable', '请求失败');
 		const decoder = new TextDecoder();
 		let buffer = '';
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
-			const blocks = buffer.split('\n\n');
-			buffer = blocks.pop() ?? '';
-			for (const block of blocks) {
-				yield* parseSseBlock(block);
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
+				const blocks = buffer.split('\n\n');
+				buffer = blocks.pop() ?? '';
+				for (const block of blocks) {
+					yield* parseSseBlock(block);
+				}
 			}
+			if (buffer.trim()) yield* parseSseBlock(buffer);
+		} catch (error) {
+			if (isAbortError(error) || input.signal?.aborted) return;
+			throw error;
 		}
-		if (buffer.trim()) yield* parseSseBlock(buffer);
 	}
 }
 
@@ -1154,6 +1200,15 @@ function* parseSseBlock(block: string): Generator<ToolStreamEvent> {
 			/* ignore malformed result */
 		}
 		return;
+	}
+	if (event === 'error') {
+		let body: unknown = data;
+		try {
+			body = JSON.parse(data);
+		} catch {
+			/* keep raw */
+		}
+		throw parseError(503, body);
 	}
 	try {
 		const parsed = JSON.parse(data) as Json;

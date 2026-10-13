@@ -310,6 +310,12 @@ async fn summary_sse_input_kinds_and_validation() {
         .to_str()
         .unwrap()
         .starts_with("text/event-stream"));
+    assert_eq!(
+        headers
+            .get("x-accel-buffering")
+            .and_then(|value| value.to_str().ok()),
+        Some("no")
+    );
     assert!(body.contains("data:"));
     assert!(body.contains("event: result"));
     assert!(body.contains("[DONE]"));
@@ -676,4 +682,13 @@ async fn history_isolation_export_and_delete() {
         .unwrap();
     assert_eq!(tasks, 0);
     assert_eq!(templates, 0);
+}
+
+#[test]
+fn sse_error_frame_uses_event_error() {
+    let frame = qingxin_api::tools::sse_error("unavailable", "保存失败");
+    assert!(frame.contains("event: error"));
+    assert!(frame.contains("data:"));
+    assert!(frame.contains("unavailable"));
+    assert!(frame.contains("保存失败"));
 }

@@ -362,4 +362,22 @@ describe('MockQingxinApi', () => {
 		await other.register('乙', 'b-tools@qingxin.app', 'qingxin1');
 		expect(await other.listAiTasks()).toEqual([]);
 	});
+
+	it('stops yielding toolbox deltas when the run is aborted', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		const controller = new AbortController();
+		const chunks: string[] = [];
+		for await (const event of api.runTool({
+			toolId: 'summary',
+			text: '明天交周报，并回复客户邮件。请列出所有待办事项，包括买菜、跑步和回复邮件。',
+			signal: controller.signal
+		})) {
+			if (event.type === 'delta') {
+				chunks.push(event.text);
+				controller.abort();
+			}
+		}
+		expect(chunks.length).toBe(1);
+	});
 });
