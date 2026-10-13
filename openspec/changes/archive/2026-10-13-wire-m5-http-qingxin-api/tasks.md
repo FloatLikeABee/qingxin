@@ -24,4 +24,4 @@
 
 - [x] 4.1 `cargo fmt --check --all`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo test --workspace` in `api/`
 - [x] 4.2 `npm test`, `npm run check`, `npm run build` in `web/`
-- [ ] 4.3 Archive this OpenSpec change
+- [x] 4.3 Archive this OpenSpec change
