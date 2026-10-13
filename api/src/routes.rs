@@ -46,6 +46,7 @@ pub fn router() -> Router<AppState> {
         .route("/v1/jobs", get(list_jobs).post(create_job))
         .route("/v1/jobs/{id}", delete(cancel_job))
         .route("/v1/ai/complete", post(ai_complete))
+        .merge(crate::elder::router())
 }
 
 #[derive(FromRow)]

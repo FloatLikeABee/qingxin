@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import './layout.css';
 	import AppShell from '#lib/components/AppShell.svelte';
+	import { readElderMode, syncElderMode } from '#lib/elder/mode';
 	import { readStoredMode, syncDocumentTheme } from '#lib/theme/runtime';
 	import type { LayoutProps } from './$types';
 
@@ -10,7 +11,10 @@
 
 	onMount(() => {
 		if (!browser) return;
-		const apply = () => syncDocumentTheme(readStoredMode());
+		const apply = () => {
+			syncDocumentTheme(readStoredMode());
+			syncElderMode(readElderMode());
+		};
 		apply();
 		const media = window.matchMedia('(prefers-color-scheme: dark)');
 		media.addEventListener('change', apply);
