@@ -13,7 +13,7 @@ npm run check
 npm run build
 ```
 
-`getApi()` in `src/lib/api/client.ts` returns `HttpQingxinApi` when `PUBLIC_API_URL` is a non-empty origin (trailing slash stripped), otherwise `MockQingxinApi`. Screens import the factory, not the mock class. The HTTP client implements the full `QingxinApi` interface against `/v1` (auth/session, mood, local, create, hustle, toolbox SSE, export/delete).
+`getApi()` in `src/lib/api/client.ts` returns `HttpQingxinApi` when `PUBLIC_API_URL` is a non-empty origin (trailing slash stripped), otherwise `MockQingxinApi`. Screens import the factory, not the mock class. The HTTP client implements the full `QingxinApi` interface against `/v1` (auth/session, mood, local, create, hustle, toolbox SSE, pets, study, export/delete).
 
 ```bash
 # live API (build-time env; static adapter inlines PUBLIC_*)

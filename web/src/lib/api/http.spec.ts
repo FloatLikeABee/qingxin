@@ -134,6 +134,47 @@ describe('HttpQingxinApi', () => {
 		await expect(api.getSession()).resolves.toBeNull();
 	});
 
+	it('keeps a stored session when /v1/me is temporarily unavailable', async () => {
+		const storage = memoryStorage({
+			'qingxin.session': JSON.stringify({
+				userId: 'user-1',
+				displayName: 'Ada',
+				email: 'ada@qingxin.app',
+				token: 'access-1',
+				refreshToken: 'refresh-1'
+			})
+		});
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage,
+			fetch: async () => jsonResponse(503, { error: { code: 'unavailable', message: 'busy' } })
+		});
+		await expect(api.getSession()).resolves.toMatchObject({
+			userId: 'user-1',
+			token: 'access-1'
+		});
+		expect(storage.getItem('qingxin.session')).toContain('access-1');
+	});
+
+	it('clears the session when /v1/me is unauthenticated', async () => {
+		const storage = memoryStorage({
+			'qingxin.session': JSON.stringify({
+				userId: 'user-1',
+				displayName: 'Ada',
+				email: 'ada@qingxin.app',
+				token: 'access-1'
+			})
+		});
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage,
+			fetch: async () =>
+				jsonResponse(401, { error: { code: 'unauthenticated', message: '请先登录' } })
+		});
+		await expect(api.getSession()).resolves.toBeNull();
+		expect(storage.getItem('qingxin.session')).toBeNull();
+	});
+
 	it('maps API errors to ApiError', async () => {
 		const api = new HttpQingxinApi({
 			baseUrl: 'http://127.0.0.1:8080',
@@ -642,5 +683,77 @@ describe('HttpQingxinApi', () => {
 				updatedAt: '2026-10-13T03:00:00Z'
 			}
 		]);
+	});
+
+	it('posts pets with avatar_url and study challenges with target_days', async () => {
+		const calls: { url: string; method?: string; body?: unknown }[] = [];
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage: memoryStorage({
+				'qingxin.session': JSON.stringify({
+					userId: 'user-1',
+					displayName: 'Ada',
+					email: 'ada@qingxin.app',
+					token: 'access-1',
+					refreshToken: 'refresh-1'
+				})
+			}),
+			fetch: async (input, init) => {
+				const url = String(input);
+				const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+				calls.push({ url, method: init?.method, body });
+				if (url.endsWith('/v1/pets') && init?.method === 'POST') {
+					return jsonResponse(201, {
+						id: 'pet-1',
+						name: '豆豆',
+						species: 'cat',
+						breed: null,
+						birthday: null,
+						avatar_url: 'https://cdn.example/doudou.png',
+						sort_order: 1,
+						created_at: '2026-10-13T00:00:00Z',
+						updated_at: '2026-10-13T00:00:00Z'
+					});
+				}
+				if (url.endsWith('/v1/study/challenges') && init?.method === 'POST') {
+					return jsonResponse(201, {
+						id: 'ch-1',
+						name: '背单词',
+						target_days: 21,
+						start_date: '2026-10-13',
+						timezone: 'Asia/Shanghai',
+						current_streak: 0,
+						progress_days: 0,
+						checked_in_today: false,
+						checkins: [],
+						created_at: '2026-10-13T00:00:00Z'
+					});
+				}
+				return jsonResponse(404, { error: { code: 'not_found', message: url } });
+			}
+		});
+		await expect(
+			api.createPet({ name: '豆豆', species: 'cat', avatarUrl: 'https://cdn.example/doudou.png' })
+		).resolves.toMatchObject({
+			id: 'pet-1',
+			avatarUrl: 'https://cdn.example/doudou.png'
+		});
+		await expect(
+			api.createStudyChallenge({ name: '背单词', targetDays: 21 })
+		).resolves.toMatchObject({
+			targetDays: 21,
+			currentStreak: 0
+		});
+		expect(calls[0]).toMatchObject({
+			url: 'http://127.0.0.1:8080/v1/pets',
+			method: 'POST',
+			body: { name: '豆豆', species: 'cat', avatar_url: 'https://cdn.example/doudou.png' }
+		});
+		expect(calls[0]?.body).not.toHaveProperty('avatarUrl');
+		expect(calls[1]).toMatchObject({
+			url: 'http://127.0.0.1:8080/v1/study/challenges',
+			method: 'POST',
+			body: { name: '背单词', target_days: 21 }
+		});
 	});
 });

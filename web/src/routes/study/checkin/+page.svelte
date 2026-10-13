@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Input from '#lib/components/Input.svelte';
@@ -6,23 +7,38 @@
 	import Flame from '#lib/study/Flame.svelte';
 	import { TARGET_DAYS, type TargetDays } from '#lib/study/disclaimer';
 	import { getStudyStore } from '#lib/study/store';
-	import { currentStreak, shanghaiToday } from '#lib/study/streak';
+	import { pushToast } from '#lib/toast';
 
 	const store = getStudyStore();
 	let name = $state('背单词');
 	let days = $state<TargetDays>(21);
-	let tick = $state(0);
-	const today = shanghaiToday();
+	let busy = $state(false);
+	let ready = $state(false);
 
-	function create() {
-		if (!name.trim()) return;
-		store.createChallenge({ name: name.trim(), targetDays: days });
-		tick += 1;
+	onMount(() => {
+		void store.load().finally(() => {
+			ready = true;
+		});
+	});
+
+	async function create() {
+		if (!name.trim() || busy) return;
+		busy = true;
+		try {
+			await store.createChallenge({ name: name.trim(), targetDays: days });
+		} catch (error) {
+			pushToast({ title: '没有保存', body: String(error), tone: 'danger' });
+		} finally {
+			busy = false;
+		}
 	}
 
-	function checkin(id: string) {
-		store.checkin(id, today);
-		tick += 1;
+	async function checkin(id: string) {
+		try {
+			await store.checkin(id);
+		} catch (error) {
+			pushToast({ title: '打卡失败', body: String(error), tone: 'danger' });
+		}
 	}
 </script>
 
@@ -41,21 +57,19 @@
 			>
 		{/each}
 	</div>
-	<Button class="mt-4 w-full" onclick={create}>开始挑战</Button>
+	<Button class="mt-4 w-full" onclick={create} disabled={busy || !ready}>开始挑战</Button>
 </Card>
 
-{#key tick}
-	{#each store.challenges as item (item.id)}
-		<Card>
-			<div class="flex items-center justify-between gap-3">
-				<h2 class="text-lg font-semibold">{item.name}</h2>
-				<Flame streak={currentStreak(item.checkins, today)} />
-			</div>
-			<Button class="mt-4 w-full" onclick={() => checkin(item.id)}>
-				{item.checkins.includes(today) ? '今日已完成' : '完成今日任务'}
-			</Button>
-		</Card>
-	{/each}
-{/key}
+{#each store.challenges as item (item.id)}
+	<Card>
+		<div class="flex items-center justify-between gap-3">
+			<h2 class="text-lg font-semibold">{item.name}</h2>
+			<Flame streak={item.currentStreak} />
+		</div>
+		<Button class="mt-4 w-full" onclick={() => checkin(item.id)}>
+			{item.checkedInToday ? '今日已完成' : '完成今日任务'}
+		</Button>
+	</Card>
+{/each}
 
 <Disclaimer />

@@ -17,6 +17,9 @@ export interface StudyChallenge {
 	startDate: string;
 	timezone: string;
 	checkins: string[];
+	currentStreak: number;
+	progressDays: number;
+	checkedInToday: boolean;
 }
 
 export interface StudyCard {
@@ -43,6 +46,19 @@ export interface StudySkill {
 	title: string;
 	unlocked: boolean;
 	sortOrder: number;
+}
+
+export interface StudySkillTemplateNode {
+	key: string;
+	title: string;
+	parent: string | null;
+	unlocked: boolean;
+}
+
+export interface StudySkillTemplate {
+	id: string;
+	title: string;
+	nodes: StudySkillTemplateNode[];
 }
 
 export interface StudyReminder {

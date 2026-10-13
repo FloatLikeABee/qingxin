@@ -1,5 +1,7 @@
 export function readPublicApiUrl(
-	env: { PUBLIC_API_URL?: unknown } = import.meta.env as { PUBLIC_API_URL?: unknown }
+	env: { PUBLIC_API_URL?: unknown } = {
+		PUBLIC_API_URL: import.meta.env.PUBLIC_API_URL as string | undefined
+	}
 ): string | undefined {
 	const raw = env.PUBLIC_API_URL;
 	if (typeof raw !== 'string') return undefined;

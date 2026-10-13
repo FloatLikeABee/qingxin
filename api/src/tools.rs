@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-use crate::ai::{AiError, ChatMessage, CompletionRequest, StreamChunk};
+use crate::ai::{ChatMessage, CompletionRequest, StreamChunk};
 use crate::auth::AuthUser;
 use crate::error::{map_sqlx, AppError};
 use crate::state::AppState;
@@ -693,9 +693,9 @@ async fn run_tool(
         model: Some("qingxin-tools".into()),
     };
     let started = state.ai.stream(&user.user_id, req).await;
-    if let Err(AiError::Failed(msg)) = &started {
-        return Err(AppError::Unavailable(msg.clone()));
-    }
+    // Unconfigured *and* provider failure (Ollama down in CI) use fallback_text
+    // inside the spawn. Returning 503 here skipped the 示意 SSE the workbench
+    // and live-API Playwright expect.
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Result<String, std::io::Error>>();
     let state_clone = state.clone();

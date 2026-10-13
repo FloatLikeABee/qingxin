@@ -1,14 +1,21 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Disclaimer from '#lib/study/Disclaimer.svelte';
 	import Flame from '#lib/study/Flame.svelte';
 	import { getStudyStore } from '#lib/study/store';
-	import { shanghaiToday } from '#lib/study/streak';
+	import { pushToast } from '#lib/toast';
 
 	const store = getStudyStore();
-	const snapshot = $derived(store.today(shanghaiToday()));
+	const snapshot = $derived(store.today());
+
+	onMount(() => {
+		void store.load().catch((error) => {
+			pushToast({ title: '无法加载学习', body: String(error), tone: 'danger' });
+		});
+	});
 </script>
 
 <svelte:head>
