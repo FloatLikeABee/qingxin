@@ -1,4 +1,4 @@
-import { getApi } from '../api/mock';
+import { getApi } from '../api/client';
 import type { ResumeVersion } from '../api/types';
 import type { SideHustle } from './catalog';
 import type { Application } from './funnel';

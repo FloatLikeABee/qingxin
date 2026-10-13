@@ -3,6 +3,9 @@
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
+	"engines": {
+		"node": ">=22"
+	},
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
@@ -13,6 +16,7 @@
 		"test:unit": "vitest --run",
 		"test": "vitest --run",
 		"test:e2e": "playwright test",
+		"test:e2e:api": "playwright test -c playwright.api.config.ts",
 		"test:screenshots": "playwright test e2e/screenshots.e2e.ts",
 		"lint": "prettier --check .",
 		"format": "prettier --write ."

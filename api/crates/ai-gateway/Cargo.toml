@@ -2,7 +2,7 @@
 name = "qingxin-ai-gateway"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "Qingxin (轻心) AI gateway: providers, fallback, cache, rate limit, SSE, tokens"
 license = "MIT"
 publish = false

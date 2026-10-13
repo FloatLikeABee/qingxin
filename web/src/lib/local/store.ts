@@ -1,4 +1,4 @@
-import { getApi } from '../api/mock';
+import { getApi } from '../api/client';
 import { enqueueSync, getRecord, openQingxinDb, putRecord } from '../offline/cache';
 import { optimistic } from '../optimistic';
 import type {

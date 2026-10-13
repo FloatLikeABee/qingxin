@@ -26,7 +26,8 @@
 </svelte:head>
 
 <div>
-	<p class="text-base text-[var(--qx-muted)]">{month} 本月结余</p>
+	<h1 class="text-3xl font-semibold">财务</h1>
+	<p class="mt-2 text-base text-[var(--qx-muted)]">{month} 本月结余</p>
 	<p
 		class="mt-1 font-[Outfit] text-5xl font-semibold {summary.balanceFen >= 0
 			? amountTone('income')

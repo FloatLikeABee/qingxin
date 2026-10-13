@@ -3,7 +3,7 @@
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Input from '#lib/components/Input.svelte';
-	import { ApiError, getApi } from '#lib/api/mock';
+	import { ApiError, getApi } from '#lib/api/client';
 	import { pushToast } from '#lib/toast';
 
 	let email = $state('demo@qingxin.app');

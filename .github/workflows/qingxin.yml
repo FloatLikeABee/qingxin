@@ -22,7 +22,7 @@ jobs:
         working-directory: api
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.88.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -48,3 +48,49 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: a-dev-secret-at-least-32-bytes-long
+      QINGXIN_DATA_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      QINGXIN_LOOKUP_KEY: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+      QINGXIN_SMS_STUB: '1'
+      QINGXIN_AI_TIMEOUT_MS: '2000'
+      DATABASE_URL: sqlite://qingxin.db?mode=rwc
+      PORT: '8080'
+      PUBLIC_API_URL: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: api
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build and start API
+        working-directory: api
+        run: |
+          cargo build --locked
+          nohup ./target/debug/qingxin-api > /tmp/qingxin-api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
+              echo "API is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API failed to start"
+          cat /tmp/qingxin-api.log
+          exit 1
+      - name: Install web and Chromium
+        working-directory: web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Playwright against the live API
+        working-directory: web
+        run: npm run test:e2e:api

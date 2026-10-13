@@ -6,7 +6,7 @@ resolver = "2"
 name = "qingxin-api"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "UNLICENSED"
 publish = false
 description = "Qingxin (轻心) T1 foundation API"
@@ -34,7 +34,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "tim
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-uuid = { version = "1", features = ["serde", "v4"] }
+# 1.28+ requires rustc 1.89; keep the 1.88 toolchain pin working.
+uuid = { version = "~1.18.1", features = ["serde", "v4"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

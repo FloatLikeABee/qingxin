@@ -30,9 +30,23 @@ The system SHALL provide login and register screens that collect credentials thr
 - **WHEN** a user submits valid credentials on the login screen
 - **THEN** the API client login method is invoked and a success session is stored
 
+### Requirement: Auth screens use the factory
+Login and register SHALL call `getApi()` rather than a concrete mock class. Successful auth SHALL navigate to Settings where the session is visible.
+
+#### Scenario: Register then settings
+- **WHEN** a user registers through the UI with the HTTP client selected
+- **THEN** Settings shows 已登录 with that display name
+
 ### Requirement: Settings data controls
-The settings page SHALL let the user change theme mode and SHALL expose stubbed data-export and account-deletion actions that go through the API client.
+The settings page SHALL let the user change theme mode and SHALL expose data-export and account-deletion actions that go through the API client.
 
 #### Scenario: Export entry
 - **WHEN** a consented user opens settings and chooses export
 - **THEN** the API client export method is invoked and a downloadable payload is produced
+
+### Requirement: Export and delete go through the client
+Settings export and account deletion SHALL keep calling `QingxinApi.exportUserData` and `QingxinApi.deleteAccount`, which the HTTP client SHALL implement as `GET /v1/privacy/export` and `DELETE /v1/privacy/account`.
+
+#### Scenario: Delete clears the session
+- **WHEN** a logged-in user confirms account deletion
+- **THEN** `getSession()` afterwards is `null`
