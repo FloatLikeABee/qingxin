@@ -4450,6 +4450,14 @@ paths:
       responses:
         "200":
           description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tool_id, favourite]
+                properties:
+                  tool_id: { type: string }
+                  favourite: { type: boolean }
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -4462,6 +4470,7 @@ paths:
       description: |
         Returns `text/event-stream` with OpenAI-compatible `data:` deltas,
         then `event: result` (saved task) and `data: [DONE]`.
+        Persist failure after deltas emits `event: error` with `{ error: { code, message } }` then `[DONE]`.
         Calls `AiGateway::stream`. Unconfigured gateways stream mock copy.
       operationId: runTool
       security:
@@ -7125,6 +7134,7 @@ components:
         text: { type: string }
         url: { type: string }
         filename: { type: string }
+        pdf_base64: { type: string }
         resume: { type: string }
         jd: { type: string }
         filenames:

@@ -157,12 +157,14 @@ export interface ToolRunInput {
 	text?: string;
 	url?: string;
 	filename?: string;
+	pdfBase64?: string;
 	resume?: string;
 	jd?: string;
 	filenames?: string[];
 	tone?: PolishTone;
 	step?: MeetingStep;
 	topics?: string[];
+	signal?: AbortSignal;
 }
 
 export type ToolStreamEvent = { type: 'delta'; text: string } | { type: 'result'; task: AiTask };
