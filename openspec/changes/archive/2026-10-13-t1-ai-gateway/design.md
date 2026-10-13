@@ -4,7 +4,7 @@
 
 See proposal.md — Why. `main` has `web/` (SvelteKit) and OpenSpec only. There is no `api/` tree. Forge’s T1 skeleton (issue #4, cloud agent running) is not in an open PR; `git ls-remote` shows only `main` and the merged T2 branch. The frontend `QingxinApi` interface has session/auth/export methods and no chat methods. Notion’s overview calls the cache “semantic-ish” and names Ollama as a first-class local provider. Issue #4 will later expose an `ai` module seam and `api/openapi.yaml`; this crate must be dependable as a library without owning HTTP routes.
 
-Checked against the tree (2026-10-13): no `design.txt` / `PLAN.md` in this repo; no Forge `Ai` trait to copy. The seam is defined here.
+Checked against the tree (2026-10-13): no `design.txt` / `PLAN.md` in this repo. Forge PR #5 (`cursor/t1-foundation-9004`) opened during this work. Its seam is `AiGateway::complete(CompletionRequest) -> CompletionResponse` with string roles, optional i64 usage, and **no user id** (the route binds `_user: AuthUser`). This crate keeps a richer `Ai` trait (stream, usage, `UserId`) and maps to Forge via `forge` + `Gateway::complete_for_user`. We do not edit PR #5 files.
 
 ## Goals / Non-Goals
 
