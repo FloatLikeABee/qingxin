@@ -1279,14 +1279,3 @@ export class MockQingxinApi implements QingxinApi {
 		yield { type: 'result', task };
 	}
 }
-
-let singleton: QingxinApi | undefined;
-
-export function getApi(): QingxinApi {
-	singleton ??= new MockQingxinApi();
-	return singleton;
-}
-
-export function resetApi(next: QingxinApi = new MockQingxinApi()) {
-	singleton = next;
-}

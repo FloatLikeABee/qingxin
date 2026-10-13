@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ApiError, MockQingxinApi, resetApi } from '../api/mock';
+import { ApiError, MockQingxinApi, resetApi } from '../api/client';
 import type { AiTask } from '../api/types';
 import { listPendingSync, openQingxinDb } from '../offline/cache';
 import type { ToolId } from './catalog';

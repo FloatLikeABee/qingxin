@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/env';
 	import { drainSync, openQingxinDb } from '../offline/cache';
-	import { ApiError, getApi } from '../api/mock';
+	import { ApiError, getApi } from '../api/client';
 	import { pushToast } from '../toast';
 	import type { ToolId } from '../tools/catalog';
 	import Icon from './Icon.svelte';

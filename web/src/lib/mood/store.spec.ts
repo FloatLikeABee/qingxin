@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ApiError, MockQingxinApi, resetApi } from '../api/mock';
+import { ApiError, MockQingxinApi, resetApi } from '../api/client';
 import { listPendingSync, openQingxinDb } from '../offline/cache';
 import { cacheLogs, loadCachedLogs, saveCheckIn, saveMeditationSession } from './store';
 import type { MoodLog } from './trends';

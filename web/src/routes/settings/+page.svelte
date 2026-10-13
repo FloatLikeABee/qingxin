@@ -5,7 +5,7 @@
 	import Drawer from '#lib/components/Drawer.svelte';
 	import ListItem from '#lib/components/ListItem.svelte';
 	import Modal from '#lib/components/Modal.svelte';
-	import { getApi } from '#lib/api/mock';
+	import { getApi } from '#lib/api/client';
 	import Switch from '#lib/components/Switch.svelte';
 	import { persistElderMode, readElderMode, syncElderMode } from '#lib/elder/mode';
 	import { persistMode, readStoredMode, syncDocumentTheme } from '#lib/theme/runtime';
@@ -83,6 +83,17 @@
 		}
 	}
 
+	async function logout() {
+		pending = true;
+		try {
+			await getApi().logout();
+			sessionName = null;
+			pushToast({ title: '已退出', tone: 'success' });
+		} finally {
+			pending = false;
+		}
+	}
+
 	async function deleteAccount() {
 		pending = true;
 		try {
@@ -135,12 +146,11 @@
 	</Card>
 
 	<Card padded={false} class="divide-y divide-[var(--qx-line)] py-1">
-		<ListItem
-			href="/login"
-			title="登录 / 注册"
-			subtitle="把设置同步到账号（即将接入 T1）"
-			icon="lock"
-		/>
+		{#if sessionName}
+			<ListItem title="退出登录" subtitle="结束当前会话" icon="lock" onclick={logout} />
+		{:else}
+			<ListItem href="/login" title="登录 / 注册" subtitle="把设置同步到账号" icon="lock" />
+		{/if}
 		<ListItem
 			title="导出我的数据"
 			subtitle="下载本地 JSON 副本"

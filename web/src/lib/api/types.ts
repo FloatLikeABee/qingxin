@@ -23,11 +23,13 @@ import type {
 } from '../local/catalog';
 import type { LocalSort } from '../local/geo';
 
+/** Access session persisted as `qingxin.session`. `refreshToken` is set by `HttpQingxinApi`. */
 export interface Session {
 	userId: string;
 	displayName: string;
 	email: string;
 	token: string;
+	refreshToken?: string;
 }
 
 export interface ExportPayload {
@@ -212,6 +214,12 @@ export interface CreateMoodLogInput {
 	note?: string;
 }
 
+/**
+ * Typed Qingxin client. Screens and stores depend on this interface, not `fetch`.
+ *
+ * `getApi()` in `./client.ts` returns `HttpQingxinApi` when `PUBLIC_API_URL` is set,
+ * otherwise `MockQingxinApi`. Add module methods here so both implementations stay in sync.
+ */
 export interface QingxinApi {
 	getSession(): Promise<Session | null>;
 	login(email: string, password: string): Promise<Session>;

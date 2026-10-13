@@ -3,7 +3,7 @@
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Input from '#lib/components/Input.svelte';
-	import { ApiError, getApi } from '#lib/api/mock';
+	import { ApiError, getApi } from '#lib/api/client';
 	import { pushToast } from '#lib/toast';
 
 	let name = $state('');
@@ -34,16 +34,23 @@
 
 <section class="mx-auto max-w-md pt-6">
 	<h1 class="text-3xl font-semibold">创建账号</h1>
-	<p class="mt-2 text-base text-[var(--qx-muted)]">当前为本地模拟注册，等待 T1 后端接入。</p>
+	<p class="mt-2 text-base text-[var(--qx-muted)]">邮箱注册，密码至少 8 位。</p>
 	<Card class="mt-6">
 		<form class="space-y-4" onsubmit={submit}>
 			<Input label="称呼" autocomplete="name" bind:value={name} />
 			<Input label="邮箱" type="email" autocomplete="email" bind:value={email} />
-			<Input label="密码" type="password" autocomplete="new-password" bind:value={password} hint="至少 6 位" />
+			<Input
+				label="密码"
+				type="password"
+				autocomplete="new-password"
+				bind:value={password}
+				hint="至少 8 位"
+			/>
 			{#if error}
 				<p class="text-base text-rose-500">{error}</p>
 			{/if}
-			<Button type="submit" class="w-full" disabled={pending}>{pending ? '提交中…' : '注册'}</Button>
+			<Button type="submit" class="w-full" disabled={pending}>{pending ? '提交中…' : '注册'}</Button
+			>
 		</form>
 	</Card>
 	<p class="mt-4 text-base">

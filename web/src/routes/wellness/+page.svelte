@@ -24,6 +24,8 @@
 	<title>轻心 · 健康</title>
 </svelte:head>
 
+<h1 class="text-3xl font-semibold">健康</h1>
+
 <Card>
 	<p class="text-base text-[var(--qx-muted)]">{date} 喝水进度</p>
 	<Ring

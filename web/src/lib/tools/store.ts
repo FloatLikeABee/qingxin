@@ -1,4 +1,4 @@
-import { getApi } from '../api/mock';
+import { getApi } from '../api/client';
 import type { AiTask, ToolCatalog } from '../api/types';
 import { enqueueSync, getRecord, openQingxinDb, putRecord } from '../offline/cache';
 import type { ToolId } from './catalog';

@@ -20,7 +20,7 @@ jobs:
         working-directory: api/crates/ai-gateway
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.88.0
         with:
           components: rustfmt, clippy
       - run: cargo fmt --check
