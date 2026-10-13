@@ -51,6 +51,7 @@ pub fn router() -> Router<AppState> {
         .merge(crate::mood::routes())
         .merge(crate::hustle::routes())
         .merge(crate::pets::router())
+        .merge(crate::wellness::router())
 }
 
 #[derive(FromRow)]
@@ -555,6 +556,7 @@ async fn export_data(
     .map_err(map_sqlx)?;
     let finance = crate::finance::export_for_user(&state, &user.user_id).await?;
     let pets = crate::pets::export_for_user(&state, &user.user_id).await?;
+    let wellness = crate::wellness::export_for_user(&state, &user.user_id).await?;
     let mood_logs = crate::mood::export_mood(&state, &user.user_id).await?;
     let meditation_sessions = crate::mood::export_sessions(&state, &user.user_id).await?;
     let applications = crate::hustle::export_applications(&state, &user.user_id).await?;
@@ -569,6 +571,7 @@ async fn export_data(
         "push_subscriptions": push_subscriptions,
         "finance": finance,
         "pets": pets,
+        "wellness": wellness,
         "mood_logs": mood_logs,
         "meditation_sessions": meditation_sessions,
         "applications": applications,
