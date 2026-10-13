@@ -473,7 +473,7 @@ struct ExplainBody {
 
 async fn ai_explain(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Json(body): Json<ExplainBody>,
 ) -> Result<Json<Value>, AppError> {
     let topic = body.topic.trim();
@@ -482,13 +482,16 @@ async fn ai_explain(
     }
     match state
         .ai
-        .complete(CompletionRequest {
-            messages: vec![ChatMessage {
-                role: "user".into(),
-                content: format!("用简短中文说明为何这类来电或消息可能是诈骗：{topic}"),
-            }],
-            model: None,
-        })
+        .complete(
+            &user.user_id,
+            CompletionRequest {
+                messages: vec![ChatMessage {
+                    role: "user".into(),
+                    content: format!("用简短中文说明为何这类来电或消息可能是诈骗：{topic}"),
+                }],
+                model: None,
+            },
+        )
         .await
     {
         Ok(done) => Ok(Json(serde_json::to_value(done).unwrap_or(Value::Null))),

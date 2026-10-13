@@ -2,9 +2,11 @@ use axum::{
     body::Body,
     http::{header, Method, Request, StatusCode},
 };
+use qingxin_api::ai::UnconfiguredAiGateway;
 use qingxin_api::{app, scheduler, AppState, Config};
 use serde_json::{json, Value};
 use sqlx::Row;
+use std::sync::Arc;
 use tower::ServiceExt;
 
 async fn world() -> (axum::Router, AppState) {
@@ -720,7 +722,9 @@ async fn activity_log_is_opt_in_and_caregiver_cannot_enable_it() {
 
 #[tokio::test]
 async fn elder_ai_explain_uses_unconfigured_gateway() {
-    let (router, _) = world().await;
+    let mut state = AppState::connect(Config::test()).await.expect("connect");
+    state.ai = Arc::new(UnconfiguredAiGateway);
+    let router = app(state);
     let elder = register_user(&router, "ai@qingxin.app", "老人").await;
     let access = elder["access_token"].as_str().unwrap();
     let (status, body) = send(
