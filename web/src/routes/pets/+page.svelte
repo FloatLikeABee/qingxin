@@ -21,11 +21,17 @@
 	let species = $state<PetSpecies>('cat');
 	let avatarUrl = $state('');
 	let busy = $state(false);
+	let ready = $state(false);
 
 	onMount(() => {
-		void store.load().catch((error) => {
-			pushToast({ title: '无法加载宠物', body: String(error), tone: 'danger' });
-		});
+		void store
+			.load()
+			.catch((error) => {
+				pushToast({ title: '无法加载宠物', body: String(error), tone: 'danger' });
+			})
+			.finally(() => {
+				ready = true;
+			});
 	});
 
 	async function addPet() {
@@ -84,7 +90,7 @@
 						</select>
 					</label>
 					<Input label="头像链接（可选）" bind:value={avatarUrl} placeholder="https://" />
-					<Button onclick={addPet} disabled={busy}>添加宠物</Button>
+					<Button onclick={addPet} disabled={busy || !ready}>添加宠物</Button>
 				</div>
 			{/snippet}
 		</EmptyState>

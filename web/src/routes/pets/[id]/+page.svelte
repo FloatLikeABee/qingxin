@@ -21,11 +21,17 @@
 	let note = $state('');
 	let measuredOn = $state(new Date().toISOString().slice(0, 10));
 	let grams = $state('');
+	let ready = $state(false);
 
 	onMount(() => {
-		void store.load().catch((error) => {
-			pushToast({ title: '无法加载档案', body: String(error), tone: 'danger' });
-		});
+		void store
+			.load()
+			.catch((error) => {
+				pushToast({ title: '无法加载档案', body: String(error), tone: 'danger' });
+			})
+			.finally(() => {
+				ready = true;
+			});
 	});
 
 	async function addRecord() {
@@ -81,7 +87,7 @@
 			<Input label="克" inputmode="numeric" bind:value={grams} placeholder="4200" />
 		</div>
 		<div class="mt-3">
-			<Button onclick={addWeight}>记下体重</Button>
+			<Button onclick={addWeight} disabled={!ready}>记下体重</Button>
 		</div>
 	</Card>
 

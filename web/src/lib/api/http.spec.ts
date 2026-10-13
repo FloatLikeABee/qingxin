@@ -134,6 +134,47 @@ describe('HttpQingxinApi', () => {
 		await expect(api.getSession()).resolves.toBeNull();
 	});
 
+	it('keeps a stored session when /v1/me is temporarily unavailable', async () => {
+		const storage = memoryStorage({
+			'qingxin.session': JSON.stringify({
+				userId: 'user-1',
+				displayName: 'Ada',
+				email: 'ada@qingxin.app',
+				token: 'access-1',
+				refreshToken: 'refresh-1'
+			})
+		});
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage,
+			fetch: async () => jsonResponse(503, { error: { code: 'unavailable', message: 'busy' } })
+		});
+		await expect(api.getSession()).resolves.toMatchObject({
+			userId: 'user-1',
+			token: 'access-1'
+		});
+		expect(storage.getItem('qingxin.session')).toContain('access-1');
+	});
+
+	it('clears the session when /v1/me is unauthenticated', async () => {
+		const storage = memoryStorage({
+			'qingxin.session': JSON.stringify({
+				userId: 'user-1',
+				displayName: 'Ada',
+				email: 'ada@qingxin.app',
+				token: 'access-1'
+			})
+		});
+		const api = new HttpQingxinApi({
+			baseUrl: 'http://127.0.0.1:8080',
+			storage,
+			fetch: async () =>
+				jsonResponse(401, { error: { code: 'unauthenticated', message: '请先登录' } })
+		});
+		await expect(api.getSession()).resolves.toBeNull();
+		expect(storage.getItem('qingxin.session')).toBeNull();
+	});
+
 	it('maps API errors to ApiError', async () => {
 		const api = new HttpQingxinApi({
 			baseUrl: 'http://127.0.0.1:8080',

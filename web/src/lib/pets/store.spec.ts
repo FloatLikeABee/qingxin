@@ -24,6 +24,14 @@ async function authedStore() {
 }
 
 describe('PetsStore', () => {
+	it('keeps a created pet when an in-flight load finishes later', async () => {
+		const store = await authedStore();
+		const pending = store.load();
+		await store.createPet({ name: '豆豆', species: 'cat' });
+		await pending;
+		expect(store.pets.map((pet) => pet.name)).toContain('豆豆');
+	});
+
 	it('counts a feed check-in on today summary', async () => {
 		const store = await authedStore();
 		const pet = await store.createPet({

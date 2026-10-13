@@ -567,9 +567,12 @@ export class HttpQingxinApi implements QingxinApi {
 			};
 			this.#persist(next);
 			return next;
-		} catch {
-			this.#persist(null);
-			return null;
+		} catch (error) {
+			if (error instanceof ApiError && error.code === 'unauthenticated') {
+				this.#persist(null);
+				return null;
+			}
+			return stored;
 		}
 	}
 

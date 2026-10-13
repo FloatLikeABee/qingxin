@@ -117,11 +117,15 @@ export class StudyStore {
 				currentStreak: Math.max(item.currentStreak, 1)
 			};
 		});
-		const snap = await getApi().getStudyToday();
-		this.challenges = snap.challenges;
-		this.dueFlashcards = snap.dueFlashcards;
-		this.date = snap.date;
-		await cacheStudy(this.#snapshot());
+		try {
+			const snap = await getApi().getStudyToday();
+			this.challenges = snap.challenges;
+			this.dueFlashcards = snap.dueFlashcards;
+			this.date = snap.date;
+			await cacheStudy(this.#snapshot());
+		} catch {
+			await cacheStudy(this.#snapshot());
+		}
 	}
 
 	async addCard(input: {

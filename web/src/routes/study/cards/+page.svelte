@@ -12,9 +12,12 @@
 	const store = getStudyStore();
 	let front = $state('');
 	let back = $state('');
+	let ready = $state(false);
 
 	onMount(() => {
-		void store.load();
+		void store.load().finally(() => {
+			ready = true;
+		});
 	});
 
 	async function add() {
@@ -46,7 +49,7 @@
 	<p class="mt-2 text-base text-[var(--qx-muted)]">只支持文本录入，照片以后再说。</p>
 	<Input label="正面" bind:value={front} />
 	<Input label="背面" bind:value={back} />
-	<Button class="mt-4 w-full" onclick={add}>加入卡片</Button>
+	<Button class="mt-4 w-full" onclick={add} disabled={!ready}>加入卡片</Button>
 </Card>
 
 {#if store.cards.length === 0}

@@ -99,12 +99,10 @@ export class PetsStore {
 			updatedAt: now
 		};
 		this.pets = [...this.pets, pending];
+		let saved: Pet;
 		try {
-			const saved = await getApi().createPet(input);
+			saved = await getApi().createPet(input);
 			this.pets = this.pets.map((item) => (item.id === pending.id ? saved : item));
-			this.summary = await getApi().getPetsToday();
-			await cachePets(this.#snapshot());
-			return saved;
 		} catch (error) {
 			if (offline()) {
 				await enqueuePetsOp('pet_create', { ...input, id: pending.id });
@@ -113,13 +111,31 @@ export class PetsStore {
 			this.pets = this.pets.filter((item) => item.id !== pending.id);
 			throw error;
 		}
+		try {
+			this.summary = await getApi().getPetsToday();
+			await cachePets(this.#snapshot());
+		} catch {
+			/* keep the saved pet even if today/cache lags */
+		}
+		return saved;
 	}
 
 	async addLog(petId: string, input: { type: CareType; value?: string | null }): Promise<PetLog> {
 		this.#seq += 1;
 		const saved = await getApi().createPetLog(petId, input);
 		this.logs = [saved, ...this.logs];
-		this.summary = await getApi().getPetsToday();
+		try {
+			this.summary = await getApi().getPetsToday();
+		} catch {
+			this.summary = {
+				...this.summary,
+				items: this.summary.items.map((item) =>
+					item.petId === petId
+						? { ...item, done: { ...item.done, [input.type]: (item.done[input.type] ?? 0) + 1 } }
+						: item
+				)
+			};
+		}
 		await cachePets(this.#snapshot());
 		return saved;
 	}

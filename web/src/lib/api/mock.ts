@@ -300,6 +300,12 @@ export class MockQingxinApi implements QingxinApi {
 	#corrections: LocalCorrection[] = [];
 	#life = new MockPetsStudy();
 
+	#ensureSession(): Session {
+		this.#session ??= readStoredSession();
+		if (this.#session) this.#life.hydrate(this.#session.userId);
+		return requireSession(this.#session);
+	}
+
 	#hydrateHustle(userId: string) {
 		hydrateUserList(this.#apps, APPS_KEY, userId, seedApplications());
 		hydrateUserList(this.#resumes, RESUMES_KEY, userId, seedResumes(userId));
@@ -1290,108 +1296,108 @@ export class MockQingxinApi implements QingxinApi {
 	}
 
 	async listPets() {
-		return this.#life.listPets(requireSession(this.#session));
+		return this.#life.listPets(this.#ensureSession());
 	}
 
 	async createPet(input: CreatePetInput) {
-		return this.#life.createPet(requireSession(this.#session), input);
+		return this.#life.createPet(this.#ensureSession(), input);
 	}
 
 	async getPet(id: string) {
-		return this.#life.getPet(requireSession(this.#session), id);
+		return this.#life.getPet(this.#ensureSession(), id);
 	}
 
 	async getPetsToday() {
-		return this.#life.getPetsToday(requireSession(this.#session));
+		return this.#life.getPetsToday(this.#ensureSession());
 	}
 
 	async listPetRecords(petId: string) {
-		return this.#life.listPetRecords(requireSession(this.#session), petId);
+		return this.#life.listPetRecords(this.#ensureSession(), petId);
 	}
 
 	async createPetRecord(
 		petId: string,
 		input: { type: RecordType; date: string; nextDueDate?: string | null; note?: string | null }
 	) {
-		return this.#life.createPetRecord(requireSession(this.#session), petId, input);
+		return this.#life.createPetRecord(this.#ensureSession(), petId, input);
 	}
 
 	async listPetWeights(petId: string) {
-		return this.#life.listPetWeights(requireSession(this.#session), petId);
+		return this.#life.listPetWeights(this.#ensureSession(), petId);
 	}
 
 	async createPetWeight(petId: string, input: { measuredOn: string; weightG: number }) {
-		return this.#life.createPetWeight(requireSession(this.#session), petId, input);
+		return this.#life.createPetWeight(this.#ensureSession(), petId, input);
 	}
 
 	async listPetLogs(petId: string) {
-		return this.#life.listPetLogs(requireSession(this.#session), petId);
+		return this.#life.listPetLogs(this.#ensureSession(), petId);
 	}
 
 	async createPetLog(petId: string, input: { type: CareType; value?: string | null }) {
-		return this.#life.createPetLog(requireSession(this.#session), petId, input);
+		return this.#life.createPetLog(this.#ensureSession(), petId, input);
 	}
 
 	async getStudyToday() {
-		return this.#life.getStudyToday(requireSession(this.#session));
+		return this.#life.getStudyToday(this.#ensureSession());
 	}
 
 	async listStudyChallenges() {
-		return this.#life.listStudyChallenges(requireSession(this.#session));
+		return this.#life.listStudyChallenges(this.#ensureSession());
 	}
 
 	async createStudyChallenge(input: { name: string; targetDays: TargetDays; timezone?: string }) {
-		return this.#life.createStudyChallenge(requireSession(this.#session), input);
+		return this.#life.createStudyChallenge(this.#ensureSession(), input);
 	}
 
 	async checkinStudyChallenge(id: string, day?: string) {
-		return this.#life.checkinStudyChallenge(requireSession(this.#session), id, day);
+		return this.#life.checkinStudyChallenge(this.#ensureSession(), id, day);
 	}
 
 	async listStudyFlashcards() {
-		return this.#life.listStudyFlashcards(requireSession(this.#session));
+		return this.#life.listStudyFlashcards(this.#ensureSession());
 	}
 
 	async listDueStudyFlashcards() {
-		return this.#life.listDueStudyFlashcards(requireSession(this.#session));
+		return this.#life.listDueStudyFlashcards(this.#ensureSession());
 	}
 
 	async createStudyFlashcard(input: { front: string; back: string; category?: string | null }) {
-		return this.#life.createStudyFlashcard(requireSession(this.#session), input);
+		return this.#life.createStudyFlashcard(this.#ensureSession(), input);
 	}
 
 	async reviewStudyFlashcard(id: string, grade: Grade) {
-		return this.#life.reviewStudyFlashcard(requireSession(this.#session), id, grade);
+		return this.#life.reviewStudyFlashcard(this.#ensureSession(), id, grade);
 	}
 
 	async listStudyNotes(q?: string) {
-		return this.#life.listStudyNotes(requireSession(this.#session), q);
+		return this.#life.listStudyNotes(this.#ensureSession(), q);
 	}
 
 	async createStudyNote(input: { title: string; contentMd?: string; tags?: string[] }) {
-		return this.#life.createStudyNote(requireSession(this.#session), input);
+		return this.#life.createStudyNote(this.#ensureSession(), input);
 	}
 
 	async listStudySkills() {
-		return this.#life.listStudySkills(requireSession(this.#session));
+		return this.#life.listStudySkills(this.#ensureSession());
 	}
 
 	async createStudySkill(input: { title: string; parentId?: string | null }) {
-		return this.#life.createStudySkill(requireSession(this.#session), input);
+		return this.#life.createStudySkill(this.#ensureSession(), input);
 	}
 
 	async patchStudySkill(
 		id: string,
 		patch: { title?: string; parentId?: string | null; unlocked?: boolean; sortOrder?: number }
 	) {
-		return this.#life.patchStudySkill(requireSession(this.#session), id, patch);
+		return this.#life.patchStudySkill(this.#ensureSession(), id, patch);
 	}
 
 	async listStudySkillTemplates() {
-		return this.#life.listStudySkillTemplates(requireSession(this.#session));
+		return this.#life.listStudySkillTemplates(this.#ensureSession());
 	}
 
 	async copyStudySkillTemplate(templateId: string) {
-		return this.#life.copyStudySkillTemplate(requireSession(this.#session), templateId);
+		return this.#life.copyStudySkillTemplate(this.#ensureSession(), templateId);
 	}
 }

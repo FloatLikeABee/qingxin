@@ -13,9 +13,12 @@
 	let name = $state('背单词');
 	let days = $state<TargetDays>(21);
 	let busy = $state(false);
+	let ready = $state(false);
 
 	onMount(() => {
-		void store.load();
+		void store.load().finally(() => {
+			ready = true;
+		});
 	});
 
 	async function create() {
@@ -54,7 +57,7 @@
 			>
 		{/each}
 	</div>
-	<Button class="mt-4 w-full" onclick={create} disabled={busy}>开始挑战</Button>
+	<Button class="mt-4 w-full" onclick={create} disabled={busy || !ready}>开始挑战</Button>
 </Card>
 
 {#each store.challenges as item (item.id)}

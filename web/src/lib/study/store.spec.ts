@@ -25,6 +25,14 @@ async function authedStore() {
 }
 
 describe('StudyStore', () => {
+	it('keeps a created challenge when an in-flight load finishes later', async () => {
+		const store = await authedStore();
+		const pending = store.load();
+		await store.createChallenge({ name: '背单词', targetDays: 21 });
+		await pending;
+		expect(store.challenges.map((item) => item.name)).toContain('背单词');
+	});
+
 	it('derives streak from unique consecutive days', async () => {
 		const store = await authedStore();
 		const challenge = await store.createChallenge({ name: '背单词', targetDays: 21 });

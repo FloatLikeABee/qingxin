@@ -18,6 +18,18 @@ describe('createApi / getApi', () => {
 		expect(api).toBeInstanceOf(HttpQingxinApi);
 	});
 
+	it('reads PUBLIC_API_URL from a static import.meta.env path', () => {
+		expect(
+			createApi({
+				PUBLIC_API_URL: import.meta.env.PUBLIC_API_URL as string | undefined
+			})
+		).toBeInstanceOf(
+			typeof import.meta.env.PUBLIC_API_URL === 'string' && import.meta.env.PUBLIC_API_URL.trim()
+				? HttpQingxinApi
+				: MockQingxinApi
+		);
+	});
+
 	it('getApi memoises until resetApi', () => {
 		const first = getApi();
 		expect(first).toBeInstanceOf(MockQingxinApi);
