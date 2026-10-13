@@ -35,7 +35,12 @@
 						await getApi().exportUserData();
 					}
 					if (op.type === 'mood_log_create') {
-						const payload = op.payload as { id?: string; emoji: string; tags: string[]; note?: string };
+						const payload = op.payload as {
+							id?: string;
+							emoji: string;
+							tags: string[];
+							note?: string;
+						};
 						await getApi().createMoodLog(payload);
 					}
 					if (op.type === 'meditation_session_create') {
@@ -46,6 +51,15 @@
 							payload?: Record<string, unknown>;
 						};
 						await getApi().createMeditationSession(payload);
+					}
+					if (op.type === 'hustle_application_create') {
+						const payload = op.payload as {
+							id?: string;
+							company: string;
+							position: string;
+							status?: '投递' | '面试' | 'Offer';
+						};
+						await getApi().createApplication(payload);
 					}
 				} catch (error) {
 					if (error instanceof ApiError && error.code === 'conflict') return;
