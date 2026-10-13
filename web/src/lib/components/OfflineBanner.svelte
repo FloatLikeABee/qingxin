@@ -61,6 +61,38 @@
 						};
 						await getApi().createApplication(payload);
 					}
+					if (op.type === 'local_review_create') {
+						const payload = op.payload as {
+							id?: string;
+							serviceId: string;
+							content: string;
+							rating?: number;
+							images?: string[];
+						};
+						await getApi().createLocalReview(payload.serviceId, payload);
+					}
+					if (op.type === 'local_service_create') {
+						const payload = op.payload as {
+							id?: string;
+							name: string;
+							category: '维修' | '宠物' | '配送' | '适老';
+							address: string;
+							latitude: number;
+							longitude: number;
+							hours?: string;
+							phone?: string;
+							tags?: Array<'有坡道' | '大字菜单' | '耐心服务'>;
+						};
+						await getApi().createLocalService(payload);
+					}
+					if (op.type === 'local_correction_create') {
+						const payload = op.payload as {
+							id?: string;
+							serviceId: string;
+							kind: '已搬迁' | '电话空号';
+						};
+						await getApi().createLocalCorrection(payload.serviceId, payload);
+					}
 					if (op.type === 'create_work_create') {
 						const payload = op.payload as {
 							id?: string;

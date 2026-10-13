@@ -78,6 +78,18 @@ pub async fn tick_once(state: &AppState) -> Result<usize, AppError> {
                     .execute(&state.pool)
                     .await
                     .map_err(map_sqlx)?;
+                } else if let Err(err) =
+                    crate::pets::after_job(state, &job.user_id, &job.id, &payload).await
+                {
+                    tracing::error!(error = %err, job_id = %job.id, "pets after_job failed");
+                    sqlx::query(
+                        "UPDATE scheduled_jobs SET status = 'failed', last_error = ? WHERE id = ?",
+                    )
+                    .bind(err.to_string())
+                    .bind(&job.id)
+                    .execute(&state.pool)
+                    .await
+                    .map_err(map_sqlx)?;
                 } else {
                     sqlx::query(
                         "UPDATE scheduled_jobs SET status = 'done', last_error = NULL WHERE id = ?",

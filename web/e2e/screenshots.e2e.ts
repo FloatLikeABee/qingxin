@@ -72,6 +72,8 @@ test('modules 390 dark', async ({ page }) => {
 	await openReady(page, '/modules');
 	await expect(page.getByRole('heading', { name: '模块中心' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: '情绪日记+冥想' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: '本地生活' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: '健康' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: '求职副业' })).toBeVisible();
 	await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
 	await page.screenshot({ path: 'screenshots/modules-390-dark.png', fullPage: true });
@@ -100,6 +102,45 @@ for (const view of views) {
 				}
 				await page.screenshot({
 					path: `screenshots/mood-${screen.key}-${view.name}-${theme}.png`,
+					fullPage: true
+				});
+			});
+		}
+	}
+}
+
+const localScreens = [
+	{ key: 'map', ready: '示意地图 · 无钥匙', extra: async (_page: Page) => undefined },
+	{
+		key: 'list',
+		ready: '轻心宠物医院',
+		extra: async (page: Page) => page.getByRole('button', { name: '列表' }).click()
+	},
+	{
+		key: 'detail',
+		ready: '拨打',
+		extra: async (page: Page) => {
+			await page.getByRole('button', { name: '列表' }).click();
+			await page.getByRole('button', { name: /轻心宠物医院/ }).click();
+		}
+	}
+] as const;
+
+for (const view of views) {
+	for (const theme of themes) {
+		for (const screen of localScreens) {
+			test(`local ${screen.key} ${view.name} ${theme}`, async ({ page }) => {
+				await page.setViewportSize({ width: view.width, height: view.height });
+				await boot(page, theme);
+				await openReady(page, '/modules/local');
+				await expect(page.getByRole('heading', { name: '本地生活' })).toBeVisible();
+				await screen.extra(page);
+				await expect(page.getByText(screen.ready).first()).toBeVisible();
+				if (view.width < 800) {
+					await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+				}
+				await page.screenshot({
+					path: `screenshots/local-${screen.key}-${view.name}-${theme}.png`,
 					fullPage: true
 				});
 			});

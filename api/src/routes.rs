@@ -50,6 +50,8 @@ pub fn router() -> Router<AppState> {
         .merge(crate::elder::router())
         .merge(crate::mood::routes())
         .merge(crate::hustle::routes())
+        .merge(crate::pets::router())
+        .merge(crate::local::routes())
         .merge(crate::wellness::router())
         .merge(crate::create::routes())
 }
@@ -555,12 +557,16 @@ async fn export_data(
     .await
     .map_err(map_sqlx)?;
     let finance = crate::finance::export_for_user(&state, &user.user_id).await?;
+    let pets = crate::pets::export_for_user(&state, &user.user_id).await?;
     let wellness = crate::wellness::export_for_user(&state, &user.user_id).await?;
     let mood_logs = crate::mood::export_mood(&state, &user.user_id).await?;
     let meditation_sessions = crate::mood::export_sessions(&state, &user.user_id).await?;
     let applications = crate::hustle::export_applications(&state, &user.user_id).await?;
     let resumes = crate::hustle::export_resumes(&state, &user.user_id).await?;
     let side_hustles = crate::hustle::export_side_hustles(&state, &user.user_id).await?;
+    let local_reviews = crate::local::export_reviews(&state, &user.user_id).await?;
+    let local_services = crate::local::export_services(&state, &user.user_id).await?;
+    let local_corrections = crate::local::export_corrections(&state, &user.user_id).await?;
     let creations = crate::create::export_creations(&state, &user.user_id).await?;
     let snippets = crate::create::export_snippets(&state, &user.user_id).await?;
     Ok(Json(json!({
@@ -571,12 +577,16 @@ async fn export_data(
         "jobs": jobs.iter().map(JobRow::public).collect::<Vec<_>>(),
         "push_subscriptions": push_subscriptions,
         "finance": finance,
+        "pets": pets,
         "wellness": wellness,
         "mood_logs": mood_logs,
         "meditation_sessions": meditation_sessions,
         "applications": applications,
         "resumes": resumes,
         "side_hustles": side_hustles,
+        "local_reviews": local_reviews,
+        "local_services": local_services,
+        "local_corrections": local_corrections,
         "creations": creations,
         "snippets": snippets,
     })))

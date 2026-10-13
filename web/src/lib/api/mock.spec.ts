@@ -235,4 +235,49 @@ describe('MockQingxinApi', () => {
 		expect(exported.data.creations?.some((item) => item.id === work.id)).toBe(true);
 		expect(exported.data.snippets?.some((item) => item.id === snip.id)).toBe(true);
 	});
+
+	it('lists seeded 宠物医院 and sorts by rating', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		const found = await api.listLocalServices({ q: '宠物医院' });
+		expect(found.length).toBeGreaterThan(0);
+		expect(found.every((item) => item.name.includes('宠物医院'))).toBe(true);
+		const ranked = await api.listLocalServices({ sort: 'rating' });
+		const ratings = ranked.map((item) => item.ratingAvg);
+		expect([...ratings].sort((a, b) => b - a)).toEqual(ratings);
+		await expect(
+			api.createLocalService({
+				name: '夜店',
+				category: '酒吧' as '维修',
+				address: '静安区',
+				latitude: 31.23,
+				longitude: 121.47
+			})
+		).rejects.toMatchObject({ code: 'invalid_request' });
+	});
+
+	it('creates a review and rejects a 501-character note', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		const [hospital] = await api.listLocalServices({ q: '宠物医院' });
+		expect(hospital).toBeTruthy();
+		const review = await api.createLocalReview(hospital!.id, { content: '医生很耐心', rating: 5 });
+		expect(review.content).toBe('医生很耐心');
+		await expect(
+			api.createLocalReview(hospital!.id, { content: '字'.repeat(501) })
+		).rejects.toMatchObject({ code: 'invalid_request' });
+		const flag = await api.createLocalCorrection(hospital!.id, { kind: '电话空号' });
+		expect(flag.kind).toBe('电话空号');
+		const published = await api.createLocalService({
+			name: '街角修伞铺',
+			category: '维修',
+			address: '轻心路 8 号',
+			latitude: 31.2298,
+			longitude: 121.4742
+		});
+		const exported = await api.exportUserData();
+		expect(exported.data.localReviews?.some((item) => item.id === review.id)).toBe(true);
+		expect(exported.data.localCorrections?.some((item) => item.id === flag.id)).toBe(true);
+		expect(exported.data.localServices?.some((item) => item.id === published.id)).toBe(true);
+	});
 });

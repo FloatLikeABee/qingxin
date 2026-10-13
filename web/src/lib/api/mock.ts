@@ -1,5 +1,20 @@
 import { MODULES } from '../modules';
 import {
+	CATEGORIES,
+	COMMUNITY_ORIGIN,
+	ELDER_TAGS,
+	SEED_REVIEWS,
+	SEED_SERVICES,
+	type CorrectionKind,
+	type ElderTag,
+	type LocalCategory,
+	type LocalCorrection,
+	type LocalReview,
+	type LocalService
+} from '../local/catalog';
+import { searchServices, sortServices, type LocalSort } from '../local/geo';
+import { validateCorrection, validatePublish, validateReview } from '../local/validate';
+import {
 	DEFAULT_RESUME,
 	INTERVIEW_DIFFICULTIES,
 	INTERVIEW_QUESTIONS,
@@ -172,6 +187,26 @@ function forgetUserLists(
 	}
 }
 
+function seedResumes(userId: string): ResumeVersion[] {
+	const now = new Date().toISOString();
+	return [
+		{
+			id: `seed-resume-${userId}`,
+			version: 1,
+			title: '投前端',
+			content: DEFAULT_RESUME,
+			pdfUrl: null,
+			createdAt: now,
+			updatedAt: now
+		}
+	];
+}
+
+function requireSession(session: Session | null): Session {
+	if (!session) throw new ApiError('unauthenticated', '请先登录');
+	return session;
+}
+
 function seedCreations(userId: string): Creation[] {
 	const now = new Date().toISOString();
 	return [
@@ -260,6 +295,9 @@ export class MockQingxinApi implements QingxinApi {
 	#hustles = new Map<string, SideHustle[]>();
 	#creations = new Map<string, Creation[]>();
 	#snippets = new Map<string, CreateSnippet[]>();
+	#services: LocalService[] = SEED_SERVICES.map((item) => ({ ...item, tags: [...item.tags] }));
+	#reviews: LocalReview[] = SEED_REVIEWS.map((item) => ({ ...item }));
+	#corrections: LocalCorrection[] = [];
 
 	#hydrateHustle(userId: string) {
 		hydrateUserList(this.#apps, APPS_KEY, userId, seedApplications());
@@ -347,6 +385,9 @@ export class MockQingxinApi implements QingxinApi {
 				applications: [...(this.#apps.get(session.userId) ?? [])],
 				resumes: [...(this.#resumes.get(session.userId) ?? [])],
 				sideHustles: [...(this.#hustles.get(session.userId) ?? [])],
+				localReviews: this.#reviews.filter((item) => item.userId === session.userId),
+				localServices: this.#services.filter((item) => item.createdBy === session.userId),
+				localCorrections: this.#corrections.filter((item) => item.userId === session.userId),
 				creations: [...(this.#creations.get(session.userId) ?? [])],
 				snippets: [...(this.#snippets.get(session.userId) ?? [])]
 			}
@@ -355,6 +396,7 @@ export class MockQingxinApi implements QingxinApi {
 
 	async deleteAccount(): Promise<void> {
 		if (this.#session) {
+			const userId = this.#session.userId;
 			forgetUserLists(
 				this.#logs,
 				this.#sessions,
@@ -363,8 +405,11 @@ export class MockQingxinApi implements QingxinApi {
 				this.#hustles,
 				this.#creations,
 				this.#snippets,
-				this.#session.userId
+				userId
 			);
+			this.#reviews = this.#reviews.filter((item) => item.userId !== userId);
+			this.#corrections = this.#corrections.filter((item) => item.userId !== userId);
+			this.#services = this.#services.filter((item) => item.createdBy !== userId);
 		}
 		this.#session = null;
 		writeStoredSession(null);
@@ -703,6 +748,160 @@ export class MockQingxinApi implements QingxinApi {
 			disclaimer: HUSTLE_DISCLAIMER,
 			source: 'mock'
 		};
+	}
+
+	#withCounts(service: LocalService): LocalService {
+		const counts = { 已搬迁: 0, 电话空号: 0 } as Record<CorrectionKind, number>;
+		for (const row of this.#corrections.filter((item) => item.serviceId === service.id)) {
+			counts[row.kind] += 1;
+		}
+		return { ...service, correctionCounts: counts };
+	}
+
+	async listLocalServices(filter?: {
+		q?: string;
+		category?: LocalCategory;
+		tag?: ElderTag;
+		sort?: LocalSort;
+		lat?: number;
+		lng?: number;
+	}): Promise<LocalService[]> {
+		requireSession(this.#session);
+		if (filter?.sort && filter.sort !== 'distance' && filter.sort !== 'rating') {
+			throw new ApiError('invalid_request', '无法这样排序');
+		}
+		if (filter?.category && !CATEGORIES.includes(filter.category)) {
+			throw new ApiError('invalid_request', '请选择分类');
+		}
+		if (filter?.tag && !ELDER_TAGS.includes(filter.tag)) {
+			throw new ApiError('invalid_request', '标签不在适老清单里');
+		}
+		const origin = {
+			lat: filter?.lat ?? COMMUNITY_ORIGIN.lat,
+			lng: filter?.lng ?? COMMUNITY_ORIGIN.lng
+		};
+		const found = searchServices(this.#services, {
+			q: filter?.q,
+			category: filter?.category,
+			tag: filter?.tag
+		});
+		return sortServices(found, filter?.sort ?? 'distance', origin).map((item) =>
+			this.#withCounts(item)
+		);
+	}
+
+	async getLocalService(id: string): Promise<LocalService> {
+		requireSession(this.#session);
+		const found = this.#services.find((item) => item.id === id);
+		if (!found) throw new ApiError('not_found', '找不到这家店');
+		return this.#withCounts(found);
+	}
+
+	async createLocalService(input: {
+		id?: string;
+		name: string;
+		category: LocalCategory;
+		address: string;
+		latitude: number;
+		longitude: number;
+		hours?: string;
+		phone?: string;
+		tags?: ElderTag[];
+	}): Promise<LocalService> {
+		const session = requireSession(this.#session);
+		const checked = validatePublish({
+			name: input.name,
+			category: input.category,
+			address: input.address,
+			latitude: input.latitude,
+			longitude: input.longitude,
+			hours: input.hours,
+			phone: input.phone,
+			tags: input.tags
+		});
+		if (!checked.ok) throw new ApiError(checked.code, checked.message);
+		const id = input.id ?? crypto.randomUUID();
+		const existing = this.#services.find((item) => item.id === id);
+		if (existing) return this.#withCounts(existing);
+		const row: LocalService = {
+			id,
+			name: checked.value.name,
+			category: checked.value.category,
+			address: checked.value.address,
+			latitude: input.latitude,
+			longitude: input.longitude,
+			tags: (checked.value.tags ?? []) as ElderTag[],
+			ratingAvg: 0,
+			hours: input.hours,
+			phone: input.phone,
+			createdBy: session.userId,
+			createdAt: new Date().toISOString()
+		};
+		this.#services = [row, ...this.#services];
+		return this.#withCounts(row);
+	}
+
+	async listLocalReviews(serviceId: string): Promise<LocalReview[]> {
+		requireSession(this.#session);
+		await this.getLocalService(serviceId);
+		return this.#reviews
+			.filter((item) => item.serviceId === serviceId)
+			.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+	}
+
+	async createLocalReview(
+		serviceId: string,
+		input: { id?: string; content: string; rating?: number; images?: string[] }
+	): Promise<LocalReview> {
+		const session = requireSession(this.#session);
+		await this.getLocalService(serviceId);
+		const checked = validateReview({ content: input.content, rating: input.rating });
+		if (!checked.ok) throw new ApiError(checked.code, checked.message);
+		const id = input.id ?? crypto.randomUUID();
+		const existing = this.#reviews.find((item) => item.id === id);
+		if (existing) return existing;
+		const row: LocalReview = {
+			id,
+			serviceId,
+			userId: session.userId,
+			content: checked.value.content,
+			rating: input.rating,
+			images: input.images ?? [],
+			createdAt: new Date().toISOString()
+		};
+		this.#reviews = [row, ...this.#reviews];
+		const rated = this.#reviews.filter(
+			(item) => item.serviceId === serviceId && item.rating != null
+		);
+		if (rated.length) {
+			const avg = rated.reduce((sum, item) => sum + (item.rating ?? 0), 0) / rated.length;
+			this.#services = this.#services.map((item) =>
+				item.id === serviceId ? { ...item, ratingAvg: avg } : item
+			);
+		}
+		return row;
+	}
+
+	async createLocalCorrection(
+		serviceId: string,
+		input: { id?: string; kind: CorrectionKind }
+	): Promise<LocalCorrection> {
+		const session = requireSession(this.#session);
+		await this.getLocalService(serviceId);
+		const checked = validateCorrection(input.kind);
+		if (!checked.ok) throw new ApiError(checked.code, checked.message);
+		const id = input.id ?? crypto.randomUUID();
+		const existing = this.#corrections.find((item) => item.id === id);
+		if (existing) return existing;
+		const row: LocalCorrection = {
+			id,
+			serviceId,
+			userId: session.userId,
+			kind: checked.value,
+			createdAt: new Date().toISOString()
+		};
+		this.#corrections = [row, ...this.#corrections];
+		return row;
 	}
 
 	async listCreations(): Promise<Creation[]> {
