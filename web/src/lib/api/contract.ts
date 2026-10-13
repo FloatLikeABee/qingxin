@@ -85,5 +85,30 @@ export function validateSchema(name: string, body: unknown): { ok: boolean; erro
 	return { ok, errors: ok ? '' : formatErrors(validate.errors) };
 }
 
+export function openApiSchemaNames(): string[] {
+	return [...compile().names];
+}
+
+export function validateOpenApi(
+	schemaName: string,
+	body: unknown
+): { ok: true } | { ok: false; errors: ErrorObject[] } {
+	const result = validateSchema(schemaName, body);
+	if (result.ok) return { ok: true };
+	return {
+		ok: false,
+		errors: [
+			{ instancePath: '', message: result.errors, keyword: 'error', schemaPath: '', params: {} }
+		]
+	};
+}
+
+export function expectOpenApi(schemaName: string, body: unknown): void {
+	const result = validateSchema(schemaName, body);
+	if (!result.ok) {
+		throw new Error(`${schemaName} failed: ${result.errors}`);
+	}
+}
+
 export const CAMEL_BAN =
-	/avatarUrl|nextDueDate|measuredOn|weightG|contentMd|parentId|targetDays|loggedAt|sortOrder|intervalDays|nextReviewDate|templateId/;
+	/avatarUrl|nextDueDate|measuredOn|weightG|contentMd|parentId|targetDays|loggedAt|sortOrder|intervalDays|nextReviewDate|templateId|amountFen|categoryId|occurredOn|clientId|priceFen|nextBillingDate|remindDaysBefore|monthlyLimitFen|alertThresholdPct|targetAmountFen|daysOfWeek|voiceText|sleepAt|wakeAt|startDate|endDate|flowLevel|reportDate|timeLocal/;

@@ -380,4 +380,65 @@ describe('MockQingxinApi', () => {
 		}
 		expect(chunks.length).toBe(1);
 	});
+
+	it('requires login for finance, elder, and wellness writes', async () => {
+		const api = new MockQingxinApi();
+		await api.logout();
+		await expect(
+			api.createFinanceTransaction({
+				amountFen: 100,
+				type: 'income',
+				categoryId: 'fin-cat-inc-salary',
+				occurredOn: '2026-10-13',
+				clientId: '11111111-1111-4111-8111-111111111111'
+			})
+		).rejects.toMatchObject({ code: 'unauthenticated' });
+	});
+
+	it('reuses a stored session for finance writes without calling getSession first', async () => {
+		const first = new MockQingxinApi();
+		await first.login('demo@qingxin.app', 'qingxin');
+		const restored = new MockQingxinApi();
+		const salary = await restored.createFinanceTransaction({
+			amountFen: 880_000,
+			type: 'income',
+			categoryId: 'fin-cat-inc-salary',
+			occurredOn: '2026-10-13',
+			clientId: '11111111-1111-4111-8111-111111111111'
+		});
+		expect(salary.categoryName).toBe('工资');
+	});
+
+	it('records a salary income and a web_push job', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		const salary = await api.createFinanceTransaction({
+			amountFen: 880_000,
+			type: 'income',
+			categoryId: 'fin-cat-inc-salary',
+			occurredOn: '2026-10-13',
+			clientId: '11111111-1111-4111-8111-111111111111'
+		});
+		expect(salary.categoryName).toBe('工资');
+		const job = await api.createJob({
+			runAt: '2026-10-13T08:00:00+08:00',
+			title: '该吃药了',
+			body: '早餐后一粒'
+		});
+		expect(job.kind).toBe('web_push');
+		expect(job.payload).toEqual({ title: '该吃药了', body: '早餐后一粒' });
+		const today = await api.getElderToday();
+		expect(today.reminders).toEqual([]);
+	});
+
+	it('blocks wellness cycles until consent is on', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		await expect(api.addWellnessCycle({ startDate: '2026-08-01' })).rejects.toMatchObject({
+			code: 'forbidden'
+		});
+		await api.putWellnessConsent(true);
+		const cycle = await api.addWellnessCycle({ startDate: '2026-08-01' });
+		expect(cycle.startDate).toBe('2026-08-01');
+	});
 });

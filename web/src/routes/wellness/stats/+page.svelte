@@ -1,17 +1,29 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Disclaimer from '#lib/wellness/Disclaimer.svelte';
 	import { getWellnessStore } from '#lib/wellness/store';
+	import type { SleepLog } from '#lib/wellness/types';
 
 	const store = getWellnessStore();
-	const waterByDay = [
-		...store.water.reduce((map, row) => {
-			map.set(row.loggedOn, (map.get(row.loggedOn) ?? 0) + row.ml);
-			return map;
-		}, new Map<string, number>())
-	].sort((a, b) => b[0].localeCompare(a[0]));
-	const sleep = [...store.sleep];
+	let waterByDay = $state<[string, number][]>([]);
+	let sleep = $state<SleepLog[]>([]);
+
+	function refresh() {
+		waterByDay = [
+			...store.water.reduce((map, row) => {
+				map.set(row.loggedOn, (map.get(row.loggedOn) ?? 0) + row.ml);
+				return map;
+			}, new Map<string, number>())
+		].sort((a, b) => b[0].localeCompare(a[0]));
+		sleep = [...store.sleep];
+	}
+
+	$effect(() => {
+		if (!browser) return;
+		void store.hydrate().then(refresh);
+	});
 </script>
 
 <svelte:head>

@@ -83,6 +83,15 @@ import {
 	type ToolRunInput,
 	type ToolStreamEvent
 } from './types';
+import { QingxinModuleMemory } from './mock-modules';
+import type { ElderReminderInput } from '../elder/payload';
+import type {
+	FinanceBudgetInput,
+	FinanceChallengeInput,
+	FinanceSubInput,
+	FinanceTxInput
+} from '../finance/payload';
+import type { CycleLog, PlanLog, ReminderLog, ReportLog } from '../wellness/types';
 
 export { ApiError } from './types';
 export type { QingxinApi, Session } from './types';
@@ -298,6 +307,7 @@ export class MockQingxinApi implements QingxinApi {
 	#services: LocalService[] = SEED_SERVICES.map((item) => ({ ...item, tags: [...item.tags] }));
 	#reviews: LocalReview[] = SEED_REVIEWS.map((item) => ({ ...item }));
 	#corrections: LocalCorrection[] = [];
+	#mod = new QingxinModuleMemory(() => this.#ensureSession());
 	#life = new MockPetsStudy();
 
 	#ensureSession(): Session {
@@ -1293,6 +1303,142 @@ export class MockQingxinApi implements QingxinApi {
 		}
 		if (input.signal?.aborted) return;
 		yield { type: 'result', task };
+	}
+
+	async listFinanceCategories() {
+		return this.#mod.listFinanceCategories();
+	}
+	async createFinanceTransaction(input: FinanceTxInput) {
+		return this.#mod.createFinanceTransaction(input);
+	}
+	async listFinanceTransactions(month?: string) {
+		return this.#mod.listFinanceTransactions(month);
+	}
+	async getFinanceSummary(month: string) {
+		return this.#mod.getFinanceSummary(month);
+	}
+	async getFinanceReport(month: string) {
+		return this.#mod.getFinanceReport(month);
+	}
+	async listFinanceBudgets() {
+		return this.#mod.listFinanceBudgets();
+	}
+	async putFinanceBudgets(items: FinanceBudgetInput[]) {
+		return this.#mod.putFinanceBudgets(items);
+	}
+	async listFinanceSubscriptions() {
+		return this.#mod.listFinanceSubscriptions();
+	}
+	async listUpcomingSubscriptions() {
+		return this.#mod.listUpcomingSubscriptions();
+	}
+	async createFinanceSubscription(input: FinanceSubInput) {
+		return this.#mod.createFinanceSubscription(input);
+	}
+	async deleteFinanceSubscription(id: string) {
+		return this.#mod.deleteFinanceSubscription(id);
+	}
+	async listFinanceChallenges() {
+		return this.#mod.listFinanceChallenges();
+	}
+	async createFinanceChallenge(input: FinanceChallengeInput) {
+		return this.#mod.createFinanceChallenge(input);
+	}
+	async checkinFinanceChallenge(id: string, day: string) {
+		return this.#mod.checkinFinanceChallenge(id, day);
+	}
+	async deleteFinanceChallenge(id: string) {
+		return this.#mod.deleteFinanceChallenge(id);
+	}
+	async createJob(input: { runAt: string; title: string; body: string }) {
+		return this.#mod.createJob(input);
+	}
+	async getElderToday(elderId?: string) {
+		return this.#mod.getElderToday(elderId);
+	}
+	async listElderReminders(elderId?: string) {
+		return this.#mod.listElderReminders(elderId);
+	}
+	async createElderReminder(input: ElderReminderInput, elderId?: string) {
+		return this.#mod.createElderReminder(input, elderId);
+	}
+	async ackElderReminder(id: string, occurrenceAt: string, elderId?: string) {
+		return this.#mod.ackElderReminder(id, occurrenceAt, elderId);
+	}
+	async listElderContacts(elderId?: string) {
+		return this.#mod.listElderContacts(elderId);
+	}
+	async getElderProfile(elderId?: string) {
+		return this.#mod.getElderProfile(elderId);
+	}
+	async patchElderProfile(
+		input: { activityLogOptIn?: boolean; timezone?: string },
+		elderId?: string
+	) {
+		return this.#mod.patchElderProfile(input, elderId);
+	}
+	async getWellnessToday() {
+		return this.#mod.getWellnessToday();
+	}
+	async addWellnessWater(ml: number, loggedOn: string) {
+		return this.#mod.addWellnessWater(ml, loggedOn);
+	}
+	async listWellnessWater() {
+		return this.#mod.listWellnessWater();
+	}
+	async addWellnessSleep(input: {
+		sleepAt: string;
+		wakeAt: string;
+		quality: number;
+		note?: string | null;
+	}) {
+		return this.#mod.addWellnessSleep(input);
+	}
+	async listWellnessSleep() {
+		return this.#mod.listWellnessSleep();
+	}
+	async putWellnessConsent(cycleConsent: boolean) {
+		return this.#mod.putWellnessConsent(cycleConsent);
+	}
+	async addWellnessCycle(input: {
+		startDate: string;
+		endDate?: string | null;
+		flowLevel?: CycleLog['flowLevel'];
+		symptoms?: string | null;
+	}) {
+		return this.#mod.addWellnessCycle(input);
+	}
+	async listWellnessCycles() {
+		return this.#mod.listWellnessCycles();
+	}
+	async addWellnessReport(input: {
+		title: string;
+		reportDate: string;
+		metrics: ReportLog['metrics'];
+	}) {
+		return this.#mod.addWellnessReport(input);
+	}
+	async listWellnessReports() {
+		return this.#mod.listWellnessReports();
+	}
+	async createWellnessPlan(kind: PlanLog['kind']) {
+		return this.#mod.createWellnessPlan(kind);
+	}
+	async listWellnessPlans() {
+		return this.#mod.listWellnessPlans();
+	}
+	async checkinWellnessPlan(id: string, day: string) {
+		return this.#mod.checkinWellnessPlan(id, day);
+	}
+	async listWellnessReminders() {
+		return this.#mod.listWellnessReminders();
+	}
+	async createWellnessReminder(input: {
+		kind: ReminderLog['kind'];
+		time: string;
+		daysOfWeek: number[];
+	}) {
+		return this.#mod.createWellnessReminder(input);
 	}
 
 	async listPets() {

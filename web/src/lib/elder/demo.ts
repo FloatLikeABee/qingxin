@@ -1,5 +1,3 @@
-import { MEDICAL_DISCLAIMER, REMINDER_DISCLAIMER } from './schedule';
-
 export interface ElderReminder {
 	id: string;
 	title: string;
@@ -98,55 +96,7 @@ export const FRAUD_SCRIPTS: FraudScript[] = [
 	}
 ];
 
-const STORE_KEY = 'qingxin.elder.demo';
-
-export interface ElderDemoState {
-	reminders: ElderReminder[];
-	contacts: ElderContact[];
-	optInLog: boolean;
-	acked: string[];
-}
-
-const seed: ElderDemoState = {
-	reminders: [
-		{
-			id: 'med-1',
-			title: '降压药',
-			body: '早餐后一粒',
-			kind: 'medication',
-			time: '08:00',
-			daysOfWeek: [1, 2, 3, 4, 5],
-			voiceText: '该吃降压药了'
-		}
-	],
-	contacts: [{ id: 'c-1', name: '女儿', relation: '子女', phone: '13800138000' }],
-	optInLog: false,
-	acked: []
-};
-
-export function loadDemo(): ElderDemoState {
-	if (typeof localStorage === 'undefined') return structuredClone(seed);
-	try {
-		const raw = localStorage.getItem(STORE_KEY);
-		if (!raw) return structuredClone(seed);
-		return { ...structuredClone(seed), ...JSON.parse(raw) };
-	} catch {
-		return structuredClone(seed);
-	}
-}
-
-export function saveDemo(state: ElderDemoState) {
-	try {
-		localStorage.setItem(STORE_KEY, JSON.stringify(state));
-	} catch {
-		// ignore
-	}
-}
-
-export function allContacts(state: ElderDemoState): ElderContact[] {
-	return [...EMERGENCY_CONTACTS, ...state.contacts];
-}
-
-export function todayCopy() {
-	return { disclaimer: REMINDER_DISCLAIMER, medical: MEDICAL_DISCLAIMER };
+export function allContacts(contacts: ElderContact[]): ElderContact[] {
+	const extras = contacts.filter((item) => !EMERGENCY_CONTACTS.some((row) => row.id === item.id));
+	return [...EMERGENCY_CONTACTS, ...extras];
 }

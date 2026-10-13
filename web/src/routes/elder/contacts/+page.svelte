@@ -1,14 +1,18 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import Card from '#lib/components/Card.svelte';
-	import { allContacts, loadDemo, saveDemo } from '#lib/elder/demo';
+	import type { ElderContact } from '#lib/elder/demo';
+	import { getElderStore } from '#lib/elder/store';
 
-	let demo = $state(loadDemo());
+	const store = getElderStore();
+	let contacts = $state<ElderContact[]>(store.contacts);
 
-	function tapped(id: string) {
-		if (id.startsWith('emergency-')) return;
-		demo = { ...demo };
-		saveDemo(demo);
-	}
+	$effect(() => {
+		if (!browser) return;
+		void store.hydrate().then(() => {
+			contacts = store.contacts;
+		});
+	});
 </script>
 
 <svelte:head>
@@ -20,14 +24,13 @@
 	<h1 class="text-3xl font-semibold">电话簿</h1>
 	<p class="text-lg text-[var(--qx-muted)]">大按钮拨号。离线也能打开已保存的号码。</p>
 	<div class="space-y-3">
-		{#each allContacts(demo) as contact (contact.id)}
+		{#each contacts as contact (contact.id)}
 			<Card>
 				<p class="text-xl font-semibold">{contact.name}</p>
 				<p class="text-lg text-[var(--qx-muted)]">{contact.relation}</p>
 				<a
 					class="mt-4 flex min-h-14 items-center justify-center rounded-2xl bg-[var(--qx-primary)] text-xl font-semibold text-white"
 					href="tel:{contact.phone}"
-					onclick={() => tapped(contact.id)}
 				>
 					呼叫 {contact.phone}
 				</a>

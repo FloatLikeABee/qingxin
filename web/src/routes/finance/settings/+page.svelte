@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Input from '#lib/components/Input.svelte';
@@ -14,10 +15,17 @@
 	let cycle = $state<SubCycle>('monthly');
 	let tick = $state(0);
 
-	function saveBudget() {
+	$effect(() => {
+		if (!browser) return;
+		void store.hydrate().then(() => {
+			tick += 1;
+		});
+	});
+
+	async function saveBudget() {
 		const fen = fenFromYuanInput(limitYuan);
 		if (!fen) return;
-		store.upsertBudget({
+		await store.upsertBudget({
 			categoryId,
 			monthlyLimitFen: fen,
 			alertThresholdPct: 80
@@ -25,12 +33,12 @@
 		tick += 1;
 	}
 
-	function saveSub() {
+	async function saveSub() {
 		const fen = fenFromYuanInput(subYuan);
 		if (!fen || !subName.trim()) return;
 		const next = new Date(`${todayIso()}T00:00:00Z`);
 		next.setUTCDate(next.getUTCDate() + 2);
-		store.createSubscription({
+		await store.createSubscription({
 			name: subName.trim(),
 			priceFen: fen,
 			cycle,

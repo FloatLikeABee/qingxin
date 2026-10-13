@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Input from '#lib/components/Input.svelte';
@@ -10,15 +11,22 @@
 	let days = $state('30');
 	let tick = $state(0);
 
-	function create() {
+	$effect(() => {
+		if (!browser) return;
+		void store.hydrate().then(() => {
+			tick += 1;
+		});
+	});
+
+	async function create() {
 		const targetDays = Number(days);
 		if (!name.trim() || !Number.isFinite(targetDays) || targetDays <= 0) return;
-		store.createChallenge({ name: name.trim(), targetDays, startDate: todayIso() });
+		await store.createChallenge({ name: name.trim(), targetDays, startDate: todayIso() });
 		tick += 1;
 	}
 
-	function checkin(id: string) {
-		store.checkin(id, todayIso());
+	async function checkin(id: string) {
+		await store.checkin(id, todayIso());
 		tick += 1;
 	}
 </script>

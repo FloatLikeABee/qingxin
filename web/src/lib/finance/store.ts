@@ -1,5 +1,7 @@
+import { getApi } from '../api/client';
 import { enqueueSync, getRecord, openQingxinDb, putRecord } from '../offline/cache';
-import { annualCostFen, currentMonth, shiftMonth, todayIso } from './money';
+import { currentMonth, todayIso } from './money';
+import type { FinanceReport } from './payload';
 import {
 	SYSTEM_CATEGORIES,
 	type FinanceBudget,
@@ -11,7 +13,7 @@ import {
 	type TxType
 } from './types';
 
-interface AddTxInput {
+export interface AddTxInput {
 	amountFen: number;
 	type: TxType;
 	categoryId: string;
@@ -20,7 +22,7 @@ interface AddTxInput {
 	clientId: string;
 }
 
-interface BudgetInput {
+export interface BudgetInput {
 	categoryId: string | null;
 	monthlyLimitFen: number;
 	alertThresholdPct: number;
@@ -28,60 +30,222 @@ interface BudgetInput {
 
 const CACHE_KEY = 'snapshot';
 
-export class MemoryFinanceStore {
+function dateDiff(from: string, to: string): number {
+	const a = Date.parse(`${from}T00:00:00Z`);
+	const b = Date.parse(`${to}T00:00:00Z`);
+	return Math.round((b - a) / 86_400_000);
+}
+
+function emptySummary(month: string): FinanceSummary {
+	return {
+		month,
+		currency: 'CNY',
+		incomeFen: 0,
+		expenseFen: 0,
+		balanceFen: 0,
+		byCategory: [],
+		budgets: [],
+		recent: []
+	};
+}
+
+export class FinanceStore {
 	categories = SYSTEM_CATEGORIES.map((item) => ({ ...item }));
 	transactions: FinanceTransaction[] = [];
 	budgets: FinanceBudget[] = [];
 	subscriptions: FinanceSubscription[] = [];
 	challenges: FinanceChallenge[] = [];
+	upcomingSubs: FinanceSubscription[] = [];
+	summaryCache: FinanceSummary = emptySummary(currentMonth());
+	reportCache: FinanceReport = {
+		from: currentMonth(),
+		to: currentMonth(),
+		currency: 'CNY',
+		expenseFen: 0,
+		incomeFen: 0,
+		slices: [],
+		mom: { expenseFen: 0, expenseDeltaFen: 0 },
+		yoy: { expenseFen: 0, expenseDeltaFen: 0 }
+	};
+
+	async hydrate(month = currentMonth()): Promise<void> {
+		try {
+			const api = getApi();
+			await api.getSession();
+			const [
+				categories,
+				transactions,
+				budgets,
+				subscriptions,
+				challenges,
+				upcoming,
+				summary,
+				report
+			] = await Promise.all([
+				api.listFinanceCategories().catch(() => this.categories),
+				api.listFinanceTransactions(month),
+				api.listFinanceBudgets().catch(() => this.budgets),
+				api.listFinanceSubscriptions().catch(() => this.subscriptions),
+				api.listFinanceChallenges().catch(() => this.challenges),
+				api.listUpcomingSubscriptions().catch(() => this.upcomingSubs),
+				api.getFinanceSummary(month),
+				api.getFinanceReport(month).catch(() => this.report(month))
+			]);
+			if (categories.length) this.categories = categories;
+			this.transactions = transactions;
+			this.budgets = budgets;
+			this.subscriptions = subscriptions;
+			this.challenges = challenges;
+			this.upcomingSubs = upcoming;
+			this.summaryCache = summary;
+			this.reportCache = report;
+			await this.persist();
+		} catch {
+			await this.loadCache();
+		}
+	}
 
 	async addTransaction(input: AddTxInput): Promise<FinanceTransaction> {
 		const existing = this.transactions.find((row) => row.clientId === input.clientId);
 		if (existing) return existing;
 		const category = this.categories.find((item) => item.id === input.categoryId);
-		if (!category) throw new Error('分类不存在');
 		const now = new Date().toISOString();
-		const row: FinanceTransaction = {
+		const pending: FinanceTransaction = {
 			id: crypto.randomUUID(),
 			amountFen: input.amountFen,
 			currency: 'CNY',
 			type: input.type,
-			categoryId: category.id,
-			categoryName: category.name,
+			categoryId: input.categoryId,
+			categoryName: category?.name ?? '',
 			note: input.note?.trim() || null,
 			occurredOn: input.occurredOn,
 			clientId: input.clientId,
 			createdAt: now,
 			updatedAt: now
 		};
-		this.transactions.unshift(row);
+		this.transactions = [pending, ...this.transactions];
+		try {
+			const saved = await getApi().createFinanceTransaction(input);
+			this.transactions = this.transactions.map((row) =>
+				row.clientId === input.clientId ? saved : row
+			);
+			try {
+				await this.refreshDerived(input.occurredOn.slice(0, 7));
+				await this.persist();
+			} catch {
+				this.summaryCache = this.computeSummary(input.occurredOn.slice(0, 7));
+			}
+			return saved;
+		} catch (error) {
+			if (typeof navigator !== 'undefined' && !navigator.onLine) {
+				await this.enqueue('finance_transaction_create', input);
+				await this.persist();
+				return pending;
+			}
+			this.transactions = this.transactions.filter((row) => row.clientId !== input.clientId);
+			throw error;
+		}
+	}
+
+	async upsertBudget(input: BudgetInput): Promise<FinanceBudget> {
+		const items = await getApi().putFinanceBudgets([input]);
+		this.budgets = items;
+		const row =
+			items.find((item) => item.categoryId === input.categoryId) ??
+			items[items.length - 1] ??
+			({
+				id: crypto.randomUUID(),
+				categoryId: input.categoryId,
+				categoryName: this.categories.find((item) => item.id === input.categoryId)?.name ?? null,
+				monthlyLimitFen: input.monthlyLimitFen,
+				alertThresholdPct: input.alertThresholdPct
+			} satisfies FinanceBudget);
+		await this.refreshDerived();
 		await this.persist();
 		return row;
 	}
 
-	upsertBudget(input: BudgetInput): FinanceBudget {
-		const category = input.categoryId
-			? this.categories.find((item) => item.id === input.categoryId)
-			: null;
-		const found = this.budgets.find((item) => item.categoryId === input.categoryId);
-		const row: FinanceBudget = {
-			id: found?.id ?? crypto.randomUUID(),
-			categoryId: input.categoryId,
-			categoryName: category?.name ?? null,
-			monthlyLimitFen: input.monthlyLimitFen,
-			alertThresholdPct: input.alertThresholdPct
+	summary(month = currentMonth()): FinanceSummary {
+		if (this.summaryCache.month === month) return this.summaryCache;
+		return this.computeSummary(month);
+	}
+
+	report(month: string): FinanceReport {
+		if (this.reportCache.from === month) return this.reportCache;
+		const current = this.summary(month);
+		return {
+			from: month,
+			to: month,
+			currency: 'CNY',
+			expenseFen: current.expenseFen,
+			incomeFen: current.incomeFen,
+			slices: current.byCategory.filter((item) => item.kind === 'expense'),
+			mom: { expenseFen: 0, expenseDeltaFen: current.expenseFen },
+			yoy: { expenseFen: 0, expenseDeltaFen: current.expenseFen }
 		};
-		if (found) {
-			Object.assign(found, row);
-			void this.persist();
-			return found;
-		}
-		this.budgets.push(row);
-		void this.persist();
+	}
+
+	upcoming(today = todayIso()): FinanceSubscription[] {
+		if (this.upcomingSubs.length) return this.upcomingSubs;
+		return this.subscriptions.filter((row) => {
+			if (!row.active) return false;
+			const until = dateDiff(today, row.nextBillingDate);
+			return until >= 0 && until <= row.remindDaysBefore;
+		});
+	}
+
+	async createSubscription(input: {
+		name: string;
+		priceFen: number;
+		cycle: SubCycle;
+		nextBillingDate: string;
+		remindDaysBefore?: number;
+	}): Promise<FinanceSubscription> {
+		const row = await getApi().createFinanceSubscription(input);
+		this.subscriptions = [...this.subscriptions, row];
+		this.upcomingSubs = await getApi()
+			.listUpcomingSubscriptions()
+			.catch(() => this.upcoming());
+		await this.persist();
 		return row;
 	}
 
-	summary(month = currentMonth()): FinanceSummary {
+	async createChallenge(input: {
+		name: string;
+		targetDays: number;
+		startDate: string;
+	}): Promise<FinanceChallenge> {
+		const row = await getApi().createFinanceChallenge(input);
+		this.challenges = [row, ...this.challenges];
+		await this.persist();
+		return row;
+	}
+
+	async checkin(id: string, day: string): Promise<FinanceChallenge | undefined> {
+		const row = await getApi().checkinFinanceChallenge(id, day);
+		this.challenges = this.challenges.map((item) => (item.id === id ? row : item));
+		await this.persist();
+		return row;
+	}
+
+	challenge(id: string): FinanceChallenge | undefined {
+		return this.challenges.find((item) => item.id === id);
+	}
+
+	async removeSubscription(id: string) {
+		await getApi().deleteFinanceSubscription(id);
+		this.subscriptions = this.subscriptions.filter((item) => item.id !== id);
+		this.upcomingSubs = this.upcomingSubs.filter((item) => item.id !== id);
+		await this.persist();
+	}
+
+	async removeChallenge(id: string) {
+		await getApi().deleteFinanceChallenge(id);
+		this.challenges = this.challenges.filter((item) => item.id !== id);
+		await this.persist();
+	}
+
+	private computeSummary(month: string): FinanceSummary {
 		const inMonth = this.transactions.filter((row) => row.occurredOn.startsWith(month));
 		const incomeFen = inMonth
 			.filter((row) => row.type === 'income')
@@ -108,12 +272,7 @@ export class MemoryFinanceStore {
 				: expenseFen;
 			const pct =
 				budget.monthlyLimitFen <= 0 ? 0 : Math.floor((spentFen * 100) / budget.monthlyLimitFen);
-			return {
-				...budget,
-				spentFen,
-				pct,
-				alert: pct >= budget.alertThresholdPct
-			};
+			return { ...budget, spentFen, pct, alert: pct >= budget.alertThresholdPct };
 		});
 		return {
 			month,
@@ -132,99 +291,24 @@ export class MemoryFinanceStore {
 		};
 	}
 
-	report(month: string) {
-		const current = this.summary(month);
-		const mom = this.summary(shiftMonth(month, -1));
-		const yoy = this.summary(shiftMonth(month, -12));
-		return {
-			from: month,
-			to: month,
-			currency: 'CNY' as const,
-			expenseFen: current.expenseFen,
-			incomeFen: current.incomeFen,
-			slices: current.byCategory.filter((item) => item.kind === 'expense'),
-			mom: {
-				expenseFen: mom.expenseFen,
-				expenseDeltaFen: current.expenseFen - mom.expenseFen
-			},
-			yoy: {
-				expenseFen: yoy.expenseFen,
-				expenseDeltaFen: current.expenseFen - yoy.expenseFen
-			}
-		};
-	}
-
-	createSubscription(input: {
-		name: string;
-		priceFen: number;
-		cycle: SubCycle;
-		nextBillingDate: string;
-		remindDaysBefore?: number;
-	}): FinanceSubscription {
-		const row: FinanceSubscription = {
-			id: crypto.randomUUID(),
-			name: input.name,
-			priceFen: input.priceFen,
-			currency: 'CNY',
-			cycle: input.cycle,
-			nextBillingDate: input.nextBillingDate,
-			remindDaysBefore: input.remindDaysBefore ?? 3,
-			active: true,
-			annualCostFen: annualCostFen(input.priceFen, input.cycle)
-		};
-		this.subscriptions.push(row);
-		void this.persist();
-		return row;
-	}
-
-	upcoming(today = todayIso()): FinanceSubscription[] {
-		return this.subscriptions.filter((row) => {
-			if (!row.active) return false;
-			const until = dateDiff(today, row.nextBillingDate);
-			return until >= 0 && until <= row.remindDaysBefore;
-		});
-	}
-
-	createChallenge(input: {
-		name: string;
-		targetDays: number;
-		startDate: string;
-	}): FinanceChallenge {
-		const row: FinanceChallenge = {
-			id: crypto.randomUUID(),
-			name: input.name,
-			targetDays: input.targetDays,
-			targetAmountFen: null,
-			startDate: input.startDate,
-			progressDays: 0,
-			checkins: []
-		};
-		this.challenges.push(row);
-		void this.persist();
-		return row;
-	}
-
-	checkin(id: string, day: string): FinanceChallenge | undefined {
-		const row = this.challenge(id);
-		if (!row) return undefined;
-		if (!row.checkins.includes(day)) {
-			row.checkins.push(day);
-			row.progressDays = row.checkins.length;
-			void this.persist();
+	private async refreshDerived(month = currentMonth()) {
+		try {
+			const api = getApi();
+			this.summaryCache = await api.getFinanceSummary(month);
+			this.reportCache = await api.getFinanceReport(month);
+		} catch {
+			this.summaryCache = this.computeSummary(month);
 		}
-		return row;
 	}
 
-	challenge(id: string): FinanceChallenge | undefined {
-		return this.challenges.find((item) => item.id === id);
-	}
-
-	removeSubscription(id: string) {
-		this.subscriptions = this.subscriptions.filter((item) => item.id !== id);
-	}
-
-	removeChallenge(id: string) {
-		this.challenges = this.challenges.filter((item) => item.id !== id);
+	private async enqueue(type: string, payload: unknown) {
+		if (typeof indexedDB === 'undefined') return;
+		const db = await openQingxinDb();
+		try {
+			await enqueueSync(db, { type, payload });
+		} finally {
+			db.close();
+		}
 	}
 
 	async persist() {
@@ -232,29 +316,23 @@ export class MemoryFinanceStore {
 		const db = await openQingxinDb();
 		try {
 			await putRecord(db, 'finance', CACHE_KEY, this.snapshot());
-			await enqueueSync(db, {
-				type: 'finance.transaction',
-				payload: { count: this.transactions.length }
-			});
 		} finally {
 			db.close();
 		}
 	}
 
-	async hydrate() {
+	async loadCache() {
 		if (typeof indexedDB === 'undefined') return;
 		const db = await openQingxinDb();
 		try {
-			const snap = await getRecord<ReturnType<MemoryFinanceStore['snapshot']>>(
-				db,
-				'finance',
-				CACHE_KEY
-			);
+			const snap = await getRecord<ReturnType<FinanceStore['snapshot']>>(db, 'finance', CACHE_KEY);
 			if (!snap) return;
 			this.transactions = snap.transactions;
 			this.budgets = snap.budgets;
 			this.subscriptions = snap.subscriptions;
 			this.challenges = snap.challenges;
+			this.upcomingSubs = snap.upcomingSubs ?? [];
+			if (snap.summary) this.summaryCache = snap.summary;
 		} finally {
 			db.close();
 		}
@@ -265,25 +343,23 @@ export class MemoryFinanceStore {
 			transactions: this.transactions,
 			budgets: this.budgets,
 			subscriptions: this.subscriptions,
-			challenges: this.challenges
+			challenges: this.challenges,
+			upcomingSubs: this.upcomingSubs,
+			summary: this.summaryCache
 		};
 	}
 }
 
-function dateDiff(from: string, to: string): number {
-	const a = Date.parse(`${from}T00:00:00Z`);
-	const b = Date.parse(`${to}T00:00:00Z`);
-	return Math.round((b - a) / 86_400_000);
-}
+export { FinanceStore as MemoryFinanceStore };
 
-let singleton: MemoryFinanceStore | undefined;
+let singleton: FinanceStore | undefined;
 
-export function getFinanceStore(): MemoryFinanceStore {
-	singleton ??= new MemoryFinanceStore();
+export function getFinanceStore(): FinanceStore {
+	singleton ??= new FinanceStore();
 	return singleton;
 }
 
-export function resetFinanceStore(next = new MemoryFinanceStore()) {
+export function resetFinanceStore(next = new FinanceStore()) {
 	singleton = next;
 	return singleton;
 }

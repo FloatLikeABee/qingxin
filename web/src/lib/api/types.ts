@@ -22,6 +22,32 @@ import type {
 	LocalService
 } from '../local/catalog';
 import type { LocalSort } from '../local/geo';
+import type { ElderContact, ElderReminder } from '../elder/demo';
+import type { ElderReminderInput, ElderToday } from '../elder/payload';
+import type {
+	FinanceBudgetInput,
+	FinanceChallengeInput,
+	FinanceReport,
+	FinanceSubInput,
+	FinanceTxInput
+} from '../finance/payload';
+import type {
+	FinanceBudget,
+	FinanceCategory,
+	FinanceChallenge,
+	FinanceSubscription,
+	FinanceSummary,
+	FinanceTransaction
+} from '../finance/types';
+import type {
+	CycleLog,
+	PlanLog,
+	ReminderLog,
+	ReportLog,
+	SleepLog,
+	TodaySnapshot,
+	WaterLog
+} from '../wellness/types';
 import type {
 	CareType,
 	CreatePetInput,
@@ -388,6 +414,75 @@ export interface QingxinApi {
 	listAiTasks(toolId?: ToolId): Promise<AiTask[]>;
 	getAiTask(id: string): Promise<AiTask>;
 	runTool(input: ToolRunInput): AsyncIterable<ToolStreamEvent>;
+	listFinanceCategories(): Promise<FinanceCategory[]>;
+	createFinanceTransaction(input: FinanceTxInput): Promise<FinanceTransaction>;
+	listFinanceTransactions(month?: string): Promise<FinanceTransaction[]>;
+	getFinanceSummary(month: string): Promise<FinanceSummary>;
+	getFinanceReport(month: string): Promise<FinanceReport>;
+	listFinanceBudgets(): Promise<FinanceBudget[]>;
+	putFinanceBudgets(items: FinanceBudgetInput[]): Promise<FinanceBudget[]>;
+	listFinanceSubscriptions(): Promise<FinanceSubscription[]>;
+	listUpcomingSubscriptions(): Promise<FinanceSubscription[]>;
+	createFinanceSubscription(input: FinanceSubInput): Promise<FinanceSubscription>;
+	deleteFinanceSubscription(id: string): Promise<void>;
+	listFinanceChallenges(): Promise<FinanceChallenge[]>;
+	createFinanceChallenge(input: FinanceChallengeInput): Promise<FinanceChallenge>;
+	checkinFinanceChallenge(id: string, day: string): Promise<FinanceChallenge>;
+	deleteFinanceChallenge(id: string): Promise<void>;
+	createJob(input: { runAt: string; title: string; body: string }): Promise<{
+		id: string;
+		kind: string;
+		runAt: string;
+		status: string;
+		payload: Record<string, unknown>;
+	}>;
+	getElderToday(elderId?: string): Promise<ElderToday>;
+	listElderReminders(elderId?: string): Promise<ElderReminder[]>;
+	createElderReminder(input: ElderReminderInput, elderId?: string): Promise<ElderReminder>;
+	ackElderReminder(id: string, occurrenceAt: string, elderId?: string): Promise<void>;
+	listElderContacts(elderId?: string): Promise<ElderContact[]>;
+	getElderProfile(elderId?: string): Promise<{
+		userId: string;
+		activityLogOptIn: boolean;
+		timezone: string;
+	}>;
+	patchElderProfile(
+		input: { activityLogOptIn?: boolean; timezone?: string },
+		elderId?: string
+	): Promise<{ userId: string; activityLogOptIn: boolean; timezone: string }>;
+	getWellnessToday(): Promise<TodaySnapshot>;
+	addWellnessWater(ml: number, loggedOn: string): Promise<WaterLog>;
+	listWellnessWater(): Promise<WaterLog[]>;
+	addWellnessSleep(input: {
+		sleepAt: string;
+		wakeAt: string;
+		quality: number;
+		note?: string | null;
+	}): Promise<SleepLog>;
+	listWellnessSleep(): Promise<SleepLog[]>;
+	putWellnessConsent(cycleConsent: boolean): Promise<{ cycleConsent: boolean }>;
+	addWellnessCycle(input: {
+		startDate: string;
+		endDate?: string | null;
+		flowLevel?: CycleLog['flowLevel'];
+		symptoms?: string | null;
+	}): Promise<CycleLog>;
+	listWellnessCycles(): Promise<CycleLog[]>;
+	addWellnessReport(input: {
+		title: string;
+		reportDate: string;
+		metrics: ReportLog['metrics'];
+	}): Promise<ReportLog>;
+	listWellnessReports(): Promise<ReportLog[]>;
+	createWellnessPlan(kind: PlanLog['kind']): Promise<PlanLog>;
+	listWellnessPlans(): Promise<PlanLog[]>;
+	checkinWellnessPlan(id: string, day: string): Promise<PlanLog>;
+	listWellnessReminders(): Promise<ReminderLog[]>;
+	createWellnessReminder(input: {
+		kind: ReminderLog['kind'];
+		time: string;
+		daysOfWeek: number[];
+	}): Promise<ReminderLog>;
 	listPets(): Promise<Pet[]>;
 	createPet(input: CreatePetInput): Promise<Pet>;
 	getPet(id: string): Promise<Pet>;

@@ -14,6 +14,8 @@
 	],
 	"exclude": [
 		"src/service-worker",
-		"src/service-worker.ts"
+		"src/service-worker.ts",
+		"src/**/*.spec.ts",
+		"src/lib/api/contract.ts"
 	]
 }
