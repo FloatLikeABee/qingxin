@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { browser } from '$app/env';
 	import Button from '#lib/components/Button.svelte';
+	import Bento from '#lib/components/Bento.svelte';
+	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Drawer from '#lib/components/Drawer.svelte';
 	import ListItem from '#lib/components/ListItem.svelte';
@@ -111,64 +113,76 @@
 	<title>轻心 · 设置</title>
 </svelte:head>
 
-<section class="mx-auto max-w-2xl space-y-5">
-	<div>
-		<h1 class="text-3xl font-semibold">我的</h1>
-		<p class="mt-2 text-base text-[var(--qx-muted)]">
-			{sessionName ? `已登录：${sessionName}` : '尚未登录 · 本地演示环境'}
-		</p>
-	</div>
+<section class="mx-auto min-w-0 max-w-5xl">
+	<Bento>
+		<BentoItem span="full">
+			<div>
+				<h1 class="text-3xl font-semibold">我的</h1>
+				<p class="mt-2 text-base text-[var(--qx-muted)]">
+					{sessionName ? `已登录：${sessionName}` : '尚未登录 · 本地演示环境'}
+				</p>
+			</div>
+		</BentoItem>
 
-	<Card>
-		<Switch
-			bind:checked={elderMode}
-			label="大字高对比（适老）"
-			description="全局加大字号并加强对比，不改组件样式。可与浅色/深色一起用。"
-		/>
-	</Card>
+		<BentoItem span="wide">
+			<Card class="h-full">
+				<Switch
+					bind:checked={elderMode}
+					label="大字高对比（适老）"
+					description="全局加大字号并加强对比，不改组件样式。可与浅色/深色一起用。"
+				/>
+			</Card>
+		</BentoItem>
 
-	<Card>
-		<h2 class="mb-3 text-lg font-semibold">外观</h2>
-		<div class="grid grid-cols-2 gap-2">
-			{#each modes as item (item.id)}
-				<button
-					type="button"
-					class="min-h-16 rounded-2xl px-3 py-3 text-left ring-1 transition {mode === item.id
-						? 'bg-[color-mix(in_srgb,var(--qx-primary)_14%,transparent)] ring-[var(--qx-primary)]'
-						: 'bg-[var(--qx-surface)] ring-transparent'}"
-					onclick={() => choose(item.id)}
-				>
-					<span class="block text-base font-medium">{item.label}</span>
-					<span class="block text-sm text-[var(--qx-muted)]">{item.hint}</span>
-				</button>
-			{/each}
-		</div>
-	</Card>
+		<BentoItem span="hero">
+			<Card class="h-full">
+				<h2 class="mb-3 text-lg font-semibold">外观</h2>
+				<div class="grid grid-cols-2 gap-2">
+					{#each modes as item (item.id)}
+						<button
+							type="button"
+							class="min-h-16 rounded-2xl px-3 py-3 text-left ring-1 transition {mode === item.id
+								? 'bg-[color-mix(in_srgb,var(--qx-primary)_14%,transparent)] ring-[var(--qx-primary)]'
+								: 'bg-[var(--qx-surface)] ring-transparent'}"
+							onclick={() => choose(item.id)}
+						>
+							<span class="block text-base font-medium">{item.label}</span>
+							<span class="block text-sm text-[var(--qx-muted)]">{item.hint}</span>
+						</button>
+					{/each}
+				</div>
+			</Card>
+		</BentoItem>
 
-	<Card padded={false} class="divide-y divide-[var(--qx-line)] py-1">
-		{#if sessionName}
-			<ListItem title="退出登录" subtitle="结束当前会话" icon="lock" onclick={logout} />
-		{:else}
-			<ListItem href="/login" title="登录 / 注册" subtitle="把设置同步到账号" icon="lock" />
-		{/if}
-		<ListItem
-			title="导出我的数据"
-			subtitle="下载本地 JSON 副本"
-			icon="download"
-			onclick={() => (exportOpen = true)}
-		/>
-		<ListItem
-			title="注销并删除数据"
-			subtitle="清除本机模拟账号"
-			icon="trash"
-			onclick={() => (deleteOpen = true)}
-		/>
-		<ListItem href="/privacy" title="隐私与免责声明" subtitle="最小必要 · 非专业建议" icon="info" />
-	</Card>
+		<BentoItem span="wide">
+			<Card padded={false} class="h-full divide-y divide-[var(--qx-line)] py-1">
+				{#if sessionName}
+					<ListItem title="退出登录" subtitle="结束当前会话" icon="lock" onclick={logout} />
+				{:else}
+					<ListItem href="/login" title="登录 / 注册" subtitle="把设置同步到账号" icon="lock" />
+				{/if}
+				<ListItem
+					title="导出我的数据"
+					subtitle="下载本地 JSON 副本"
+					icon="download"
+					onclick={() => (exportOpen = true)}
+				/>
+				<ListItem
+					title="注销并删除数据"
+					subtitle="清除本机模拟账号"
+					icon="trash"
+					onclick={() => (deleteOpen = true)}
+				/>
+				<ListItem href="/privacy" title="隐私与免责声明" subtitle="最小必要 · 非专业建议" icon="info" />
+			</Card>
+		</BentoItem>
 
-	<p class="text-sm text-[var(--qx-muted)]">
-		添加到主屏幕：在浏览器菜单中选择「添加到主屏幕」，即可离线打开轻心。
-	</p>
+		<BentoItem span="full">
+			<p class="text-sm text-[var(--qx-muted)]">
+				添加到主屏幕：在浏览器菜单中选择「添加到主屏幕」，即可离线打开轻心。
+			</p>
+		</BentoItem>
+	</Bento>
 </section>
 
 <Drawer bind:open={exportOpen} title="导出数据">

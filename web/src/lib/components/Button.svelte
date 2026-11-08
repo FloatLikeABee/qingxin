@@ -23,12 +23,12 @@
 		secondary:
 			'bg-[var(--qx-card)] text-[var(--qx-text)] ring-1 ring-[var(--qx-line)] hover:bg-[var(--qx-surface)]',
 		ghost: 'bg-transparent text-[var(--qx-text)] hover:bg-[var(--qx-card)]',
-		danger: 'bg-rose-500 text-white hover:bg-rose-400'
+		danger: 'bg-[var(--qx-danger)] text-white hover:brightness-110'
 	};
 
 	const classes = $derived(
 		[
-			'inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-5 text-base font-medium transition duration-200 ease-out',
+			'inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-6 text-base font-medium transition duration-200 ease-out',
 			'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--qx-primary)]',
 			'disabled:pointer-events-none disabled:opacity-45 motion-safe:active:scale-[0.98]',
 			styles[variant],

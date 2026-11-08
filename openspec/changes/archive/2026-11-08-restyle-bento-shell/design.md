@@ -35,7 +35,7 @@ ECC frontend-patterns / tdd-workflow / verification-loop (pinned `d2ef268`) are 
 
 ### D2 — Grid mechanics
 
-**Chosen:** Sparse CSS Grid, `gap: var(--qx-gutter)`, tracks `repeat(N, minmax(0, 1fr))`, item `min-inline-size: 0`. Column count via **container queries** on a host (`1` / `2` / `4` at ~34rem / ~56rem) because AppShell steals ~16rem for the sidebar. Spans: `unit` 1×1, `wide` 2×1, `hero` 2×2 (wide only), `full` all columns. Span recipes are packed so auto-placement fills rows without dense packing (e.g. hub: hero + wide + wide, then unit/unit/wide).
+**Chosen:** Sparse CSS Grid, `gap: var(--qx-gutter)`, tracks `repeat(N, minmax(0, 1fr))`, item `min-inline-size: 0`. Column count via **container queries** on a host (`1` / `2` / `4` at ~34rem / ~48rem) because AppShell steals ~16rem for the sidebar. 48rem is the 4-column floor so a 1280px window with the sidebar still gets a 4-track bento. Spans: `unit` 1×1, `wide` 2×1, `hero` 2×2 (wide only), `full` all columns. Span recipes are packed so auto-placement fills rows without dense packing (e.g. hub: hero + wide + wide, then unit/unit/wide).
 
 **Rejected:** viewport-only `md:` grids (wrong inside sidebar); masonry/grid-lanes (not baseline); dense packing (breaks tab order).
 

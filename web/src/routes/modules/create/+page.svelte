@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { getApi } from '#lib/api/client';
 	import type { CreateAiText, CreateOutlineResult, CreateSnippet, Creation } from '#lib/api/types';
+	import Bento from '#lib/components/Bento.svelte';
+	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
@@ -40,6 +42,8 @@
 		loadCachedSnippets,
 		saveCreation
 	} from '#lib/create/store';
+	import { LINK_CLASS } from '#lib/ui/affordance';
+	import { planBentoSpans } from '#lib/ui/bento';
 	import { pushToast } from '#lib/toast';
 
 	let tab = $state(0);
@@ -64,6 +68,8 @@
 	let activeWorkId = $state('');
 
 	const templates = $derived(filterTemplates(TEMPLATES, templateFilter));
+	const templateSpans = $derived(planBentoSpans(templates.length));
+	const inspirationSpans = planBentoSpans(INSPIRATION.length);
 	const hunks = $derived(diffLines(generated, finalContent));
 	const templateParts = $derived(
 		highlightVariables(TEMPLATES.find((item) => item.platform === platform)?.body ?? '')
@@ -303,7 +309,7 @@
 	<title>轻心 · 内容创作</title>
 </svelte:head>
 
-<section class="mx-auto max-w-5xl space-y-5 pb-8">
+<section class="mx-auto min-w-0 max-w-5xl space-y-5 pb-8">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<Tag tone="primary">工具辅助 · 示意文案</Tag>
@@ -312,7 +318,7 @@
 				选一个场景，写下主题，生成后再润色。不构成专业文案或营销建议。
 			</p>
 		</div>
-		<Button href="/modules" variant="secondary">返回模块中心</Button>
+		<a class={LINK_CLASS} href="/modules">← 返回模块中心</a>
 	</div>
 
 	{#if needLogin}
@@ -495,16 +501,18 @@
 			{/each}
 		</div>
 		<p class="text-sm text-[var(--qx-muted)]">一键使用会把平台和提示词带回创作页。</p>
-		<div class="grid gap-3 md:grid-cols-2">
-			{#each templates as item (item.id)}
-				<Card>
-					<Tag>{item.platform}</Tag>
-					<h2 class="mt-2 text-lg font-semibold">{item.name}</h2>
-					<pre class="mt-3 text-sm whitespace-pre-wrap text-[var(--qx-muted)]">{item.body}</pre>
-					<Button class="mt-4" onclick={() => useTemplate(item.id)}>使用</Button>
-				</Card>
+		<Bento>
+			{#each templates as item, index (item.id)}
+				<BentoItem span={templateSpans[index] ?? 'unit'}>
+					<Card class="h-full">
+						<Tag>{item.platform}</Tag>
+						<h2 class="mt-2 text-lg font-semibold">{item.name}</h2>
+						<pre class="mt-3 text-sm whitespace-pre-wrap text-[var(--qx-muted)]">{item.body}</pre>
+						<Button class="mt-4" onclick={() => useTemplate(item.id)}>使用</Button>
+					</Card>
+				</BentoItem>
 			{/each}
-		</div>
+		</Bento>
 	{:else}
 		<div class="grid gap-4 lg:grid-cols-2">
 			<Card>
@@ -573,18 +581,20 @@
 	{/if}
 
 	{#if tab === 0}
-		<div class="grid gap-3 sm:grid-cols-2">
-			{#each INSPIRATION as item (item.id)}
-				<button
-					type="button"
-					class="rounded-3xl bg-[var(--qx-card)] p-4 text-left ring-1 ring-[var(--qx-line)]"
-					onclick={() => useInspiration(item.topic, item.platform)}
-				>
-					<Tag>{item.platform}</Tag>
-					<p class="mt-2 font-medium">{item.topic}</p>
-					<p class="text-sm text-[var(--qx-muted)]">{item.hook}</p>
-				</button>
+		<Bento>
+			{#each INSPIRATION as item, index (item.id)}
+				<BentoItem span={inspirationSpans[index] ?? 'unit'}>
+					<button
+						type="button"
+						class="h-full w-full rounded-3xl bg-[var(--qx-card)] p-4 text-left ring-1 ring-[var(--qx-line)]"
+						onclick={() => useInspiration(item.topic, item.platform)}
+					>
+						<Tag>{item.platform}</Tag>
+						<p class="mt-2 font-medium">{item.topic}</p>
+						<p class="text-sm text-[var(--qx-muted)]">{item.hook}</p>
+					</button>
+				</BentoItem>
 			{/each}
-		</div>
+		</Bento>
 	{/if}
 </section>

@@ -26,6 +26,8 @@
 	--qx-chart-1: #3b82f6;
 	--qx-chart-2: #60a5fa;
 	--qx-chart-3: #93c5fd;
+	--qx-gutter: 1rem;
+	--qx-danger: #c45c6a;
 	color-scheme: light;
 }
 
@@ -41,6 +43,7 @@
 	--qx-chart-1: #60a5fa;
 	--qx-chart-2: #93c5fd;
 	--qx-chart-3: #1d4ed8;
+	--qx-danger: #d0919c;
 	color-scheme: dark;
 }
 
@@ -63,6 +66,8 @@ html.elder.dark {
 html,
 body {
 	min-height: 100%;
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
 	background: var(--qx-bg);
 	color: var(--qx-text);
 	font-family: var(--font-sans);
@@ -148,6 +153,80 @@ body {
 
 .qx-drawer {
 	margin: auto 0 0;
+}
+
+.qx-link {
+	color: var(--qx-primary);
+	text-decoration: underline;
+	text-underline-offset: 0.25em;
+}
+
+.qx-link:focus-visible {
+	outline: 2px solid var(--qx-primary);
+	outline-offset: 2px;
+}
+
+.qx-bento-host {
+	container-type: inline-size;
+	container-name: qx-bento;
+	inline-size: 100%;
+	min-inline-size: 0;
+}
+
+.qx-bento {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	align-items: stretch;
+	gap: var(--qx-gutter);
+}
+
+.qx-bento-item {
+	min-inline-size: 0;
+	min-width: 0;
+}
+
+.qx-bento-item > a,
+.qx-bento-item > button {
+	display: block;
+	min-inline-size: 0;
+	height: 100%;
+}
+
+.qx-bento-item :is(a, button):focus-visible {
+	outline: 2px solid var(--qx-primary);
+	outline-offset: 2px;
+}
+
+@container qx-bento (min-width: 34rem) {
+	.qx-bento {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.qx-bento-wide,
+	.qx-bento-hero,
+	.qx-bento-full {
+		grid-column: span 2;
+	}
+}
+
+@container qx-bento (min-width: 48rem) {
+	.qx-bento {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+
+	.qx-bento-hero {
+		grid-column: span 2;
+		grid-row: span 2;
+	}
+
+	.qx-bento-wide {
+		grid-column: span 2;
+		grid-row: auto;
+	}
+
+	.qx-bento-full {
+		grid-column: span 4;
+	}
 }
 
 dialog::backdrop {

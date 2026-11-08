@@ -48,6 +48,15 @@ describe('bento', () => {
 		expect(bentoItemClass('hero')).toContain('qx-bento-hero');
 	});
 
+	it('uses a hero-wide-unit recipe for four tiles', () => {
+		expect(planBentoSpans(4)).toEqual(['hero', 'wide', 'unit', 'unit']);
+	});
+
+	it('caps two-column tracks so wide and hero share a row pair', () => {
+		expect(tracksForColumns('hero', 2)).toEqual({ col: 2, row: 1 });
+		expect(tracksForColumns('full', 2)).toEqual({ col: 2, row: 1 });
+	});
+
 	it('does not require dense packing for the default ten-tile recipe', () => {
 		const placed = placeSparse(planBentoSpans(10), 4);
 		for (let i = 1; i < placed.length; i++) {

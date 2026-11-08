@@ -33,23 +33,27 @@
 		lock: 'M8 10V8a4 4 0 1 1 8 0v2h2v10H6V10h2zm2 0h4V8a2 2 0 0 0-4 0v2z',
 		logo: 'M8 16c0-5 3-9 8-11-2 4 1 7 5 8-6 1-9 4-9 8-3-2-4-4-4-5z',
 		chevron: 'M9 6l6 6-6 6',
-		bell: 'M6 16h12l-1.2-6.2A4.8 4.8 0 0 0 12 6a4.8 4.8 0 0 0-4.8 3.8L6 16zm4 3a2 2 0 0 0 4 0'
+		bell: 'M6 16h12l-1.2-6.2A4.8 4.8 0 0 0 12 6a4.8 4.8 0 0 0-4.8 3.8L6 16zm4 3a2 2 0 0 0 4 0',
+		eye: 'M2.5 12S6 6 12 6s9.5 6 9.5 6S18 18 12 18 2.5 12 2.5 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+		eyeOff:
+			'M4 4l16 16M9.9 9.9A3 3 0 0 0 12 15m2.1-.9A3 3 0 0 0 12 9M3.6 7.4C5.5 5.7 8.4 4 12 4c5.2 0 8.8 3.6 10.4 5.6M7.1 16.6C8.6 17.5 10.2 18 12 18c5.2 0 8.8-3.6 10.4-5.6'
 	} as const;
 
 	type IconName = keyof typeof icons;
 
 	let {
 		name,
-		class: className = 'h-5 w-5'
+		class: className = ''
 	}: {
 		name: IconName | string;
 		class?: string;
 	} = $props();
 
 	const path = $derived(icons[(name in icons ? name : 'info') as IconName]);
+	const sized = $derived(/\b(?:h-|w-|size-)/.test(className) ? className : `h-5 w-5 ${className}`);
 </script>
 
-<svg class={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+<svg class={sized} viewBox="0 0 24 24" fill="none" aria-hidden="true">
 	<path
 		d={path}
 		stroke="currentColor"

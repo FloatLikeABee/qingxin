@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/env';
+	import Bento from '#lib/components/Bento.svelte';
+	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
@@ -7,10 +9,12 @@
 	import { getWellnessStore } from '#lib/wellness/store';
 	import { shanghaiToday } from '#lib/wellness/water';
 	import type { PlanLog } from '#lib/wellness/types';
+	import { planBentoSpans } from '#lib/ui/bento';
 
 	const store = getWellnessStore();
 	const today = shanghaiToday();
 	let plans = $state<PlanLog[]>([]);
+	const planSpans = $derived(planBentoSpans(plans.length));
 
 	function refresh() {
 		plans = [...store.plans];
@@ -36,31 +40,39 @@
 	<title>轻心 · 健康计划</title>
 </svelte:head>
 
-<Card>
-	<h1 class="text-2xl font-semibold">21 天计划</h1>
-	<Disclaimer />
-	<div class="mt-4 grid gap-3 sm:grid-cols-2">
-		<Button onclick={() => start('water_21')}>开始喝水挑战</Button>
-		<Button variant="secondary" onclick={() => start('sleep_21')}>开始睡眠打卡</Button>
-	</div>
-</Card>
-
-{#if plans.length === 0}
-	<EmptyState title="还没有计划" body="选一个 21 天微习惯。" />
-{:else}
-	{#each plans as plan (plan.id)}
+<Bento>
+	<BentoItem span="full">
 		<Card>
-			<h2 class="text-lg font-semibold">{plan.title}</h2>
-			<p class="mt-2 text-base text-[var(--qx-muted)]">
-				{plan.progressDays} / {plan.targetDays} 天
-			</p>
-			<div class="mt-3 h-3 overflow-hidden rounded-full bg-[var(--qx-surface)]">
-				<div
-					class="h-full rounded-full bg-[var(--qx-primary)]"
-					style="width: {Math.min((plan.progressDays * 100) / plan.targetDays, 100)}%"
-				></div>
+			<h1 class="text-2xl font-semibold">21 天计划</h1>
+			<Disclaimer />
+			<div class="mt-4 flex flex-col gap-3 sm:flex-row">
+				<Button onclick={() => start('water_21')}>开始喝水挑战</Button>
+				<Button variant="secondary" onclick={() => start('sleep_21')}>开始睡眠打卡</Button>
 			</div>
-			<Button class="mt-4 w-full" onclick={() => checkin(plan.id)}>完成今日</Button>
 		</Card>
-	{/each}
-{/if}
+	</BentoItem>
+
+	{#if plans.length === 0}
+		<BentoItem span="wide">
+			<EmptyState title="还没有计划" body="选一个 21 天微习惯。" />
+		</BentoItem>
+	{:else}
+		{#each plans as plan, index (plan.id)}
+			<BentoItem span={planSpans[index] ?? 'unit'}>
+				<Card class="h-full">
+					<h2 class="text-lg font-semibold">{plan.title}</h2>
+					<p class="mt-2 text-base text-[var(--qx-muted)]">
+						{plan.progressDays} / {plan.targetDays} 天
+					</p>
+					<div class="mt-3 h-3 overflow-hidden rounded-full bg-[var(--qx-surface)]">
+						<div
+							class="h-full rounded-full bg-[var(--qx-primary)]"
+							style="width: {Math.min((plan.progressDays * 100) / plan.targetDays, 100)}%"
+						></div>
+					</div>
+					<Button class="mt-4 w-full" onclick={() => checkin(plan.id)}>完成今日</Button>
+				</Card>
+			</BentoItem>
+		{/each}
+	{/if}
+</Bento>

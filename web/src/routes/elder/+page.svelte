@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { browser } from '$app/env';
+	import Bento from '#lib/components/Bento.svelte';
+	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Modal from '#lib/components/Modal.svelte';
+	import { planBentoSpans } from '#lib/ui/bento';
 	import { getElderStore } from '#lib/elder/store';
 	import { shanghaiClock } from '#lib/elder/due';
 	import type { ElderContact, ElderReminder } from '#lib/elder/demo';
@@ -57,67 +60,78 @@
 		{ href: '/elder/anti-fraud', label: '防诈卫士', icon: 'lock' },
 		{ href: '/elder/family', label: '家人设置', icon: 'heart' }
 	];
+	const toolSpans = planBentoSpans(tools.length);
 </script>
 
 <svelte:head>
 	<title>轻心 · 老人助手</title>
 </svelte:head>
 
-<section class="elder-home mx-auto max-w-2xl space-y-5">
-	<div>
-		<p class="text-sm text-[var(--qx-muted)]">老人助手</p>
-		<h1 class="text-3xl font-semibold">今天先做这几件</h1>
-		<p class="sr-only">{shanghaiClock(new Date()).date}</p>
-	</div>
+<section class="elder-home mx-auto min-w-0 max-w-5xl">
+	<Bento>
+		<BentoItem span="full">
+			<div>
+				<p class="text-sm text-[var(--qx-muted)]">老人助手</p>
+				<h1 class="text-3xl font-semibold">今天先做这几件</h1>
+				<p class="sr-only">{shanghaiClock(new Date()).date}</p>
+			</div>
+		</BentoItem>
 
-	<Card class="space-y-3">
-		<h2 class="text-xl font-semibold">今日提醒</h2>
-		{#if reminders.length === 0}
-			<p class="text-lg text-[var(--qx-muted)]">今天没有用药提醒。</p>
-		{:else}
-			<ul class="space-y-3">
-				{#each reminders as item (item.id)}
-					<li class="rounded-2xl bg-[var(--qx-surface)] p-4">
-						<p class="text-xl font-semibold">{item.time} · {item.title}</p>
-						<p class="text-lg">{item.body}</p>
-						<p class="text-sm text-[var(--qx-muted)]">
-							{acked.includes(item.id) ? '已确认' : '待确认'}
-						</p>
-					</li>
-				{/each}
-			</ul>
-		{/if}
-		<p class="text-base text-[var(--qx-muted)]">{disclaimer}</p>
-	</Card>
+		<BentoItem span="hero">
+			<Card class="h-full space-y-3">
+				<h2 class="text-xl font-semibold">今日提醒</h2>
+				{#if reminders.length === 0}
+					<p class="text-lg text-[var(--qx-muted)]">今天没有用药提醒。</p>
+				{:else}
+					<ul class="space-y-3">
+						{#each reminders as item (item.id)}
+							<li class="rounded-2xl bg-[var(--qx-surface)] p-4">
+								<p class="text-xl font-semibold">{item.time} · {item.title}</p>
+								<p class="text-lg">{item.body}</p>
+								<p class="text-sm text-[var(--qx-muted)]">
+									{acked.includes(item.id) ? '已确认' : '待确认'}
+								</p>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				<p class="text-base text-[var(--qx-muted)]">{disclaimer}</p>
+			</Card>
+		</BentoItem>
 
-	<Card class="space-y-3">
-		<h2 class="text-xl font-semibold">紧急呼叫</h2>
-		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-			{#each contacts.filter((c) => c.isEmergency) as contact (contact.id)}
+		<BentoItem span="wide">
+			<Card class="h-full space-y-3">
+				<h2 class="text-xl font-semibold">紧急呼叫</h2>
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					{#each contacts.filter((c) => c.isEmergency) as contact (contact.id)}
+						<a
+							class="flex min-h-14 items-center justify-center rounded-2xl bg-rose-600 text-xl font-semibold text-white"
+							href="tel:{contact.phone}"
+						>
+							{contact.name}
+							{contact.phone}
+						</a>
+					{/each}
+				</div>
+			</Card>
+		</BentoItem>
+
+		{#each tools as tool, index (tool.href)}
+			<BentoItem span={toolSpans[index] ?? 'unit'}>
 				<a
-					class="flex min-h-14 items-center justify-center rounded-2xl bg-rose-600 text-xl font-semibold text-white"
-					href="tel:{contact.phone}"
+					href={tool.href}
+					class="flex h-full min-h-14 flex-col items-center justify-center gap-2 rounded-3xl bg-[var(--qx-card)] p-5 text-lg font-medium ring-1 ring-[var(--qx-line)]"
 				>
-					{contact.name}
-					{contact.phone}
+					<Icon name={tool.icon} class="h-7 w-7" />
+					{tool.label}
 				</a>
-			{/each}
-		</div>
-	</Card>
-
-	<div class="grid grid-cols-2 gap-3">
-		{#each tools as tool (tool.href)}
-			<a
-				href={tool.href}
-				class="flex min-h-14 flex-col items-center justify-center gap-2 rounded-3xl bg-[var(--qx-card)] p-5 text-lg font-medium ring-1 ring-[var(--qx-line)]"
-			>
-				<Icon name={tool.icon} class="h-7 w-7" />
-				{tool.label}
-			</a>
+			</BentoItem>
 		{/each}
-	</div>
 
-	<p class="text-sm text-[var(--qx-muted)]">{medical}</p>
+		<BentoItem span="full">
+			<p class="text-sm text-[var(--qx-muted)]">{medical}</p>
+		</BentoItem>
+	</Bento>
 </section>
 
 <Modal bind:open={dueOpen} title="该吃药了" dismissible={false}>

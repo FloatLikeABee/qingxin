@@ -41,6 +41,7 @@
 		saveService
 	} from '#lib/local/store';
 	import { validatePublish, validateReview } from '#lib/local/validate';
+	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { pushToast } from '#lib/toast';
 
 	let needLogin = $state(false);
@@ -241,9 +242,7 @@
 
 {#if !detail}
 	<section class="mx-auto max-w-3xl space-y-4 pb-28">
-		<a href="/modules" class="inline-flex min-h-11 items-center text-base text-[var(--qx-muted)]"
-			>← 返回模块中心</a
-		>
+		<a href="/modules" class={LINK_CLASS}>← 返回模块中心</a>
 		<div class="flex items-start justify-between gap-3">
 			<div>
 				<Tag tone="primary">15 分钟生活圈</Tag>

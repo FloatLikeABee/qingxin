@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { getApi } from '#lib/api/client';
 	import type { HustleAiText, ResumeVersion } from '#lib/api/types';
+	import Bento from '#lib/components/Bento.svelte';
+	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
@@ -36,6 +38,8 @@
 	} from '#lib/hustle/store';
 	import { todayTodos } from '#lib/hustle/todos';
 	import { quoteSheet } from '#lib/hustle/quote';
+	import { LINK_CLASS } from '#lib/ui/affordance';
+	import { planBentoSpans } from '#lib/ui/bento';
 	import { pushToast } from '#lib/toast';
 
 	let tab = $state(0);
@@ -82,6 +86,8 @@
 	const filteredHustles = $derived(
 		kindFilter ? sideHustles.filter((item) => item.kind === kindFilter) : sideHustles
 	);
+	const ideaCards = $derived([...suggestions, ...filteredHustles]);
+	const ideaSpans = $derived(planBentoSpans(ideaCards.length));
 
 	onMount(() => {
 		void boot();
@@ -340,10 +346,8 @@
 	<title>轻心 · 求职副业</title>
 </svelte:head>
 
-<section class="mx-auto max-w-5xl space-y-5">
-	<a href="/modules" class="inline-flex min-h-11 items-center text-base text-[var(--qx-muted)]"
-		>← 返回模块中心</a
-	>
+<section class="mx-auto min-w-0 max-w-5xl space-y-5">
+	<a href="/modules" class={LINK_CLASS}>← 返回模块中心</a>
 	<div class="flex items-start gap-4">
 		<div
 			class="flex h-14 w-14 items-center justify-center rounded-2xl text-white"
@@ -648,27 +652,29 @@
 						</button>
 					{/each}
 				</div>
-				<div class="grid gap-3 sm:grid-cols-2">
-					{#each [...suggestions, ...filteredHustles] as item (item.id)}
-						<Card>
-							<div class="flex items-start justify-between gap-2">
-								<h2 class="text-lg font-semibold">{item.title}</h2>
-								<Tag>{item.kind}</Tag>
-							</div>
-							<p class="mt-1 text-base text-[var(--qx-muted)]">{item.platform}</p>
-							<p class="mt-3 text-base">示意收入约 {item.estimatedIncome} 元 / 月</p>
-							<p class="mt-1 text-sm text-[var(--qx-muted)]">{item.skillsRequired.join(' · ')}</p>
-							{#if suggestions.some((row) => row.id === item.id)}
-								<p class="mt-2 text-sm text-[var(--qx-muted)]">
-									{suggestionReason(item, Number(hoursQuery) || 1)}
-								</p>
-								<div class="mt-4">
-									<Button variant="secondary" onclick={() => saveIdea(item)}>放入灵感夹</Button>
+				<Bento>
+					{#each ideaCards as item, index (item.id)}
+						<BentoItem span={ideaSpans[index] ?? 'unit'}>
+							<Card class="h-full">
+								<div class="flex items-start justify-between gap-2">
+									<h2 class="text-lg font-semibold">{item.title}</h2>
+									<Tag>{item.kind}</Tag>
 								</div>
-							{/if}
-						</Card>
+								<p class="mt-1 text-base text-[var(--qx-muted)]">{item.platform}</p>
+								<p class="mt-3 text-base">示意收入约 {item.estimatedIncome} 元 / 月</p>
+								<p class="mt-1 text-sm text-[var(--qx-muted)]">{item.skillsRequired.join(' · ')}</p>
+								{#if suggestions.some((row) => row.id === item.id)}
+									<p class="mt-2 text-sm text-[var(--qx-muted)]">
+										{suggestionReason(item, Number(hoursQuery) || 1)}
+									</p>
+									<div class="mt-4">
+										<Button variant="secondary" onclick={() => saveIdea(item)}>放入灵感夹</Button>
+									</div>
+								{/if}
+							</Card>
+						</BentoItem>
 					{/each}
-				</div>
+				</Bento>
 			{:else}
 				<Card>
 					<h2 class="text-lg font-semibold">报价计算器</h2>

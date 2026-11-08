@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { getApi } from '#lib/api/client';
 	import type { AiTask, ToolCatalog, ToolRunInput } from '#lib/api/types';
+	import Bento from '#lib/components/Bento.svelte';
+	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
@@ -27,6 +29,8 @@
 		loadCachedTasks,
 		toggleFavourite
 	} from '#lib/tools/store';
+	import { LINK_CLASS } from '#lib/ui/affordance';
+	import { planBentoSpans } from '#lib/ui/bento';
 	import { pushToast } from '#lib/toast';
 
 	let tab = $state(0);
@@ -67,6 +71,9 @@
 			.filter((item): item is NonNullable<typeof item> => Boolean(item))
 	);
 	const favTools = $derived(catalog.items.filter((item) => item.favourite));
+	const favSpans = $derived(planBentoSpans(favTools.length));
+	const recentSpans = $derived(planBentoSpans(recentTools.length));
+	const catalogSpans = $derived(planBentoSpans(catalog.items.length));
 
 	async function refresh() {
 		const api = getApi();
@@ -218,10 +225,8 @@
 	<title>轻心 · AI效率工具箱</title>
 </svelte:head>
 
-<section class="mx-auto max-w-5xl space-y-5">
-	<a href="/modules" class="inline-flex min-h-11 items-center text-base text-[var(--qx-muted)]"
-		>← 返回模块中心</a
-	>
+<section class="mx-auto min-w-0 max-w-5xl space-y-5">
+	<a href="/modules" class={LINK_CLASS}>← 返回模块中心</a>
 	<div>
 		<Tag tone="primary">工具辅助 · 示意结果</Tag>
 		<h1 class="mt-2 text-3xl font-semibold">AI效率工具箱</h1>
@@ -245,50 +250,56 @@
 	{#if tab === 0}
 		{#if favTools.length}
 			<h2 class="text-lg font-semibold">已收藏</h2>
-			<div class="grid gap-3 sm:grid-cols-2">
-				{#each favTools as item (item.id)}
-					<button type="button" class="text-left" onclick={() => openTool(item.id)}>
-						<Card>
-							<p class="font-medium">{item.name}</p>
-							<p class="mt-1 text-sm text-[var(--qx-muted)]">{item.blurb}</p>
-						</Card>
-					</button>
+			<Bento>
+				{#each favTools as item, index (item.id)}
+					<BentoItem span={favSpans[index] ?? 'unit'}>
+						<button type="button" class="h-full w-full text-left" onclick={() => openTool(item.id)}>
+							<Card class="h-full">
+								<p class="font-medium">{item.name}</p>
+								<p class="mt-1 text-sm text-[var(--qx-muted)]">{item.blurb}</p>
+							</Card>
+						</button>
+					</BentoItem>
 				{/each}
-			</div>
+			</Bento>
 		{/if}
 		{#if recentTools.length}
 			<h2 class="text-lg font-semibold">最近使用</h2>
-			<div class="grid gap-3 sm:grid-cols-2">
-				{#each recentTools as item (item.id)}
-					<button type="button" class="text-left" onclick={() => openTool(item.id)}>
-						<Card>
-							<p class="font-medium">{item.name}</p>
-							<p class="mt-1 text-sm text-[var(--qx-muted)]">{item.blurb}</p>
-						</Card>
-					</button>
+			<Bento>
+				{#each recentTools as item, index (item.id)}
+					<BentoItem span={recentSpans[index] ?? 'unit'}>
+						<button type="button" class="h-full w-full text-left" onclick={() => openTool(item.id)}>
+							<Card class="h-full">
+								<p class="font-medium">{item.name}</p>
+								<p class="mt-1 text-sm text-[var(--qx-muted)]">{item.blurb}</p>
+							</Card>
+						</button>
+					</BentoItem>
 				{/each}
-			</div>
+			</Bento>
 		{/if}
 		<h2 class="text-lg font-semibold">全部工具</h2>
-		<div class="grid gap-3 sm:grid-cols-2">
-			{#each catalog.items as item (item.id)}
-				<Card>
-					<div class="flex items-start justify-between gap-3">
-						<button type="button" class="min-w-0 text-left" onclick={() => openTool(item.id)}>
-							<p class="font-medium">{item.name}</p>
-							<p class="mt-1 text-sm text-[var(--qx-muted)]">{item.blurb}</p>
-						</button>
-						<button
-							type="button"
-							class="min-h-11 shrink-0 text-sm text-[var(--qx-primary)]"
-							onclick={() => star(item.id, !item.favourite)}
-						>
-							{item.favourite ? '取消收藏' : '收藏'}
-						</button>
-					</div>
-				</Card>
+		<Bento>
+			{#each catalog.items as item, index (item.id)}
+				<BentoItem span={catalogSpans[index] ?? 'unit'}>
+					<Card class="h-full">
+						<div class="flex items-start justify-between gap-3">
+							<button type="button" class="min-w-0 text-left" onclick={() => openTool(item.id)}>
+								<p class="font-medium">{item.name}</p>
+								<p class="mt-1 text-sm text-[var(--qx-muted)]">{item.blurb}</p>
+							</button>
+							<button
+								type="button"
+								class="min-h-11 shrink-0 text-sm text-[var(--qx-primary)] underline underline-offset-4"
+								onclick={() => star(item.id, !item.favourite)}
+							>
+								{item.favourite ? '取消收藏' : '收藏'}
+							</button>
+						</div>
+					</Card>
+				</BentoItem>
 			{/each}
-		</div>
+		</Bento>
 	{:else if tab === 1}
 		<div class="grid gap-4 md:grid-cols-2">
 			<Card>
