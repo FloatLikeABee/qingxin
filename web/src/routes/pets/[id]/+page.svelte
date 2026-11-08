@@ -11,6 +11,7 @@
 	import { getPetsStore } from '#lib/pets/store';
 	import { RECORD_LABEL, type RecordType } from '#lib/pets/types';
 	import { formatKg, parseGrams } from '#lib/pets/weight';
+	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { pushToast } from '#lib/toast';
 
 	const store = getPetsStore();
@@ -67,8 +68,7 @@
 	<title>轻心 · {pet?.name ?? '宠物档案'}</title>
 </svelte:head>
 
-<a href="/pets" class="inline-flex min-h-11 items-center text-base text-[var(--qx-muted)]">← 今日</a
->
+<a href="/pets" class={LINK_CLASS}>← 今日</a>
 <DisclaimerBanner />
 
 {#if !pet}

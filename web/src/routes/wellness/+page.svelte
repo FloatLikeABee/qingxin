@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/env';
+	import Bento from '#lib/components/Bento.svelte';
+	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Disclaimer from '#lib/wellness/Disclaimer.svelte';
@@ -30,33 +32,40 @@
 	<title>轻心 · 健康</title>
 </svelte:head>
 
-<h1 class="text-3xl font-semibold">健康</h1>
-
-<Card>
-	<p class="text-base text-[var(--qx-muted)]">{date} 喝水进度</p>
-	<Ring
-		percent={progressPercent(snapshot.water.totalMl, snapshot.water.targetMl)}
-		label="今日目标"
-	/>
-	<p class="mt-2 text-center text-base">
-		{snapshot.water.totalMl} / {snapshot.water.targetMl} ml
-	</p>
-	<Button class="mt-4 w-full" onclick={addCup}>+1 杯（250 ml）</Button>
-</Card>
-
-<Card>
-	<h2 class="text-lg font-semibold">睡眠</h2>
-	{#if snapshot.sleep}
-		<p class="mt-2 text-base">
-			质量 {snapshot.sleep.quality}/5
-			{#if snapshot.sleep.note}
-				· {snapshot.sleep.note}
+<Bento>
+	<BentoItem span="full">
+		<h1 class="text-3xl font-semibold">健康</h1>
+	</BentoItem>
+	<BentoItem span="hero">
+		<Card class="h-full">
+			<p class="text-base text-[var(--qx-muted)]">{date} 喝水进度</p>
+			<Ring
+				percent={progressPercent(snapshot.water.totalMl, snapshot.water.targetMl)}
+				label="今日目标"
+			/>
+			<p class="mt-2 text-center text-base">
+				{snapshot.water.totalMl} / {snapshot.water.targetMl} ml
+			</p>
+			<Button class="mt-4 w-full" onclick={addCup}>+1 杯（250 ml）</Button>
+		</Card>
+	</BentoItem>
+	<BentoItem span="wide">
+		<Card class="h-full">
+			<h2 class="text-lg font-semibold">睡眠</h2>
+			{#if snapshot.sleep}
+				<p class="mt-2 text-base">
+					质量 {snapshot.sleep.quality}/5
+					{#if snapshot.sleep.note}
+						· {snapshot.sleep.note}
+					{/if}
+				</p>
+			{:else}
+				<p class="mt-2 text-base text-[var(--qx-muted)]">还没有睡眠打卡。</p>
 			{/if}
-		</p>
-	{:else}
-		<p class="mt-2 text-base text-[var(--qx-muted)]">还没有睡眠打卡。</p>
-	{/if}
-	<Button href="/wellness/record" variant="secondary" class="mt-4 w-full">去记录</Button>
-</Card>
-
-<Disclaimer />
+			<Button href="/wellness/record" variant="secondary" class="mt-4 w-full">去记录</Button>
+		</Card>
+	</BentoItem>
+	<BentoItem span="full">
+		<Disclaimer />
+	</BentoItem>
+</Bento>

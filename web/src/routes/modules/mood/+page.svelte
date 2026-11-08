@@ -2,6 +2,8 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { getApi } from '#lib/api/client';
 	import type { MeditationStory, MoodInsight } from '#lib/api/types';
+	import Bento from '#lib/components/Bento.svelte';
+	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
@@ -19,7 +21,15 @@
 	import TrendChart from '#lib/mood/TrendChart.svelte';
 	import type { MoodLog, TrendPoint } from '#lib/mood/trends';
 	import { validateCheckIn } from '#lib/mood/validate';
+	import { LINK_CLASS } from '#lib/ui/affordance';
+	import { planBentoSpans } from '#lib/ui/bento';
 	import { pushToast } from '#lib/toast';
+
+	const meditateSpans = planBentoSpans(4);
+	const medHero = meditateSpans[0] ?? 'hero';
+	const medWide = meditateSpans[1] ?? 'wide';
+	const medUnitA = meditateSpans[2] ?? 'unit';
+	const medUnitB = meditateSpans[3] ?? 'unit';
 
 	let tab = $state(0);
 	let emoji = $state('');
@@ -312,8 +322,8 @@
 	<title>轻心 · 情绪日记+冥想</title>
 </svelte:head>
 
-<section class="qx-mood mx-auto max-w-2xl space-y-5">
-	<a href="/modules" class="inline-flex min-h-11 items-center text-base text-[var(--qx-muted)]">← 返回模块中心</a>
+<section class="qx-mood mx-auto min-w-0 max-w-5xl space-y-5">
+	<a href="/modules" class={LINK_CLASS}>← 返回模块中心</a>
 	<div class="flex items-start justify-between gap-4">
 		<div>
 			<Tag tone="primary">示意陪伴 · 非医疗</Tag>
@@ -437,43 +447,51 @@
 			<p class="text-sm text-[var(--qx-muted)]">{summary.disclaimer}</p>
 		</Card>
 	{:else}
-		<div class="grid gap-3 sm:grid-cols-2">
-			<button type="button" class="text-left" onclick={openBreath}>
-				<Card class="h-full space-y-2">
-					<Icon name="cloud" />
-					<h2 class="text-lg font-semibold">4-7-8 呼吸</h2>
-					<p class="text-base text-[var(--qx-muted)]">吸气四、屏息七、呼气八。</p>
-				</Card>
-			</button>
-			<button
-				type="button"
-				class="text-left"
-				onclick={() => {
-					overlay = 'mixer';
-					breathStarted = performance.now();
-				}}
-			>
-				<Card class="h-full space-y-2">
-					<Icon name="pulse" />
-					<h2 class="text-lg font-semibold">白噪音混合</h2>
-					<p class="text-base text-[var(--qx-muted)]">雨声、海浪、风扇，叠在一起。</p>
-				</Card>
-			</button>
-			<button type="button" class="text-left" onclick={() => openStory(stories[0] ?? null)}>
-				<Card class="h-full space-y-2">
-					<Icon name="book" />
-					<h2 class="text-lg font-semibold">睡前小故事</h2>
-					<p class="text-base text-[var(--qx-muted)]">两则很短的中文故事。</p>
-				</Card>
-			</button>
-			<button type="button" class="text-left" onclick={() => startTimer(180)}>
-				<Card class="h-full space-y-2">
-					<Icon name="moon" />
-					<h2 class="text-lg font-semibold">全屏计时</h2>
-					<p class="text-base text-[var(--qx-muted)]">给自己三分钟不被打断。</p>
-				</Card>
-			</button>
-		</div>
+		<Bento>
+			<BentoItem span={medHero}>
+				<button type="button" class="h-full w-full text-left" onclick={openBreath}>
+					<Card class="h-full space-y-2">
+						<Icon name="cloud" />
+						<h2 class="text-lg font-semibold">4-7-8 呼吸</h2>
+						<p class="text-base text-[var(--qx-muted)]">吸气四、屏息七、呼气八。</p>
+					</Card>
+				</button>
+			</BentoItem>
+			<BentoItem span={medWide}>
+				<button
+					type="button"
+					class="h-full w-full text-left"
+					onclick={() => {
+						overlay = 'mixer';
+						breathStarted = performance.now();
+					}}
+				>
+					<Card class="h-full space-y-2">
+						<Icon name="pulse" />
+						<h2 class="text-lg font-semibold">白噪音混合</h2>
+						<p class="text-base text-[var(--qx-muted)]">雨声、海浪、风扇，叠在一起。</p>
+					</Card>
+				</button>
+			</BentoItem>
+			<BentoItem span={medUnitA}>
+				<button type="button" class="h-full w-full text-left" onclick={() => openStory(stories[0] ?? null)}>
+					<Card class="h-full space-y-2">
+						<Icon name="book" />
+						<h2 class="text-lg font-semibold">睡前小故事</h2>
+						<p class="text-base text-[var(--qx-muted)]">两则很短的中文故事。</p>
+					</Card>
+				</button>
+			</BentoItem>
+			<BentoItem span={medUnitB}>
+				<button type="button" class="h-full w-full text-left" onclick={() => startTimer(180)}>
+					<Card class="h-full space-y-2">
+						<Icon name="moon" />
+						<h2 class="text-lg font-semibold">全屏计时</h2>
+						<p class="text-base text-[var(--qx-muted)]">给自己三分钟不被打断。</p>
+					</Card>
+				</button>
+			</BentoItem>
+		</Bento>
 		{#if stories.length}
 			<div class="space-y-3">
 				{#each stories as item (item.id)}

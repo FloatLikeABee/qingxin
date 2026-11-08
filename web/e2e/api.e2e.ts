@@ -16,7 +16,7 @@ async function registerFresh(page: Page) {
 	await page.goto('/register');
 	await page.getByLabel('称呼').fill('E2E同学');
 	await page.getByLabel('邮箱').fill(email);
-	await page.getByLabel('密码').fill('correct-horse');
+	await page.getByLabel('密码', { exact: true }).fill('correct-horse');
 	await page.getByRole('button', { name: '注册' }).click();
 	await expect(page.getByText('已登录：E2E同学')).toBeVisible({ timeout: 15_000 });
 	return { email, note };

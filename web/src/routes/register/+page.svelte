@@ -4,6 +4,7 @@
 	import Card from '#lib/components/Card.svelte';
 	import Input from '#lib/components/Input.svelte';
 	import { ApiError, getApi } from '#lib/api/client';
+	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { pushToast } from '#lib/toast';
 
 	let name = $state('');
@@ -47,7 +48,7 @@
 				hint="至少 8 位"
 			/>
 			{#if error}
-				<p class="text-base text-rose-500">{error}</p>
+				<p class="text-base text-[var(--qx-danger)]">{error}</p>
 			{/if}
 			<Button type="submit" class="w-full" disabled={pending}>{pending ? '提交中…' : '注册'}</Button
 			>
@@ -55,6 +56,6 @@
 	</Card>
 	<p class="mt-4 text-base">
 		已有账号？
-		<a class="text-[var(--qx-primary)]" href="/login">去登录</a>
+		<a class={LINK_CLASS} href="/login">去登录</a>
 	</p>
 </section>

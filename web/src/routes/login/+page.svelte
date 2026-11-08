@@ -4,6 +4,7 @@
 	import Card from '#lib/components/Card.svelte';
 	import Input from '#lib/components/Input.svelte';
 	import { ApiError, getApi } from '#lib/api/client';
+	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { pushToast } from '#lib/toast';
 
 	let email = $state('demo@qingxin.app');
@@ -39,13 +40,13 @@
 			<Input label="邮箱" type="email" autocomplete="username" bind:value={email} />
 			<Input label="密码" type="password" autocomplete="current-password" bind:value={password} />
 			{#if error}
-				<p class="text-base text-rose-500">{error}</p>
+				<p class="text-base text-[var(--qx-danger)]">{error}</p>
 			{/if}
 			<Button type="submit" class="w-full" disabled={pending}>{pending ? '登录中…' : '登录'}</Button>
 		</form>
 	</Card>
 	<p class="mt-4 text-base">
 		还没有账号？
-		<a class="text-[var(--qx-primary)]" href="/register">创建账号</a>
+		<a class={LINK_CLASS} href="/register">创建账号</a>
 	</p>
 </section>

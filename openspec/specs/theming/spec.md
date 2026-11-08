@@ -31,6 +31,13 @@ The system SHALL apply these tokens: light primary `#3B82F6`, background `#FFFFF
 - **WHEN** the resolved appearance is light
 - **THEN** CSS variables expose the light primary, background, text, and secondary values above
 
+### Requirement: Gutter token
+The system SHALL expose a 16px gutter token used by bento grids.
+
+#### Scenario: Gutter is 16px
+- **WHEN** layout CSS is loaded
+- **THEN** `--qx-gutter` is `1rem`
+
 #### Scenario: Dark tokens
 - **WHEN** the resolved appearance is dark
 - **THEN** CSS variables expose the dark primary, background, text, and secondary values above

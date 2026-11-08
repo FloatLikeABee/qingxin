@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Bento from '#lib/components/Bento.svelte';
+	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
 	import Drawer from '#lib/components/Drawer.svelte';
@@ -12,27 +14,56 @@
 	import Tabs from '#lib/components/Tabs.svelte';
 	import Tag from '#lib/components/Tag.svelte';
 	import Textarea from '#lib/components/Textarea.svelte';
+	import { LINK_CLASS } from '#lib/ui/affordance';
+	import { planBentoSpans } from '#lib/ui/bento';
 	import { pushToast } from '#lib/toast';
 
 	let tab = $state(0);
+	let fiveTab = $state(0);
 	let notify = $state(true);
 	let modalOpen = $state(false);
 	let drawerOpen = $state(false);
 	let name = $state('轻心');
 	let note = $state('把日子过轻一点');
+	let secret = $state('qingxin');
+	const demoTiles = [
+		{ title: '主区块', body: 'hero 占两列两行，用来放最重要的内容。' },
+		{ title: '宽卡片', body: 'wide 横跨两列，适合摘要和进度。' },
+		{ title: '单元 A', body: 'unit 是一列一块。' },
+		{ title: '单元 B', body: '窄屏全部折成一列，阅读顺序不变。' }
+	];
+	const demoSpans = planBentoSpans(demoTiles.length);
 </script>
 
 <svelte:head>
 	<title>轻心 · 设计系统</title>
 </svelte:head>
 
-<section class="mx-auto max-w-3xl space-y-8">
+<section class="mx-auto min-w-0 max-w-5xl space-y-8">
 	<div>
 		<h1 class="text-3xl font-semibold">设计系统</h1>
 		<p class="mt-2 text-base text-[var(--qx-muted)]">
 			按钮高度 ≥ 44px，关键文字 ≥ 16px。优先抽屉、弹窗与 Tab，而不是把用户赶去下一页。
 		</p>
+		<a class="{LINK_CLASS} mt-3" href="/modules">打开模块中心 <Icon name="chevron" class="h-4 w-4" /></a>
 	</div>
+
+	<section class="space-y-3">
+		<h2 class="text-xl font-semibold">Bento</h2>
+		<p class="text-base text-[var(--qx-muted)]">
+			模块化网格：容器查询决定 1 / 2 / 4 列，间距 16px，不使用 dense 重排。
+		</p>
+		<Bento>
+			{#each demoTiles as tile, index (tile.title)}
+				<BentoItem span={demoSpans[index] ?? 'unit'}>
+					<Card class="h-full">
+						<h3 class="text-lg font-semibold">{tile.title}</h3>
+						<p class="mt-1 text-base text-[var(--qx-muted)]">{tile.body}</p>
+					</Card>
+				</BentoItem>
+			{/each}
+		</Bento>
+	</section>
 
 	<section class="space-y-3">
 		<h2 class="text-xl font-semibold">Button</h2>
@@ -61,6 +92,7 @@
 	<section class="space-y-3">
 		<h2 class="text-xl font-semibold">Input / Textarea</h2>
 		<Input label="称呼" bind:value={name} />
+		<Input label="密码" type="password" bind:value={secret} hint="字段内切换可见性" />
 		<Textarea label="一句话" bind:value={note} />
 	</section>
 
@@ -68,6 +100,7 @@
 		<h2 class="text-xl font-semibold">Tabs</h2>
 		<Tabs tabs={['今日', '本周', '归档']} bind:value={tab} />
 		<p class="text-base text-[var(--qx-muted)]">当前：{['今日', '本周', '归档'][tab]}</p>
+		<Tabs tabs={['一', '二', '三', '四', '五']} bind:value={fiveTab} />
 	</section>
 
 	<section class="space-y-3">
@@ -89,6 +122,7 @@
 	<section class="space-y-3">
 		<h2 class="text-xl font-semibold">Skeleton / EmptyState / ListItem</h2>
 		<Card><Skeleton /></Card>
+		<Card><Skeleton variant="page" /></Card>
 		<Card>
 			<EmptyState title="空状态" body="没有内容时保持呼吸感，而不是空白墙。" />
 		</Card>
