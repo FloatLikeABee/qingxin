@@ -101,9 +101,9 @@ The home route and `/modules` hub SHALL arrange card-like sections in a bento ho
 - **WHEN** a user opens the home route
 - **THEN** primary headings and nav labels are zh-CN and 求职概览 / 内容创作 remain visible
 
-#### Scenario: Hub lists ten modules in bento
+#### Scenario: Hub lists modules in bento
 - **WHEN** a user opens the module hub
-- **THEN** all ten module names are listed inside a `[data-bento]` host
+- **THEN** module names including 秘密 are listed inside a `[data-bento]` host
 
 ### Requirement: Settings cards in bento
 Settings SHALL place appearance, account, and 适老 cards in a bento without removing 已登录 / 退出登录 behavior.
@@ -113,9 +113,9 @@ Settings SHALL place appearance, account, and 适老 cards in a bento without re
 - **THEN** the page shows 已登录 and 退出登录 inside a `[data-bento]` host, and does not show a 登录 / 注册 row
 
 ### Requirement: Icon and text nav
-Primary AppShell destinations SHALL keep icon plus short zh-CN labels (首页, 模块, 组件, 我的). The sidebar SHALL include a non-pricing 打开模块中心 call-to-action.
+Primary AppShell destinations SHALL keep icon plus short zh-CN labels (首页, 内容, 模块, 我的). The sidebar SHALL include a non-pricing 打开模块中心 call-to-action. 组件 SHALL NOT appear in primary nav.
 
 #### Scenario: Four primary destinations
 - **WHEN** the viewport is 390px
-- **THEN** the bottom tab bar shows four labeled destinations
+- **THEN** the bottom tab bar shows 首页, 内容, 模块, 我的 and does not show 组件
 

@@ -14,13 +14,13 @@ export interface ThemeResolverInput {
 export const palette = {
 	light: {
 		primary: '#3B82F6',
-		background: '#FFFFFF',
+		background: '#EAF3FF',
 		text: '#1F2937',
 		secondary: '#6B7280'
 	},
 	dark: {
 		primary: '#60A5FA',
-		background: '#111827',
+		background: '#0B1526',
 		text: '#F9FAFB',
 		secondary: '#9CA3AF'
 	}
@@ -50,7 +50,10 @@ export function parseThemeMode(value: string | null | undefined): ThemeMode {
 	return 'system';
 }
 
-export function applyAppearance(root: { classList: DOMTokenList; style: CSSStyleDeclaration }, appearance: Appearance) {
+export function applyAppearance(
+	root: { classList: DOMTokenList; style: CSSStyleDeclaration },
+	appearance: Appearance
+) {
 	root.classList.toggle('dark', appearance === 'dark');
 	root.style.colorScheme = appearance;
 }

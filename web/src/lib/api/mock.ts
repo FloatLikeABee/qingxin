@@ -54,6 +54,9 @@ import {
 	type CreateTone,
 	type SnippetKind
 } from '../create/catalog';
+import type { SecretThread } from '../secrets/board';
+import { assertCanSendSecret } from '../secrets/consent';
+import { composeMailboxReply } from '../secrets/letter';
 import { BEDTIME_STORIES, SOUND_PRESETS } from '../mood/catalog';
 import { DISCLAIMER, mockInsight } from '../mood/insight';
 import { aggregateTrends, type MoodLog } from '../mood/trends';
@@ -304,6 +307,7 @@ export class MockQingxinApi implements QingxinApi {
 	#snippets = new Map<string, CreateSnippet[]>();
 	#aiTasks = new Map<string, AiTask[]>();
 	#aiTemplates = new Map<string, AiTemplate[]>();
+	#secrets = new Map<string, SecretThread[]>();
 	#services: LocalService[] = SEED_SERVICES.map((item) => ({ ...item, tags: [...item.tags] }));
 	#reviews: LocalReview[] = SEED_REVIEWS.map((item) => ({ ...item }));
 	#corrections: LocalCorrection[] = [];
@@ -419,6 +423,7 @@ export class MockQingxinApi implements QingxinApi {
 				localCorrections: this.#corrections.filter((item) => item.userId === session.userId),
 				creations: [...(this.#creations.get(session.userId) ?? [])],
 				snippets: [...(this.#snippets.get(session.userId) ?? [])],
+				secretLetters: [...(this.#secrets.get(session.userId) ?? [])],
 				aiTasks: [...(this.#aiTasks.get(session.userId) ?? [])],
 				aiTemplates: [...(this.#aiTemplates.get(session.userId) ?? [])]
 			}
@@ -444,6 +449,7 @@ export class MockQingxinApi implements QingxinApi {
 			this.#corrections = this.#corrections.filter((item) => item.userId !== userId);
 			this.#services = this.#services.filter((item) => item.createdBy !== userId);
 			this.#life.forget(userId);
+			this.#secrets.delete(userId);
 		}
 		this.#session = null;
 		writeStoredSession(null);
@@ -1150,6 +1156,44 @@ export class MockQingxinApi implements QingxinApi {
 		};
 		persistUserList(this.#snippets, SNIPPETS_KEY, session.userId, [row, ...list]);
 		return row;
+	}
+
+	async listSecretLetters(): Promise<SecretThread[]> {
+		const session = requireSession(this.#session);
+		return [...(this.#secrets.get(session.userId) ?? [])];
+	}
+
+	async postSecretLetter(input: {
+		title?: string;
+		body: string;
+		consent: boolean;
+	}): Promise<SecretThread> {
+		const session = requireSession(this.#session);
+		const checked = assertCanSendSecret({ body: input.body, consented: input.consent });
+		if (!checked.ok) throw new ApiError('invalid_request', checked.reason);
+		const now = new Date().toISOString();
+		const pairId = crypto.randomUUID();
+		const thread: SecretThread = {
+			id: pairId,
+			secret: {
+				id: crypto.randomUUID(),
+				role: 'secret',
+				title: input.title?.trim() || '未署名的信',
+				body: checked.body,
+				createdAt: now,
+				consentedAt: now
+			},
+			reply: {
+				id: crypto.randomUUID(),
+				role: 'reply',
+				title: '信箱回信',
+				body: composeMailboxReply(checked.body),
+				createdAt: now
+			}
+		};
+		const list = this.#secrets.get(session.userId) ?? [];
+		this.#secrets.set(session.userId, [thread, ...list]);
+		return thread;
 	}
 
 	async useSnippet(id: string): Promise<CreateSnippet> {

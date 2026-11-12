@@ -25,7 +25,7 @@
 	<title>轻心 · {data.module.name}</title>
 </svelte:head>
 
-<section class="mx-auto min-w-0 max-w-5xl">
+<section class="mx-auto max-w-5xl min-w-0">
 	<Bento>
 		<BentoItem span="full">
 			<a href="/modules" class={LINK_CLASS}>← 返回模块中心</a>
@@ -61,7 +61,7 @@
 							{:else if data.module.slug === 'pet'}
 								<Button href="/pets">打开宠物</Button>
 							{:else}
-								<Button href="/kit">查看设计系统</Button>
+								<Button href="/modules">返回模块中心</Button>
 							{/if}
 						{/snippet}
 					</EmptyState>

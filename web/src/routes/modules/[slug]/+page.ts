@@ -5,9 +5,18 @@ import type { EntryGenerator, PageLoad } from './$types';
 export const entries: EntryGenerator = () =>
 	MODULES.filter(
 		(item) =>
-			!['mood', 'hustle', 'finance', 'pet', 'local', 'health', 'create', 'study', 'ai'].includes(
-				item.slug
-			)
+			![
+				'mood',
+				'hustle',
+				'finance',
+				'pet',
+				'local',
+				'health',
+				'create',
+				'study',
+				'ai',
+				'secrets'
+			].includes(item.slug)
 	).map((item) => ({
 		slug: item.slug
 	}));

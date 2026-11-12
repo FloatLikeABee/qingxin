@@ -34,6 +34,12 @@
 		outlineToMarkdown,
 		outlineToPptx
 	} from '#lib/create/export';
+	import {
+		formatSharePack,
+		SHARE_TARGETS,
+		shareViaOfficial,
+		type ShareTarget
+	} from '#lib/create/share';
 	import PlatformPreview from '#lib/create/PlatformPreview.svelte';
 	import {
 		cacheCreations,
@@ -66,6 +72,7 @@
 	let snippetDraft = $state('把结论写在第一句。');
 	let snippetKind = $state<SnippetKind>('金句');
 	let activeWorkId = $state('');
+	let shareTarget = $state<ShareTarget>('小红书');
 
 	const templates = $derived(filterTemplates(TEMPLATES, templateFilter));
 	const templateSpans = $derived(planBentoSpans(templates.length));
@@ -281,6 +288,35 @@
 		pushToast({ title: '已复制', tone: 'success' });
 	}
 
+	function packForShare() {
+		return formatSharePack(shareTarget, {
+			title: previewTitle,
+			body: finalContent || generated,
+			tags: keywordList()
+		});
+	}
+
+	async function publishOfficial() {
+		const pack = packForShare();
+		if (!pack.text.trim()) {
+			pushToast({ title: '请先写下要发出去的稿', tone: 'danger' });
+			return;
+		}
+		try {
+			const result = await shareViaOfficial(pack);
+			if (result.method === 'web-share') pushToast({ title: '已打开系统分享', tone: 'success' });
+			if (result.method === 'clipboard')
+				pushToast({ title: '已复制，可粘贴到对应 App', tone: 'success' });
+		} catch {
+			pushToast({ title: '当前浏览器无法分享', tone: 'danger' });
+		}
+	}
+
+	function copySharePack() {
+		const pack = packForShare();
+		copyText(pack.text);
+	}
+
 	function exportMarkdown() {
 		const doc = outline
 			? outlineToMarkdown(outline)
@@ -309,7 +345,7 @@
 	<title>轻心 · 内容创作</title>
 </svelte:head>
 
-<section class="mx-auto min-w-0 max-w-5xl space-y-5 pb-8">
+<section class="mx-auto max-w-5xl min-w-0 space-y-5 pb-8">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<Tag tone="primary">工具辅助 · 示意文案</Tag>
@@ -476,6 +512,30 @@
 				{/if}
 			</div>
 		</div>
+		<Card>
+			<h2 class="text-lg font-semibold">发布到社交平台</h2>
+			<p class="mt-1 text-sm text-[var(--qx-muted)]">
+				只用系统分享或复制。不会登录小红书、微信或抖音的非官方接口。
+			</p>
+			<div class="mt-3 flex flex-wrap gap-2">
+				{#each SHARE_TARGETS as item (item)}
+					<button
+						type="button"
+						class="min-h-11 rounded-full px-4 text-sm {shareTarget === item
+							? 'bg-[var(--qx-primary)] text-white'
+							: 'bg-[var(--qx-surface)]'}"
+						onclick={() => (shareTarget = item)}>{item}</button
+					>
+				{/each}
+			</div>
+			<pre
+				class="mt-3 max-h-40 overflow-auto rounded-2xl bg-[var(--qx-surface)] p-3 text-sm whitespace-pre-wrap">{packForShare()
+					.text}</pre>
+			<div class="mt-3 flex flex-wrap gap-2">
+				<Button onclick={publishOfficial}>系统分享</Button>
+				<Button variant="secondary" onclick={copySharePack}>复制文案</Button>
+			</div>
+		</Card>
 		{#if aiNote}
 			<p class="text-sm text-[var(--qx-muted)]">{aiNote.disclaimer} · {aiNote.source}</p>
 		{:else}

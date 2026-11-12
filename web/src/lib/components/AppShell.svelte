@@ -18,13 +18,15 @@
 	<div class="qx-aurora pointer-events-none" aria-hidden="true">
 		<div class="qx-orb qx-orb-a"></div>
 		<div class="qx-orb qx-orb-b"></div>
+		<div class="qx-orb qx-orb-c"></div>
+		<div class="qx-orb qx-orb-d"></div>
 	</div>
 
 	<OfflineBanner />
 	<PrivacyGate />
 	<Toast />
 
-	<div class="relative mx-auto flex min-h-dvh w-full min-w-0 max-w-6xl">
+	<div class="relative mx-auto flex min-h-dvh w-full max-w-6xl min-w-0">
 		<aside
 			class="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-[var(--qx-line)] px-4 py-6 md:flex"
 			style="overscroll-behavior: contain"

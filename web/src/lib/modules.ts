@@ -8,6 +8,20 @@ export interface ModuleInfo {
 
 export const MODULES: ModuleInfo[] = [
 	{
+		slug: 'create',
+		name: '内容创作',
+		summary: '写成可发出去的草稿，再用系统分享或复制发到小红书、微信、抖音。',
+		accent: '#38BDF8',
+		icon: 'pen'
+	},
+	{
+		slug: 'secrets',
+		name: '秘密',
+		summary: '把不想公开的话写成一封信，信箱会回一封信，而不是聊天。',
+		accent: '#C45C6A',
+		icon: 'envelope'
+	},
+	{
 		slug: 'mood',
 		name: '情绪日记+冥想',
 		summary: '记录心情起伏，用短冥想把呼吸放慢。',
@@ -62,13 +76,6 @@ export const MODULES: ModuleInfo[] = [
 		summary: '专注一块、打卡一天，看见自己的连续。',
 		accent: '#A78BFA',
 		icon: 'book'
-	},
-	{
-		slug: 'create',
-		name: '内容创作',
-		summary: '标题、润色与平台草稿，把想法写成可发出去的文字。',
-		accent: '#38BDF8',
-		icon: 'pen'
 	},
 	{
 		slug: 'hustle',

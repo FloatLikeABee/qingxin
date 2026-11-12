@@ -16,6 +16,7 @@ info:
     M6 pets lives at `/v1/pets` (weights stay plaintext grams).
     M7 wellness lives at `/v1/wellness` (owner-only; caregivers never see it).
     M9 content studio lives at `/v1/create` (generate/titles/polish/outline use the AI gateway seam).
+    Secrets mailbox lives at `/v1/secrets` (owner-only; letter bodies use `body_encrypted`).
     M5 AI toolbox lives at `/v1/tools` (catalog, SSE run, history; uses the AI gateway stream seam).
     Cycle symptoms, sleep notes and report metrics use `*_encrypted` BLOB columns
     (`symptoms_encrypted`, `note_encrypted`, `metrics_encrypted`).
@@ -52,6 +53,7 @@ tags:
   - name: Wellness
   - name: Local
   - name: Create
+  - name: Secrets
   - name: Study
   - name: Tools
 paths:
@@ -3776,6 +3778,46 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /v1/secrets/letters:
+    get:
+      tags: [Secrets]
+      summary: List the caller's mailbox threads
+      operationId: listSecretLetters
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Owner-only secret threads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretThreadList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Secrets]
+      summary: Post a consented secret letter and receive a mailbox reply
+      operationId: postSecretLetter
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostSecretLetterRequest"
+      responses:
+        "201":
+          description: Created thread
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretThread"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /v1/study/today:
     get:
       tags: [Study]
@@ -4803,6 +4845,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CreateSnippet"
+        secret_letters:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecretThread"
         ai_tasks:
           type: array
           items:
@@ -6672,6 +6718,54 @@ components:
           type: array
           items:
             type: string
+    SecretLetter:
+      type: object
+      required: [id, role, title, body, created_at]
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [secret, reply]
+        title:
+          type: string
+        body:
+          type: string
+        consented_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+    SecretThread:
+      type: object
+      required: [id, secret, reply]
+      properties:
+        id:
+          type: string
+        secret:
+          $ref: "#/components/schemas/SecretLetter"
+        reply:
+          $ref: "#/components/schemas/SecretLetter"
+        disclaimer:
+          type: string
+    SecretThreadList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecretThread"
+    PostSecretLetterRequest:
+      type: object
+      required: [body, consent]
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        consent:
+          type: boolean
     CreateTemplate:
       type: object
       required: [id, platform, name, body]

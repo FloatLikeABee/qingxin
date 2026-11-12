@@ -6,7 +6,9 @@ import {
 	type ThemeMode
 } from './resolve';
 
-export function readStoredMode(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): ThemeMode {
+export function readStoredMode(
+	storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage
+): ThemeMode {
 	try {
 		return parseThemeMode(storage?.getItem(THEME_STORAGE_KEY));
 	} catch {
@@ -14,7 +16,10 @@ export function readStoredMode(storage: Pick<Storage, 'getItem'> | undefined = g
 	}
 }
 
-export function persistMode(mode: ThemeMode, storage: Pick<Storage, 'setItem'> | undefined = globalThis.localStorage) {
+export function persistMode(
+	mode: ThemeMode,
+	storage: Pick<Storage, 'setItem'> | undefined = globalThis.localStorage
+) {
 	try {
 		storage?.setItem(THEME_STORAGE_KEY, mode);
 	} catch {
@@ -44,5 +49,5 @@ export function syncDocumentTheme(
 	const meta = options.meta ?? document.querySelector('meta[name="color-scheme"]');
 	meta?.setAttribute('content', mode === 'system' ? 'light dark' : appearance);
 	const themeColor = document.querySelector('meta[name="theme-color"]');
-	themeColor?.setAttribute('content', appearance === 'dark' ? '#111827' : '#3B82F6');
+	themeColor?.setAttribute('content', appearance === 'dark' ? '#0B1526' : '#3B82F6');
 }
