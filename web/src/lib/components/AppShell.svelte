@@ -11,7 +11,8 @@
 	let { children }: { children: Snippet } = $props();
 
 	const pathname = $derived(page.url.pathname);
-	const hideTabs = $derived(['/login', '/register'].includes(pathname));
+	const playView = $derived(/\/play\/?$/.test(pathname));
+	const hideTabs = $derived(['/login', '/register'].includes(pathname) || playView);
 </script>
 
 <div class="qx-shell relative min-h-dvh min-w-0 bg-[var(--qx-bg)] text-[var(--qx-text)]">
@@ -28,7 +29,9 @@
 
 	<div class="relative mx-auto flex min-h-dvh w-full max-w-6xl min-w-0">
 		<aside
-			class="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-[var(--qx-line)] px-4 py-6 md:flex"
+			class="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-[var(--qx-line)] px-4 py-6 {playView
+				? 'md:hidden'
+				: 'md:flex'}"
 			style="overscroll-behavior: contain"
 		>
 			<a href="/" class="mb-8 flex min-h-11 items-center gap-2 px-2">
@@ -67,7 +70,9 @@
 		</aside>
 
 		<div class="flex min-w-0 flex-1 flex-col">
-			<header class="flex items-center justify-between px-5 pt-5 pb-2 md:hidden">
+			<header
+				class="flex items-center justify-between px-5 pt-5 pb-2 {playView ? 'hidden' : 'md:hidden'}"
+			>
 				<a href="/" class="flex min-h-11 items-center gap-2">
 					<span
 						class="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--qx-primary)] text-white"
@@ -85,7 +90,11 @@
 				</a>
 			</header>
 
-			<main class="min-w-0 flex-1 overflow-x-clip px-5 pb-28 md:px-8 md:pt-8 md:pb-12">
+			<main
+				class="min-w-0 flex-1 overflow-x-clip {playView
+					? 'px-0 pb-0 md:px-0 md:pt-0 md:pb-0'
+					: 'px-5 pb-28 md:px-8 md:pt-8 md:pb-12'}"
+			>
 				{@render children()}
 			</main>
 		</div>

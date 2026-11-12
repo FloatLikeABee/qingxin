@@ -299,6 +299,26 @@ for (const view of views) {
 
 for (const view of views) {
 	for (const theme of themes) {
+		test(`games catalog ${view.name} ${theme}`, async ({ page }) => {
+			await page.setViewportSize({ width: view.width, height: view.height });
+			await boot(page, theme);
+			await openReady(page, '/modules/games');
+			await expect(page.getByRole('heading', { name: '轻心游戏' })).toBeVisible();
+			await expect(page.getByRole('heading', { name: '便利店经理' }).first()).toBeVisible();
+			await expect(page.getByRole('button', { name: '经营' })).toBeVisible();
+			if (view.width < 800) {
+				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+			}
+			await page.screenshot({
+				path: `screenshots/games-catalog-${view.name}-${theme}.png`,
+				fullPage: true
+			});
+		});
+	}
+}
+
+for (const view of views) {
+	for (const theme of themes) {
 		test(`settings ${view.name} ${theme}`, async ({ page }) => {
 			await page.setViewportSize({ width: view.width, height: view.height });
 			await boot(page, theme);

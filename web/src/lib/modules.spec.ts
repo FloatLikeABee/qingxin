@@ -10,4 +10,12 @@ describe('module catalog', () => {
 		});
 		expect(MODULES.some((item) => item.slug === 'kit')).toBe(false);
 	});
+
+	it('lists 游戏 as a real module and still omits 组件', () => {
+		expect(getModule('games')).toMatchObject({
+			slug: 'games',
+			name: '游戏'
+		});
+		expect(MODULES.some((item) => item.slug === 'kit' || item.name === '组件')).toBe(false);
+	});
 });

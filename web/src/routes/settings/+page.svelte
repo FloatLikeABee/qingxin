@@ -113,7 +113,7 @@
 	<title>轻心 · 设置</title>
 </svelte:head>
 
-<section class="mx-auto min-w-0 max-w-5xl">
+<section class="mx-auto max-w-5xl min-w-0">
 	<Bento>
 		<BentoItem span="full">
 			<div>
@@ -173,7 +173,13 @@
 					icon="trash"
 					onclick={() => (deleteOpen = true)}
 				/>
-				<ListItem href="/privacy" title="隐私与免责声明" subtitle="最小必要 · 非专业建议" icon="info" />
+				<ListItem
+					href="/privacy"
+					title="隐私与免责声明"
+					subtitle="最小必要 · 非专业建议"
+					icon="info"
+				/>
+				<ListItem href="/kit" title="设计系统" subtitle="开发用组件页，不在主导航里" icon="kit" />
 			</Card>
 		</BentoItem>
 

@@ -49,7 +49,8 @@ describe('MockQingxinApi', () => {
 		const modules = await api.listModules();
 		expect(modules.map((item) => item.name)).toEqual(MODULES.map((item) => item.name));
 		expect(modules.some((item) => item.slug === 'secrets')).toBe(true);
-		expect(modules).toHaveLength(11);
+		expect(modules.some((item) => item.slug === 'games')).toBe(true);
+		expect(modules).toHaveLength(MODULES.length);
 	});
 
 	it('exports a JSON payload for the current session', async () => {

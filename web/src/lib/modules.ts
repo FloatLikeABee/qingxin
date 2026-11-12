@@ -83,6 +83,13 @@ export const MODULES: ModuleInfo[] = [
 		summary: '机会清单与进度板，信息展示，不是职场咨询。',
 		accent: '#FBBF24',
 		icon: 'briefcase'
+	},
+	{
+		slug: 'games',
+		name: '游戏',
+		summary: '逛目录，进小店。先从便利店经理开始。',
+		accent: '#EAB308',
+		icon: 'game'
 	}
 ];
 

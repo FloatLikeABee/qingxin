@@ -14,6 +14,8 @@ describe('primary nav', () => {
 		expect(isTabActive('/modules', '/modules/create')).toBe(false);
 		expect(isTabActive('/modules/create', '/modules')).toBe(false);
 		expect(isTabActive('/modules/mood', '/modules')).toBe(true);
+		expect(isTabActive('/modules/games', '/modules')).toBe(true);
+		expect(isTabActive('/modules/games/convenient-store/play', '/modules')).toBe(true);
 		expect(isTabActive('/', '/')).toBe(true);
 		expect(isTabActive('/settings/extra', '/settings')).toBe(true);
 	});
