@@ -15,6 +15,7 @@ pub mod pets;
 pub mod push;
 pub mod routes;
 pub mod scheduler;
+pub mod secrets;
 pub mod state;
 pub mod study;
 pub mod tools;

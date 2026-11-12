@@ -49,22 +49,61 @@ for (const view of views) {
 			} else {
 				await expect(page.locator('aside')).toBeVisible();
 			}
+			if (view.width < 800) {
+				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+			}
 			await page.screenshot({
 				path: `screenshots/home-${view.name}-${theme}.png`,
-				fullPage: view.width >= 800
+				fullPage: true
 			});
 		});
 	}
 }
 
-test('kit 390 light', async ({ page }) => {
-	await page.setViewportSize({ width: 390, height: 844 });
-	await boot(page, 'light');
-	await openReady(page, '/kit');
-	await expect(page.getByRole('heading', { name: '设计系统' })).toBeVisible();
-	await expect(page.getByRole('heading', { name: 'Button' })).toBeVisible();
-	await page.screenshot({ path: 'screenshots/kit-390-light.png', fullPage: false });
-});
+for (const view of views) {
+	for (const theme of themes) {
+		test(`create posting ${view.name} ${theme}`, async ({ page }) => {
+			await page.setViewportSize({ width: view.width, height: view.height });
+			await boot(page, theme);
+			await openReady(page, '/modules/create');
+			await expect(page.getByRole('heading', { name: '发布到社交平台' })).toBeVisible();
+			await expect(page.getByRole('button', { name: '系统分享' })).toBeVisible();
+			if (view.width < 800) {
+				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+			}
+			await page.screenshot({
+				path: `screenshots/create-posting-${view.name}-${theme}.png`,
+				fullPage: true
+			});
+		});
+	}
+}
+
+for (const view of views) {
+	for (const theme of themes) {
+		test(`secrets mailbox ${view.name} ${theme}`, async ({ page }) => {
+			await page.setViewportSize({ width: view.width, height: view.height });
+			await boot(page, theme);
+			await openReady(page, '/modules/secrets');
+			await expect(page.getByRole('heading', { name: '秘密信箱' })).toBeVisible();
+			await page.getByRole('checkbox').check();
+			await page.getByPlaceholder('写给信箱的话，不必署名。').fill('把这句话交给信箱。');
+			await page.getByRole('button', { name: '投进信箱' }).click();
+			await expect(page.getByText('亲爱的来信人').first()).toBeVisible();
+			const closeToast = page.getByRole('button', { name: '关闭提示' });
+			if (await closeToast.count()) {
+				await closeToast.first().click();
+			}
+			if (view.width < 800) {
+				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+			}
+			await page.screenshot({
+				path: `screenshots/secrets-mailbox-${view.name}-${theme}.png`,
+				fullPage: true
+			});
+		});
+	}
+}
 
 for (const view of views) {
 	for (const theme of themes) {

@@ -44,11 +44,12 @@ describe('MockQingxinApi', () => {
 		await expect(api.getSession()).resolves.toMatchObject({ userId: session.userId });
 	});
 
-	it('lists the ten product modules', async () => {
+	it('lists product modules including 秘密', async () => {
 		const api = new MockQingxinApi();
 		const modules = await api.listModules();
 		expect(modules.map((item) => item.name)).toEqual(MODULES.map((item) => item.name));
-		expect(modules).toHaveLength(10);
+		expect(modules.some((item) => item.slug === 'secrets')).toBe(true);
+		expect(modules).toHaveLength(11);
 	});
 
 	it('exports a JSON payload for the current session', async () => {
@@ -429,6 +430,39 @@ describe('MockQingxinApi', () => {
 		expect(job.payload).toEqual({ title: '该吃药了', body: '早餐后一粒' });
 		const today = await api.getElderToday();
 		expect(today.reminders).toEqual([]);
+	});
+
+	it('posts a consented secret letter and keeps it off localStorage and other users', async () => {
+		const api = new MockQingxinApi();
+		await api.login('demo@qingxin.app', 'qingxin');
+		await expect(
+			api.postSecretLetter({ body: '今天有点累。', consent: false })
+		).rejects.toMatchObject({ code: 'invalid_request' });
+		const thread = await api.postSecretLetter({
+			title: '未署名的信',
+			body: '今天有点累。',
+			consent: true
+		});
+		expect(thread.secret.body).toBe('今天有点累。');
+		expect(thread.secret.role).toBe('secret');
+		expect(thread.reply.role).toBe('reply');
+		expect(thread.reply.body).toContain('此致');
+		expect(thread.reply.body).not.toContain('今天有点累。');
+		const listed = await api.listSecretLetters();
+		expect(listed).toHaveLength(1);
+		expect(listed[0]?.id).toBe(thread.id);
+		if (typeof localStorage !== 'undefined') {
+			for (let i = 0; i < localStorage.length; i++) {
+				const key = localStorage.key(i);
+				const value = key ? localStorage.getItem(key) : '';
+				expect(value ?? '').not.toContain('今天有点累。');
+			}
+		}
+		const exported = await api.exportUserData();
+		expect(exported.data.secretLetters?.some((item) => item.id === thread.id)).toBe(true);
+		await api.logout();
+		await api.register('Bee', 'bee@qingxin.app', 'secret1');
+		expect(await api.listSecretLetters()).toEqual([]);
 	});
 
 	it('blocks wellness cycles until consent is on', async () => {

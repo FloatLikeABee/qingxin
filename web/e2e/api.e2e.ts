@@ -230,3 +230,32 @@ test('AI toolbox streams through /v1/tools and persists history', async ({ page 
 	await expect(page.getByText('今天')).toBeVisible();
 	await page.screenshot({ path: 'screenshots/tools-http-history-390.png', fullPage: true });
 });
+
+test('content posting share uses official copy, not a publisher login', async ({ page }) => {
+	await registerFresh(page);
+	await page.goto('/modules/create');
+	await expect(page.getByRole('heading', { name: '内容创作' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: '发布到社交平台' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '系统分享' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '复制文案' })).toBeVisible();
+	await expect(page.getByText('非官方接口')).toBeVisible();
+	await page.getByRole('button', { name: '复制文案' }).click();
+	await expect(page.getByText('已复制').first()).toBeVisible();
+});
+
+test('secrets mailbox posts a consented letter through the live API', async ({ page }) => {
+	await registerFresh(page);
+	await page.goto('/modules/secrets');
+	await expect(page.getByRole('heading', { name: '秘密信箱' })).toBeVisible();
+	await page.getByRole('checkbox').check();
+	await page.getByPlaceholder('写给信箱的话，不必署名。').fill('把这句话交给信箱。');
+	const posted = page.waitForResponse(
+		(res) => res.url().includes('/v1/secrets/letters') && res.request().method() === 'POST'
+	);
+	await page.getByRole('button', { name: '投进信箱' }).click();
+	const res = await posted;
+	expect(res.ok(), await res.text()).toBeTruthy();
+	await expect(page.getByText('亲爱的来信人').first()).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByRole('button', { name: /信箱写的/ })).toBeVisible();
+	await expect(page.getByRole('button', { name: /你写的/ })).toBeVisible();
+});

@@ -12,6 +12,7 @@ import type {
 	Inspiration,
 	SnippetKind
 } from '../create/catalog';
+import type { SecretThread } from '../secrets/board';
 import type { InputKind, MeetingStep, PolishTone, ToolId, ToolItem } from '../tools/catalog';
 import type {
 	CorrectionKind,
@@ -93,6 +94,7 @@ export interface ExportPayload {
 		localCorrections?: LocalCorrection[];
 		creations?: Creation[];
 		snippets?: CreateSnippet[];
+		secretLetters?: SecretThread[];
 		aiTasks?: AiTask[];
 		aiTemplates?: AiTemplate[];
 	};
@@ -406,6 +408,12 @@ export interface QingxinApi {
 		tags?: string[];
 	}): Promise<CreateSnippet>;
 	useSnippet(id: string): Promise<CreateSnippet>;
+	listSecretLetters(): Promise<SecretThread[]>;
+	postSecretLetter(input: {
+		title?: string;
+		body: string;
+		consent: boolean;
+	}): Promise<SecretThread>;
 	listTools(): Promise<ToolCatalog>;
 	setToolFavourite(
 		toolId: ToolId,

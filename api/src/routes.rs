@@ -55,6 +55,7 @@ pub fn router() -> Router<AppState> {
         .merge(crate::wellness::router())
         .merge(crate::study::router())
         .merge(crate::create::routes())
+        .merge(crate::secrets::routes())
         .merge(crate::tools::routes())
 }
 
@@ -572,6 +573,7 @@ async fn export_data(
     let local_corrections = crate::local::export_corrections(&state, &user.user_id).await?;
     let creations = crate::create::export_creations(&state, &user.user_id).await?;
     let snippets = crate::create::export_snippets(&state, &user.user_id).await?;
+    let secret_letters = crate::secrets::export_letters(&state, &user.user_id).await?;
     let ai_tasks = crate::tools::export_tasks(&state, &user.user_id).await?;
     let templates = crate::tools::export_templates(&state, &user.user_id).await?;
     Ok(Json(json!({
@@ -595,6 +597,7 @@ async fn export_data(
         "local_corrections": local_corrections,
         "creations": creations,
         "snippets": snippets,
+        "secret_letters": secret_letters,
         "ai_tasks": ai_tasks,
         "templates": templates,
     })))

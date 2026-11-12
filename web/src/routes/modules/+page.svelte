@@ -14,13 +14,13 @@
 	<title>轻心 · 模块</title>
 </svelte:head>
 
-<section class="mx-auto min-w-0 max-w-5xl">
+<section class="mx-auto max-w-5xl min-w-0">
 	<Bento>
 		<BentoItem span="full">
 			<div>
 				<h1 class="font-[Outfit] text-3xl font-semibold tracking-tight">模块中心</h1>
 				<p class="mt-2 text-[var(--qx-muted)]">
-					十个生活工具，单页单任务，能用抽屉和弹窗解决的就不跳转。
+					内容创作是主产品。秘密信箱单独收信。游戏还在后面。
 				</p>
 			</div>
 		</BentoItem>
@@ -44,5 +44,20 @@
 				</a>
 			</BentoItem>
 		{/each}
+		<BentoItem span="wide">
+			<Card class="h-full opacity-70">
+				<div class="flex items-start justify-between gap-3">
+					<div
+						class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--qx-accent-gold)] text-white"
+					>
+						<Icon name="game" />
+					</div>
+				</div>
+				<h2 class="mt-5 text-lg font-semibold">游戏</h2>
+				<p class="mt-1 text-base text-[var(--qx-muted)]">轻松小游戏还在编排，这一期先不做。</p>
+				<button type="button" class="mt-3 min-h-11 text-[var(--qx-muted)]" disabled>即将到来</button
+				>
+			</Card>
+		</BentoItem>
 	</Bento>
 </section>

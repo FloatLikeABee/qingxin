@@ -10,6 +10,7 @@ import type {
 	Inspiration,
 	SnippetKind
 } from '../create/catalog';
+import type { BoardLetter, SecretThread } from '../secrets/board';
 import { mergeCatalog, type ToolId } from '../tools/catalog';
 import type { CareType, CreatePetInput, RecordType } from '../pets/types';
 import {
@@ -351,6 +352,28 @@ function mapCreation(value: unknown): Creation {
 	};
 }
 
+function mapBoardLetter(value: unknown, fallbackRole: BoardLetter['role']): BoardLetter {
+	const row = asJson(value);
+	const role = str(row.role, fallbackRole) === 'reply' ? 'reply' : 'secret';
+	return {
+		id: str(row.id),
+		role,
+		title: str(row.title),
+		body: str(row.body),
+		createdAt: str(row.created_at),
+		consentedAt: row.consented_at ? str(row.consented_at) : undefined
+	};
+}
+
+function mapSecretThread(value: unknown): SecretThread {
+	const row = asJson(value);
+	return {
+		id: str(row.id),
+		secret: mapBoardLetter(row.secret, 'secret'),
+		reply: mapBoardLetter(row.reply, 'reply')
+	};
+}
+
 function mapSnippet(value: unknown): CreateSnippet {
 	const row = asJson(value);
 	return {
@@ -662,6 +685,9 @@ export class HttpQingxinApi implements QingxinApi {
 					: [],
 				creations: Array.isArray(body.creations) ? body.creations.map(mapCreation) : [],
 				snippets: Array.isArray(body.snippets) ? body.snippets.map(mapSnippet) : [],
+				secretLetters: Array.isArray(body.secret_letters)
+					? body.secret_letters.map(mapSecretThread)
+					: [],
 				aiTasks: Array.isArray(body.ai_tasks) ? body.ai_tasks.map(mapTask) : [],
 				aiTemplates: Array.isArray(body.templates) ? body.templates.map(mapAiTemplate) : []
 			}
@@ -1158,6 +1184,26 @@ export class HttpQingxinApi implements QingxinApi {
 	async useSnippet(id: string): Promise<CreateSnippet> {
 		return mapSnippet(
 			await this.#json('POST', `/v1/create/snippets/${encodeURIComponent(id)}/use`)
+		);
+	}
+
+	async listSecretLetters(): Promise<SecretThread[]> {
+		return itemsOf(await this.#json('GET', '/v1/secrets/letters')).map(mapSecretThread);
+	}
+
+	async postSecretLetter(input: {
+		title?: string;
+		body: string;
+		consent: boolean;
+	}): Promise<SecretThread> {
+		return mapSecretThread(
+			await this.#json('POST', '/v1/secrets/letters', {
+				json: compact({
+					title: input.title,
+					body: input.body,
+					consent: input.consent
+				})
+			})
 		);
 	}
 

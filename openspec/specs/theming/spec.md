@@ -25,11 +25,11 @@ The system SHALL support four theme modes: light (浅色), dark (深色), system
 - **THEN** the resolved appearance is light
 
 ### Requirement: Exact palette
-The system SHALL apply these tokens: light primary `#3B82F6`, background `#FFFFFF`, text `#1F2937`, secondary `#6B7280`; dark primary `#60A5FA`, background `#111827`, text `#F9FAFB`, secondary `#9CA3AF`. Tokens SHALL cover page background, cards, dividers, button states, icon fills, and chart colors.
+The system SHALL apply these tokens: light primary `#3B82F6`, background `#EAF3FF`, text `#1F2937`, secondary `#6B7280`; dark primary `#60A5FA`, background `#0B1526`, text `#F9FAFB`, secondary `#9CA3AF`. Atmosphere MAY add coral, teal, and gold glows. Tokens SHALL cover page background, cards, dividers, button states, icon fills, and chart colors. The brand SHALL NOT become a purple sample-slide gradient.
 
 #### Scenario: Light tokens
 - **WHEN** the resolved appearance is light
-- **THEN** CSS variables expose the light primary, background, text, and secondary values above
+- **THEN** CSS variables expose the light primary `#3B82F6`, pale-sky canvas, text, and secondary values above
 
 ### Requirement: Gutter token
 The system SHALL expose a 16px gutter token used by bento grids.

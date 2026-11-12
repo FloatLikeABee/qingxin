@@ -19,7 +19,9 @@
 
 	const hour = new Date().getHours();
 	const greeting = hour < 12 ? '早安' : hour < 18 ? '下午好' : '夜安';
-	const featured = MODULES.slice(0, 4);
+	const featured = MODULES.filter((item) =>
+		['mood', 'finance', 'elder', 'local'].includes(item.slug)
+	);
 	const featuredSpans = planBentoSpans(4);
 	let applications = $state<Application[]>([]);
 	const stages = $derived(funnelStages(applications));
@@ -42,12 +44,14 @@
 	<title>轻心 · 首页</title>
 </svelte:head>
 
-<section class="mx-auto min-w-0 max-w-5xl">
+<section class="mx-auto max-w-5xl min-w-0">
 	<Bento>
 		<BentoItem span="full">
 			<div class="pt-2">
 				<Tag tone="primary">工具辅助 · 信息展示</Tag>
-				<h1 class="mt-4 font-[Outfit] text-4xl leading-tight font-semibold tracking-tight md:text-5xl">
+				<h1
+					class="mt-4 font-[Outfit] text-4xl leading-tight font-semibold tracking-tight md:text-5xl"
+				>
 					{greeting}，<span class="text-[var(--qx-primary)]">轻一点</span>
 				</h1>
 				<p class="mt-3 max-w-xl text-base text-[var(--qx-muted)] md:text-lg">
@@ -74,7 +78,9 @@
 				</div>
 				<FunnelChart {stages} />
 				{#if todos.length === 0}
-					<p class="text-sm text-[var(--qx-muted)]">今天还没有面试。把投递放进看板后会出现在这里。</p>
+					<p class="text-sm text-[var(--qx-muted)]">
+						今天还没有面试。把投递放进看板后会出现在这里。
+					</p>
 				{:else}
 					<ul class="mt-2 space-y-2">
 						{#each todos as item (item.id)}
@@ -93,7 +99,9 @@
 				<div class="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
 					<div>
 						<h2 class="text-lg font-semibold">内容创作</h2>
-						<p class="mt-1 text-sm text-[var(--qx-muted)]">选一个场景，把灵感写成可发出去的草稿。</p>
+						<p class="mt-1 text-sm text-[var(--qx-muted)]">
+							选一个场景，把灵感写成可发出去的草稿。
+						</p>
 					</div>
 					<Button href="/modules/create" variant="secondary" class="shrink-0 whitespace-nowrap"
 						>打开内容创作</Button
@@ -119,6 +127,24 @@
 					{/each}
 				</ul>
 			</Card>
+		</BentoItem>
+
+		<BentoItem span="wide">
+			<a href="/modules/secrets" class="group block h-full">
+				<Card class="h-full transition motion-safe:group-hover:-translate-y-0.5">
+					<div
+						class="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl text-white"
+						style="background:#C45C6A"
+					>
+						<Icon name="envelope" />
+					</div>
+					<h2 class="text-lg font-semibold">秘密</h2>
+					<p class="mt-1 text-base text-[var(--qx-muted)]">
+						把不想公开的话写成信。信箱回信，贴在木板上。
+					</p>
+					<span class="{LINK_CLASS} mt-3">打开信箱 <Icon name="chevron" class="h-4 w-4" /></span>
+				</Card>
+			</a>
 		</BentoItem>
 
 		{#each featured as item, index (item.slug)}
