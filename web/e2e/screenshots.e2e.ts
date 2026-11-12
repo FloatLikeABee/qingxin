@@ -319,6 +319,23 @@ for (const view of views) {
 
 for (const view of views) {
 	for (const theme of themes) {
+		test(`store play ${view.name} ${theme}`, async ({ page }) => {
+			await page.setViewportSize({ width: view.width, height: view.height });
+			await boot(page, theme);
+			await openReady(page, '/modules/games/convenient-store/play');
+			await expect(page.locator('canvas[aria-label="便利店三维店面"]')).toBeVisible();
+			await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
+			await expect(page.getByRole('button', { name: '从库房补货' })).toBeVisible();
+			await page.waitForTimeout(1200);
+			await page.screenshot({
+				path: `screenshots/store-play-${view.name}-${theme}.png`
+			});
+		});
+	}
+}
+
+for (const view of views) {
+	for (const theme of themes) {
 		test(`settings ${view.name} ${theme}`, async ({ page }) => {
 			await page.setViewportSize({ width: view.width, height: view.height });
 			await boot(page, theme);

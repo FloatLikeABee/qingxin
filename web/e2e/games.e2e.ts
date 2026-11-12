@@ -57,8 +57,30 @@ test('card opens detail then play chrome', async ({ page }) => {
 	await page.getByRole('link', { name: '开始经营' }).click();
 	await expect(page).toHaveURL(/\/modules\/games\/convenient-store\/play/);
 	await expect(page.getByRole('link', { name: '← 返回目录' })).toBeVisible();
+	await expect(page.locator('canvas[aria-label="便利店三维店面"]')).toBeVisible();
+	await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
+	await expect(page.getByRole('button', { name: '暂停' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '重新开始' })).toBeVisible();
+	await expect(page.getByText('现金')).toBeVisible();
+	await expect(page.getByRole('button', { name: '从库房补货' })).toBeVisible();
+	await page.screenshot({ path: 'screenshots/store-play-smoke-390.png' });
 	await page.getByRole('link', { name: '← 返回目录' }).click();
 	await expect(page.getByRole('heading', { name: '轻心游戏' })).toBeVisible();
+});
+
+test('play mounts without a session', async ({ page }) => {
+	await page.addInitScript(() => {
+		localStorage.setItem('qingxin.privacyConsent', 'accepted');
+		localStorage.setItem('qingxin.theme', 'light');
+	});
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/modules/games/convenient-store/play', { waitUntil: 'networkidle' });
+	await expect(page.locator('canvas[aria-label="便利店三维店面"]')).toBeVisible();
+	await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
+	await expect(page.getByRole('heading', { name: '便利店经理' })).toBeVisible();
+	await expect(page.getByRole('button', { name: /架上/ }).first()).toBeVisible();
+	await page.getByRole('button', { name: '暂停' }).click();
+	await expect(page.getByText('客人还在店门口等着。')).toBeVisible();
 });
 
 test('coming soon game cannot start a session', async ({ page }) => {

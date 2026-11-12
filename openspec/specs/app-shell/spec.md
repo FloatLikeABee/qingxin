@@ -24,11 +24,11 @@ The system SHALL show a bottom tab bar on phone-width viewports and a sidebar on
 - **THEN** a sidebar is visible for primary navigation
 
 ### Requirement: Module hub
-The system SHALL present a hub listing these ten modules: 情绪日记+冥想, 个人财务小助手, 老人助手, 本地生活, AI效率工具箱, 宠物, 健康, 学习打卡, 内容创作, 求职副业. Opening 求职副业 SHALL load the M10 workshop (not the generic placeholder). Opening 情绪日记+冥想 SHALL continue to load M1. Opening 本地生活 SHALL load the M4 map (not the generic placeholder). Opening 健康 SHALL load the M7 wellness app (not the generic placeholder). Opening 内容创作 SHALL load the M9 studio (not the generic placeholder). Opening AI效率工具箱 SHALL load the M5 toolbox (not the generic placeholder).
+The system SHALL present a hub listing these modules: 情绪日记+冥想, 个人财务小助手, 老人助手, 本地生活, AI效率工具箱, 宠物, 健康, 学习打卡, 内容创作, 求职副业, 秘密, 游戏. Opening 求职副业 SHALL load the M10 workshop (not the generic placeholder). Opening 情绪日记+冥想 SHALL continue to load M1. Opening 本地生活 SHALL load the M4 map (not the generic placeholder). Opening 健康 SHALL load the M7 wellness app (not the generic placeholder). Opening 内容创作 SHALL load the M9 studio (not the generic placeholder). Opening AI效率工具箱 SHALL load the M5 toolbox (not the generic placeholder). Opening 游戏 SHALL load the games catalog (not a disabled 即将到来 tile). 组件 SHALL NOT appear as a hub module.
 
-#### Scenario: Hub lists ten modules
+#### Scenario: Hub lists the product modules
 - **WHEN** a user opens the module hub
-- **THEN** all ten module names above are listed
+- **THEN** the module names above are listed
 
 #### Scenario: Hustle is a real module
 - **WHEN** a user opens `/modules/hustle`
@@ -49,6 +49,10 @@ The system SHALL present a hub listing these ten modules: 情绪日记+冥想, �
 #### Scenario: AI toolbox is a real module
 - **WHEN** a user opens `/modules/ai`
 - **THEN** the heading AI效率工具箱 is visible and the 工具 tab includes 摘要
+
+#### Scenario: Games is a real module
+- **WHEN** a user opens `/modules/games`
+- **THEN** heading 轻心游戏 is visible
 
 ### Requirement: Home job overview
 The home route SHALL remain zh-CN and SHALL include a job-status overview and today's application/interview todos when the session has hustle data.
@@ -118,4 +122,12 @@ Primary AppShell destinations SHALL keep icon plus short zh-CN labels (首页, �
 #### Scenario: Four primary destinations
 - **WHEN** the viewport is 390px
 - **THEN** the bottom tab bar shows 首页, 内容, 模块, 我的 and does not show 组件
+
+#### Scenario: Kit from settings
+- **WHEN** a user opens `/settings`
+- **THEN** a 设计系统 row linking to `/kit` is present and 组件 is still absent from the tab bar
+
+#### Scenario: Play hides phone tabs
+- **WHEN** a user opens a `/play` route
+- **THEN** the bottom tab bar is not shown so the game can use the full viewport
 

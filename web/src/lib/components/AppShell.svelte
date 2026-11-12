@@ -27,7 +27,7 @@
 	<PrivacyGate />
 	<Toast />
 
-	<div class="relative mx-auto flex min-h-dvh w-full max-w-6xl min-w-0">
+	<div class="relative mx-auto flex min-h-dvh w-full min-w-0 {playView ? '' : 'max-w-6xl'}">
 		<aside
 			class="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-[var(--qx-line)] px-4 py-6 {playView
 				? 'md:hidden'
@@ -92,7 +92,7 @@
 
 			<main
 				class="min-w-0 flex-1 overflow-x-clip {playView
-					? 'px-0 pb-0 md:px-0 md:pt-0 md:pb-0'
+					? 'h-dvh overflow-hidden px-0 pb-0 md:px-0 md:pt-0 md:pb-0'
 					: 'px-5 pb-28 md:px-8 md:pt-8 md:pb-12'}"
 			>
 				{@render children()}
