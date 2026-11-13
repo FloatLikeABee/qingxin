@@ -21,6 +21,7 @@ export interface GameInfo {
 	tags: string[];
 	status: GameStatus;
 	featured?: boolean;
+	playCta: string;
 	cover: GameCoverArt;
 }
 
@@ -35,6 +36,7 @@ export const GAMES: GameInfo[] = [
 		category: '经营',
 		tags: ['补货', '班次', '三维'],
 		status: 'playable',
+		playCta: '开始经营',
 		featured: true,
 		cover: {
 			sky: '#9EC9FF',
@@ -47,10 +49,12 @@ export const GAMES: GameInfo[] = [
 		id: 'corner-florist',
 		title: '街角花店',
 		summary: '把当天的花束配齐，等有人推门进来。',
-		about: '一间向阳的花店。之后会做成经营班次，这一期只把铺面留在目录里。',
+		about:
+			'早晨先把橱窗配齐。玫瑰偏暖，绣球偏静，郁金香偏亮。有人推门进来，按他们想要的气色递出一束，太慢他们会走。',
 		category: '经营',
 		tags: ['花束', '橱窗'],
-		status: 'coming',
+		status: 'playable',
+		playCta: '开始配花',
 		cover: {
 			sky: '#F8C9C0',
 			ground: '#E7F6F1',
@@ -62,10 +66,11 @@ export const GAMES: GameInfo[] = [
 		id: 'night-puzzle',
 		title: '夜窗拼图',
 		summary: '把窗外那块被风吹乱的夜色拼回去。',
-		about: '安静的益智。拼块还在打磨。',
+		about: '风把窗外的夜色撕成碎片。把月亮、星河和楼下的灯窗放回原位。拼回去的那一块会重新亮起来。',
 		category: '益智',
 		tags: ['夜晚', '拼块'],
-		status: 'coming',
+		status: 'playable',
+		playCta: '开始拼夜',
 		cover: {
 			sky: '#1E3A5F',
 			ground: '#0B1526',
@@ -81,6 +86,7 @@ export const GAMES: GameInfo[] = [
 		category: '节奏',
 		tags: ['呼吸', '海'],
 		status: 'coming',
+		playCta: '即将到来',
 		cover: {
 			sky: '#7DD3FC',
 			ground: '#14B8A6',
@@ -96,6 +102,7 @@ export const GAMES: GameInfo[] = [
 		category: '休闲',
 		tags: ['散步', '云'],
 		status: 'coming',
+		playCta: '即将到来',
 		cover: {
 			sky: '#DBEAFE',
 			ground: '#F8FAFC',
@@ -111,6 +118,7 @@ export const GAMES: GameInfo[] = [
 		category: '益智',
 		tags: ['记忆', '货架'],
 		status: 'coming',
+		playCta: '即将到来',
 		cover: {
 			sky: '#FEF3C7',
 			ground: '#F1E6D0',

@@ -41,7 +41,7 @@
 
 	<div class="mt-8">
 		{#if playable}
-			<Button href={playHref(data.game)}>开始经营</Button>
+			<Button href={playHref(data.game)}>{data.game.playCta}</Button>
 		{:else}
 			<Button disabled>即将到来</Button>
 		{/if}

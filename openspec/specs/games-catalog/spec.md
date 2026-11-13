@@ -6,15 +6,15 @@ Holds an extensible frontend games registry and a Qingxin-skinned shop-catalog f
 ## Requirements
 
 ### Requirement: Extensible games registry
-The system SHALL expose a typed in-memory games registry that can list multiple games. Each entry SHALL include an id, zh-CN title, short description, category, tags, cover motif, and status `playable` or `coming`. Stage 2 SHALL include exactly one playable game (便利店经理) and one or more 即将到来 placeholders that still appear in the grid.
+The system SHALL expose a typed in-memory games registry that can list multiple games. Each entry SHALL include an id, zh-CN title, short description, category, tags, cover motif, play CTA label, and status `playable` or `coming`. Three games SHALL be playable: 便利店经理, 街角花店, 夜窗拼图. Remaining placeholders SHALL stay visible as 即将到来.
 
-#### Scenario: Registry lists a playable store game
+#### Scenario: Registry lists three playable games
 - **WHEN** the catalog is loaded
-- **THEN** an entry with id `convenient-store`, title 便利店经理, and status `playable` is present
+- **THEN** entries `convenient-store`, `corner-florist`, and `night-puzzle` have status `playable`
 
 #### Scenario: Placeholders remain visible
 - **WHEN** the catalog is loaded
-- **THEN** at least two entries with status `coming` are listed with zh-CN titles
+- **THEN** 潮汐呼吸, 云上散步, and 记忆货架 remain `coming`
 
 ### Requirement: Search and category filter
 The system SHALL filter the registry by a case-insensitive search over title, English title, summary, category, and tags, and by an exact category (including 全部 meaning no category constraint). Filtering SHALL be a pure function with no DOM or WebGL.
@@ -50,12 +50,20 @@ The module hub SHALL list 游戏 as a real module (not a disabled 即将到来 t
 - **THEN** tiles for 经营, 休闲, 益智, and 节奏 are visible
 
 ### Requirement: Card to detail to Play
-Selecting a game card SHALL open a presentation route with cover, about copy, and a Play CTA. For `playable` games the CTA SHALL navigate to a dedicated play route. For `coming` games the CTA SHALL be disabled or labeled 即将到来 and SHALL NOT enter a 3D session. The play route SHALL offer 返回目录.
+Selecting a game card SHALL open a presentation route with cover, about copy, and a Play CTA whose label fits the game. For `playable` games the CTA SHALL navigate to a dedicated play route. For `coming` games the CTA SHALL be disabled or labeled 即将到来.
 
-#### Scenario: Playable detail
+#### Scenario: Playable store detail
 - **WHEN** a user opens `/modules/games/convenient-store`
-- **THEN** heading 便利店经理 is visible and a 开始经营 control links to the play route
+- **THEN** heading 便利店经理 is visible and 开始经营 links to the play route
+
+#### Scenario: Florist detail
+- **WHEN** a user opens `/modules/games/corner-florist`
+- **THEN** heading 街角花店 is visible and 开始配花 links to the play route
+
+#### Scenario: Night puzzle detail
+- **WHEN** a user opens `/modules/games/night-puzzle`
+- **THEN** heading 夜窗拼图 is visible and 开始拼夜 links to the play route
 
 #### Scenario: Coming soon cannot play
 - **WHEN** a user opens a `coming` game's detail
-- **THEN** a 即将到来 control is present and no 3D canvas is mounted
+- **THEN** a 即将到来 control is present and no play canvas is mounted

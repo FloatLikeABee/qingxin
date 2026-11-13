@@ -85,10 +85,40 @@ test('play mounts without a session', async ({ page }) => {
 
 test('coming soon game cannot start a session', async ({ page }) => {
 	await boot(page);
-	await page.goto('/modules/games/night-puzzle', { waitUntil: 'networkidle' });
-	await expect(page.getByRole('heading', { name: '夜窗拼图' })).toBeVisible();
+	await page.goto('/modules/games/tide-breath', { waitUntil: 'networkidle' });
+	await expect(page.getByRole('heading', { name: '潮汐呼吸' })).toBeVisible();
 	await expect(page.getByRole('button', { name: '即将到来' })).toBeDisabled();
 	await expect(page.locator('canvas')).toHaveCount(0);
+});
+
+test('florist opens from catalog into play chrome', async ({ page }) => {
+	await boot(page);
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/modules/games', { waitUntil: 'networkidle' });
+	const florist = page.locator('a.game-card').filter({ hasText: '街角花店' });
+	await expect(florist.getByText('即将到来')).toHaveCount(0);
+	await florist.click();
+	await expect(page.getByRole('heading', { name: '街角花店', level: 1 })).toBeVisible();
+	await page.getByRole('link', { name: '开始配花' }).click();
+	await expect(page).toHaveURL(/\/modules\/games\/corner-florist\/play/);
+	await expect(page.getByRole('link', { name: '← 返回目录' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '玫瑰' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '开门' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '暂停' })).toBeVisible();
+	await page.screenshot({ path: 'screenshots/florist-play-smoke-390.png' });
+});
+
+test('night puzzle opens from catalog into a living window', async ({ page }) => {
+	await boot(page);
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/modules/games/night-puzzle', { waitUntil: 'networkidle' });
+	await expect(page.getByRole('heading', { name: '夜窗拼图', level: 1 })).toBeVisible();
+	await page.getByRole('link', { name: '开始拼夜' }).click();
+	await expect(page).toHaveURL(/\/modules\/games\/night-puzzle\/play/);
+	await expect(page.getByText('夜色拼块')).toBeVisible();
+	await expect(page.getByRole('button', { name: '风来了' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '月亮' }).first()).toBeVisible();
+	await page.screenshot({ path: 'screenshots/night-play-smoke-390.png' });
 });
 
 test('kit lives under 我的, not in tab bar', async ({ page }) => {
