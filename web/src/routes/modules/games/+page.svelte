@@ -31,6 +31,11 @@
 			id: '节奏',
 			icon: 'pulse',
 			wash: 'linear-gradient(135deg, var(--qx-accent-gold), var(--qx-accent-coral))'
+		},
+		{
+			id: '飞行',
+			icon: 'jet',
+			wash: 'linear-gradient(135deg, var(--qx-primary), var(--qx-accent-teal))'
 		}
 	];
 
@@ -51,7 +56,7 @@
 	>
 		<div class="min-w-0">
 			<h1 class="font-[Outfit] text-3xl font-semibold tracking-tight">轻心游戏</h1>
-			<p class="mt-1 max-w-md text-base text-[var(--qx-muted)]">进一间小店，过完一个班次。</p>
+			<p class="mt-1 max-w-md text-base text-[var(--qx-muted)]">挑一款小游戏，玩一会儿。</p>
 		</div>
 		{#if featured}
 			<a
@@ -65,7 +70,7 @@
 
 	<section class="mt-5">
 		<h2 class="text-lg font-semibold">按类型逛</h2>
-		<div class="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+		<div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
 			{#each tiles as tile (tile.id)}
 				<button
 					type="button"

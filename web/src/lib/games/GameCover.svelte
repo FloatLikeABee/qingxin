@@ -30,19 +30,19 @@
 			</div>
 		</div>
 		<div class="store-crate"></div>
-	{:else if cover.motif === 'flowers'}
-		<div class="flower-pot p1"></div>
-		<div class="flower-pot p2"></div>
-		<div class="flower-pot p3"></div>
-		<div class="flower-bloom b1"></div>
-		<div class="flower-bloom b2"></div>
-		<div class="flower-bloom b3"></div>
-	{:else if cover.motif === 'puzzle'}
-		<div class="puzzle-tile t1"></div>
-		<div class="puzzle-tile t2"></div>
-		<div class="puzzle-tile t3"></div>
-		<div class="puzzle-tile t4"></div>
-		<div class="puzzle-gap"></div>
+	{:else if cover.motif === 'garden'}
+		<div class="bed-row"></div>
+		<div class="plant-form tomato"></div>
+		<div class="plant-form fern"></div>
+		<div class="plant-form cactus"></div>
+		<div class="plant-form sunflower"></div>
+	{:else if cover.motif === 'jet'}
+		<div class="jet-trail"></div>
+		<div class="jet-body"></div>
+		<div class="jet-wing left"></div>
+		<div class="jet-wing right"></div>
+		<div class="jet-blip a"></div>
+		<div class="jet-blip b"></div>
 	{:else if cover.motif === 'wave'}
 		<div class="wave w1"></div>
 		<div class="wave w2"></div>
@@ -164,91 +164,118 @@
 		box-shadow: 0.35rem -0.15rem 0 color-mix(in srgb, var(--qx-accent-coral) 80%, white);
 	}
 
-	.flower-pot,
-	.flower-bloom {
+	.bed-row {
 		position: absolute;
-		border-radius: 999px;
+		left: 10%;
+		right: 10%;
+		bottom: 14%;
+		height: 22%;
+		border-radius: 0.35rem;
+		background: color-mix(in srgb, var(--cover-ground) 55%, #7c5a32);
 	}
 
-	.flower-pot {
-		width: 1.1rem;
-		height: 1.35rem;
-		bottom: 16%;
-		background: color-mix(in srgb, var(--cover-accent) 55%, #7c2d12);
-		border-radius: 0 0 0.4rem 0.4rem;
-	}
-
-	.p1 {
-		left: 18%;
-	}
-	.p2 {
-		left: 46%;
-		height: 1.6rem;
-	}
-	.p3 {
-		left: 72%;
-	}
-
-	.flower-bloom {
-		width: 1.35rem;
-		height: 1.35rem;
-		background: var(--cover-accent);
+	.plant-form {
+		position: absolute;
 		bottom: 28%;
 	}
 
-	.b1 {
-		left: 16%;
+	.plant-form.tomato {
+		left: 14%;
+		width: 1.1rem;
+		height: 1.1rem;
+		border-radius: 999px;
 		background: var(--qx-accent-coral);
-	}
-	.b2 {
-		left: 44%;
-		width: 1.7rem;
-		height: 1.7rem;
-		background: var(--qx-accent-gold);
-	}
-	.b3 {
-		left: 70%;
-		background: #fb7185;
+		box-shadow: 0 -0.85rem 0 -0.28rem var(--qx-accent-teal);
 	}
 
-	.puzzle-tile {
+	.plant-form.fern {
+		left: 36%;
+		width: 0.35rem;
+		height: 1.8rem;
+		background: var(--qx-accent-teal);
+		border-radius: 0.2rem;
+		box-shadow:
+			-0.45rem -0.2rem 0 -0.05rem color-mix(in srgb, var(--qx-accent-teal) 70%, white),
+			0.45rem 0.1rem 0 -0.05rem color-mix(in srgb, var(--qx-accent-teal) 55%, #166534);
+	}
+
+	.plant-form.cactus {
+		left: 56%;
+		width: 0.7rem;
+		height: 1.55rem;
+		border-radius: 0.35rem;
+		background: color-mix(in srgb, var(--qx-accent-teal) 55%, #166534);
+		box-shadow: 0.55rem 0.2rem 0 -0.12rem color-mix(in srgb, var(--qx-accent-teal) 70%, #166534);
+	}
+
+	.plant-form.sunflower {
+		left: 74%;
+		width: 1.35rem;
+		height: 1.35rem;
+		border-radius: 999px;
+		background: var(--qx-accent-gold);
+		box-shadow: 0 0.9rem 0 -0.45rem color-mix(in srgb, var(--cover-accent) 55%, #166534);
+	}
+
+	.jet-trail {
 		position: absolute;
-		width: 28%;
-		height: 28%;
-		border-radius: 0.45rem;
+		left: 18%;
+		right: 28%;
+		top: 46%;
+		height: 0.28rem;
+		border-radius: 999px;
+		background: linear-gradient(
+			90deg,
+			transparent,
+			color-mix(in srgb, var(--qx-accent-gold) 70%, white)
+		);
+	}
+
+	.jet-body {
+		position: absolute;
+		left: 42%;
+		top: 34%;
+		width: 1.15rem;
+		height: 2.4rem;
+		border-radius: 1rem 1rem 0.3rem 0.3rem;
 		background: var(--cover-accent);
 	}
 
-	.t1 {
-		left: 16%;
-		top: 18%;
-		opacity: 0.95;
-	}
-	.t2 {
-		left: 48%;
-		top: 22%;
-		background: color-mix(in srgb, var(--cover-accent) 55%, white);
-	}
-	.t3 {
-		left: 18%;
+	.jet-wing {
+		position: absolute;
 		top: 52%;
-		background: var(--qx-accent-teal);
-	}
-	.t4 {
-		left: 50%;
-		top: 56%;
-		background: var(--qx-accent-gold);
-		opacity: 0.85;
+		width: 1.35rem;
+		height: 0.45rem;
+		background: var(--qx-accent-coral);
+		border-radius: 0.2rem;
 	}
 
-	.puzzle-gap {
+	.jet-wing.left {
+		left: 28%;
+	}
+
+	.jet-wing.right {
+		right: 26%;
+		background: var(--qx-accent-teal);
+	}
+
+	.jet-blip {
 		position: absolute;
-		left: 48%;
-		top: 52%;
-		width: 28%;
-		height: 28%;
-		border-radius: 0.45rem;
-		box-shadow: inset 0 0 0 2px color-mix(in srgb, white 35%, transparent);
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 0.12rem;
+		background: var(--qx-accent-gold);
+	}
+
+	.jet-blip.a {
+		left: 22%;
+		top: 22%;
+	}
+
+	.jet-blip.b {
+		right: 18%;
+		top: 28%;
+		background: var(--qx-accent-coral);
 	}
 
 	.wave {

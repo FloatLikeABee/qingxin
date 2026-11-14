@@ -22,4 +22,11 @@ describe('games catalog filter', () => {
 		expect(ops.every((game) => game.category === '经营')).toBe(true);
 		expect(ops.some((game) => game.id === 'convenient-store')).toBe(true);
 	});
+
+	it('filters by category 飞行', () => {
+		const flight = filterGames(GAMES, { category: '飞行' });
+		expect(flight.some((game) => game.id === 'sky-sortie')).toBe(true);
+		expect(flight.every((game) => game.category === '飞行')).toBe(true);
+		expect(flight.some((game) => game.id === 'convenient-store')).toBe(false);
+	});
 });

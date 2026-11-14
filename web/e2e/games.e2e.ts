@@ -37,9 +37,10 @@ test('catalog search and category filter', async ({ page }) => {
 	await expect(page.getByRole('button', { name: '休闲' })).toBeVisible();
 	await expect(page.getByRole('button', { name: '益智' })).toBeVisible();
 	await expect(page.getByRole('button', { name: '节奏' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '飞行' })).toBeVisible();
 	await page.getByLabel('找一款想玩的').fill('经理');
 	await expect(page.getByRole('heading', { name: '便利店经理' }).first()).toBeVisible();
-	await expect(page.getByRole('heading', { name: '夜窗拼图' })).toHaveCount(0);
+	await expect(page.getByRole('heading', { name: '晴空出击' })).toHaveCount(0);
 	await page.getByLabel('找一款想玩的').fill('');
 	await page.getByRole('button', { name: '节奏' }).click();
 	await expect(page.getByRole('heading', { name: '潮汐呼吸' })).toBeVisible();
@@ -91,34 +92,96 @@ test('coming soon game cannot start a session', async ({ page }) => {
 	await expect(page.locator('canvas')).toHaveCount(0);
 });
 
-test('florist opens from catalog into play chrome', async ({ page }) => {
+test('garden opens from catalog into play chrome', async ({ page }) => {
 	await boot(page);
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/modules/games', { waitUntil: 'networkidle' });
-	const florist = page.locator('a.game-card').filter({ hasText: '街角花店' });
-	await expect(florist.getByText('即将到来')).toHaveCount(0);
-	await florist.click();
-	await expect(page.getByRole('heading', { name: '街角花店', level: 1 })).toBeVisible();
-	await page.getByRole('link', { name: '开始配花' }).click();
-	await expect(page).toHaveURL(/\/modules\/games\/corner-florist\/play/);
+	const garden = page.locator('a.game-card').filter({ hasText: '窗前庭园' });
+	await expect(garden.getByText('即将到来')).toHaveCount(0);
+	await garden.click();
+	await expect(page.getByRole('heading', { name: '窗前庭园', level: 1 })).toBeVisible();
+	await page.getByRole('link', { name: '开始种植' }).click();
+	await expect(page).toHaveURL(/\/modules\/games\/window-garden\/play/);
 	await expect(page.getByRole('link', { name: '← 返回目录' })).toBeVisible();
-	await expect(page.getByRole('button', { name: '玫瑰' })).toBeVisible();
-	await expect(page.getByRole('button', { name: '开门' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '浇水' })).toBeVisible();
+	await expect(page.getByRole('button', { name: /种下番茄/ })).toBeVisible();
 	await expect(page.getByRole('button', { name: '暂停' })).toBeVisible();
-	await page.screenshot({ path: 'screenshots/florist-play-smoke-390.png' });
+	await page.screenshot({ path: 'screenshots/garden-play-smoke-390.png' });
 });
 
-test('night puzzle opens from catalog into a living window', async ({ page }) => {
+test('garden plant, care, bugs, harvest, and reload', async ({ page }) => {
+	test.setTimeout(90_000);
 	await boot(page);
 	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/modules/games/window-garden/play', { waitUntil: 'networkidle' });
+	await page.getByRole('button', { name: '番茄' }).first().click();
+	await page.getByRole('button', { name: /种下番茄/ }).click();
+	await expect(page.locator('[data-bed="0"]')).toContainText('番茄');
+	await page.getByRole('button', { name: '浇水' }).click();
+	await page.getByRole('button', { name: '施肥' }).click();
+	const bug = page.getByRole('button', { name: /害虫|益虫/ });
+	await expect(bug.first()).toBeVisible({ timeout: 25_000 });
+	const pest = page.getByRole('button', { name: /害虫/ });
+	if ((await pest.count()) > 0) {
+		await pest.first().click();
+		await expect(page.getByText('害虫')).toBeVisible();
+	} else {
+		await expect(page.getByRole('button', { name: /益虫/ }).first()).toBeVisible();
+	}
+	await page.reload({ waitUntil: 'networkidle' });
+	await expect(page.locator('[data-bed="0"]')).toContainText('番茄');
+	for (let i = 0; i < 16; i++) {
+		await page.getByRole('button', { name: '浇水' }).click();
+		const nextPest = page.getByRole('button', { name: /害虫/ });
+		if ((await nextPest.count()) > 0) await nextPest.first().click();
+		if (await page.getByRole('button', { name: '收获' }).isEnabled()) break;
+		await page.waitForTimeout(1200);
+	}
+	await expect(page.getByRole('button', { name: '收获' })).toBeEnabled();
+	await page.getByRole('button', { name: '收获' }).click();
+	await expect(page.locator('[data-bed="0"]')).toContainText('空畦');
+});
+
+test('old florist and night routes redirect', async ({ page }) => {
+	await boot(page);
+	await page.goto('/modules/games/corner-florist', { waitUntil: 'networkidle' });
+	await expect(page).toHaveURL(/\/modules\/games\/window-garden\/?$/);
+	await expect(page.getByRole('heading', { name: '窗前庭园', level: 1 })).toBeVisible();
 	await page.goto('/modules/games/night-puzzle', { waitUntil: 'networkidle' });
-	await expect(page.getByRole('heading', { name: '夜窗拼图', level: 1 })).toBeVisible();
-	await page.getByRole('link', { name: '开始拼夜' }).click();
-	await expect(page).toHaveURL(/\/modules\/games\/night-puzzle\/play/);
-	await expect(page.getByText('夜色拼块')).toBeVisible();
-	await expect(page.getByRole('button', { name: '风来了' })).toBeVisible();
-	await expect(page.getByRole('button', { name: '月亮' }).first()).toBeVisible();
-	await page.screenshot({ path: 'screenshots/night-play-smoke-390.png' });
+	await expect(page).toHaveURL(/\/modules\/games\/sky-sortie\/?$/);
+	await expect(page.getByRole('heading', { name: '晴空出击', level: 1 })).toBeVisible();
+});
+
+test('shooter opens from catalog and plays', async ({ page }) => {
+	test.setTimeout(90_000);
+	await boot(page);
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/modules/games', { waitUntil: 'networkidle' });
+	const jet = page.locator('a.game-card').filter({ hasText: '晴空出击' });
+	await expect(jet.getByText('即将到来')).toHaveCount(0);
+	await jet.click();
+	await page.getByRole('link', { name: '开始出击' }).click();
+	await expect(page).toHaveURL(/\/modules\/games\/sky-sortie\/play/);
+	const canvas = page.locator('canvas[aria-label="晴空出击"]');
+	await expect(canvas).toBeVisible();
+	await expect(canvas).toHaveAttribute('data-ready', '1', { timeout: 20_000 });
+	await expect(canvas).toHaveAttribute('data-fired', '1', { timeout: 5_000 });
+	await expect(page.getByText('分数')).toBeVisible();
+	await page.screenshot({ path: 'screenshots/sky-play-smoke-390.png' });
+
+	const box = await canvas.boundingBox();
+	if (!box) throw new Error('canvas box');
+	await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.35);
+	await page.mouse.down();
+	await expect(canvas).toHaveAttribute('data-boss', '1', { timeout: 40_000 });
+	await expect(page.getByText('头目来了')).toBeVisible();
+	for (let i = 0; i < 120; i++) {
+		await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.18);
+		if ((await canvas.getAttribute('data-over')) === '1') break;
+		await page.waitForTimeout(180);
+	}
+	await expect(page.getByText('结束了')).toBeVisible({ timeout: 20_000 });
+	await page.mouse.up();
 });
 
 test('kit lives under 我的, not in tab bar', async ({ page }) => {

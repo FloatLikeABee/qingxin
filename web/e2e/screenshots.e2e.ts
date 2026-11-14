@@ -305,13 +305,13 @@ for (const view of views) {
 			await openReady(page, '/modules/games');
 			await expect(page.getByRole('heading', { name: '轻心游戏' })).toBeVisible();
 			await expect(page.getByRole('heading', { name: '便利店经理' }).first()).toBeVisible();
-			await expect(page.getByRole('heading', { name: '街角花店' }).first()).toBeVisible();
-			await expect(page.getByRole('heading', { name: '夜窗拼图' }).first()).toBeVisible();
+			await expect(page.getByRole('heading', { name: '窗前庭园' }).first()).toBeVisible();
+			await expect(page.getByRole('heading', { name: '晴空出击' }).first()).toBeVisible();
 			await expect(page.getByRole('button', { name: '经营' })).toBeVisible();
-			const florist = page.locator('a.game-card').filter({ hasText: '街角花店' });
-			const night = page.locator('a.game-card').filter({ hasText: '夜窗拼图' });
-			await expect(florist.getByText('即将到来')).toHaveCount(0);
-			await expect(night.getByText('即将到来')).toHaveCount(0);
+			const garden = page.locator('a.game-card').filter({ hasText: '窗前庭园' });
+			const jet = page.locator('a.game-card').filter({ hasText: '晴空出击' });
+			await expect(garden.getByText('即将到来')).toHaveCount(0);
+			await expect(jet.getByText('即将到来')).toHaveCount(0);
 			if (view.width < 800) {
 				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
 			}
@@ -342,14 +342,15 @@ for (const view of views) {
 
 for (const view of views) {
 	for (const theme of themes) {
-		test(`florist play ${view.name} ${theme}`, async ({ page }) => {
+		test(`garden play ${view.name} ${theme}`, async ({ page }) => {
 			await page.setViewportSize({ width: view.width, height: view.height });
 			await boot(page, theme);
-			await openReady(page, '/modules/games/corner-florist/play');
-			await expect(page.getByRole('button', { name: '开门' })).toBeVisible();
-			await expect(page.getByRole('button', { name: '玫瑰' })).toBeVisible();
+			await openReady(page, '/modules/games/window-garden/play');
+			await expect(page.getByRole('button', { name: '浇水' })).toBeVisible();
+			await page.getByRole('button', { name: /种下番茄/ }).click();
+			await page.waitForTimeout(600);
 			await page.screenshot({
-				path: `screenshots/florist-play-${view.name}-${theme}.png`
+				path: `screenshots/garden-play-${view.name}-${theme}.png`
 			});
 		});
 	}
@@ -357,14 +358,15 @@ for (const view of views) {
 
 for (const view of views) {
 	for (const theme of themes) {
-		test(`night play ${view.name} ${theme}`, async ({ page }) => {
+		test(`sky play ${view.name} ${theme}`, async ({ page }) => {
 			await page.setViewportSize({ width: view.width, height: view.height });
 			await boot(page, theme);
-			await openReady(page, '/modules/games/night-puzzle/play');
-			await expect(page.getByText('夜色拼块')).toBeVisible();
-			await expect(page.getByRole('button', { name: '月亮' }).first()).toBeVisible();
+			await openReady(page, '/modules/games/sky-sortie/play');
+			const canvas = page.locator('canvas[aria-label="晴空出击"]');
+			await expect(canvas).toHaveAttribute('data-ready', '1', { timeout: 20_000 });
+			await page.waitForTimeout(800);
 			await page.screenshot({
-				path: `screenshots/night-play-${view.name}-${theme}.png`
+				path: `screenshots/sky-play-${view.name}-${theme}.png`
 			});
 		});
 	}

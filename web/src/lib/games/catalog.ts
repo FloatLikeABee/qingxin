@@ -1,8 +1,17 @@
-export const GAME_CATEGORIES = ['全部', '经营', '休闲', '益智', '节奏'] as const;
+export const GAME_CATEGORIES = ['全部', '经营', '休闲', '益智', '节奏', '飞行'] as const;
 
 export type GameCategory = Exclude<(typeof GAME_CATEGORIES)[number], '全部'>;
 export type GameStatus = 'playable' | 'coming';
-export type CoverMotif = 'store' | 'flowers' | 'puzzle' | 'wave' | 'cloud' | 'shelf';
+export type CoverMotif = 'store' | 'garden' | 'jet' | 'wave' | 'cloud' | 'shelf';
+
+export const GAME_ALIASES: Record<string, string> = {
+	'corner-florist': 'window-garden',
+	'night-puzzle': 'sky-sortie'
+};
+
+export function aliasTarget(id: string): string | undefined {
+	return GAME_ALIASES[id];
+}
 
 export interface GameCoverArt {
 	sky: string;
@@ -46,36 +55,39 @@ export const GAMES: GameInfo[] = [
 		}
 	},
 	{
-		id: 'corner-florist',
-		title: '街角花店',
-		summary: '把当天的花束配齐，等有人推门进来。',
+		id: 'window-garden',
+		title: '窗前庭园',
+		englishTitle: 'Window Garden',
+		summary: '把四十多种植物养熟，认出益虫和害虫。园子没有通关。',
 		about:
-			'早晨先把橱窗配齐。玫瑰偏暖，绣球偏静，郁金香偏亮。有人推门进来，按他们想要的气色递出一束，太慢他们会走。',
+			'窗台上十二畦土。番茄、薄荷、银杏……每一种长得不一样，喝水、见光、吃肥也不一样。看清虫子：蜜蜂和瓢虫请留着，蚜虫和蜗牛要捉走。收成换成种子和照料用品。园子没有通关，只有下一季。这是简化的玩法，不是园艺教科书。',
 		category: '经营',
-		tags: ['花束', '橱窗'],
+		tags: ['种植', '虫鸣'],
 		status: 'playable',
-		playCta: '开始配花',
+		playCta: '开始种植',
 		cover: {
-			sky: '#F8C9C0',
+			sky: '#9EC9FF',
 			ground: '#E7F6F1',
-			accent: '#F97316',
-			motif: 'flowers'
+			accent: '#14B8A6',
+			motif: 'garden'
 		}
 	},
 	{
-		id: 'night-puzzle',
-		title: '夜窗拼图',
-		summary: '把窗外那块被风吹乱的夜色拼回去。',
-		about: '风把窗外的夜色撕成碎片。把月亮、星河和楼下的灯窗放回原位。拼回去的那一块会重新亮起来。',
-		category: '益智',
-		tags: ['夜晚', '拼块'],
+		id: 'sky-sortie',
+		title: '晴空出击',
+		englishTitle: 'Azure Sortie',
+		summary: '在淡蓝天空里躲开弹雨，打完一波还有下一波。',
+		about:
+			'战机自己开火。键盘或手指带着它飞。三条命，挨打后会闪一会儿。侦察机、战斗机、轰炸机分值不同，残骸要躲开。每隔几波会来一架有预兆的头目。活着就有敌人。分数记在这台机器上。',
+		category: '飞行',
+		tags: ['战机', '无尽'],
 		status: 'playable',
-		playCta: '开始拼夜',
+		playCta: '开始出击',
 		cover: {
-			sky: '#1E3A5F',
-			ground: '#0B1526',
-			accent: '#60A5FA',
-			motif: 'puzzle'
+			sky: '#9EC9FF',
+			ground: '#DBEAFE',
+			accent: '#3B82F6',
+			motif: 'jet'
 		}
 	},
 	{
