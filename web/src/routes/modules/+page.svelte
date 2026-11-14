@@ -20,7 +20,7 @@
 			<div>
 				<h1 class="font-[Outfit] text-3xl font-semibold tracking-tight">模块中心</h1>
 				<p class="mt-2 text-[var(--qx-muted)]">
-					内容创作是主产品。秘密信箱单独收信。游戏还在后面。
+					内容创作是主产品。秘密信箱单独收信。游戏可以进店里过一个班次。
 				</p>
 			</div>
 		</BentoItem>
@@ -44,20 +44,5 @@
 				</a>
 			</BentoItem>
 		{/each}
-		<BentoItem span="wide">
-			<Card class="h-full opacity-70">
-				<div class="flex items-start justify-between gap-3">
-					<div
-						class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--qx-accent-gold)] text-white"
-					>
-						<Icon name="game" />
-					</div>
-				</div>
-				<h2 class="mt-5 text-lg font-semibold">游戏</h2>
-				<p class="mt-1 text-base text-[var(--qx-muted)]">轻松小游戏还在编排，这一期先不做。</p>
-				<button type="button" class="mt-3 min-h-11 text-[var(--qx-muted)]" disabled>即将到来</button
-				>
-			</Card>
-		</BentoItem>
 	</Bento>
 </section>
