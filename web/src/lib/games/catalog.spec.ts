@@ -14,7 +14,7 @@ describe('games registry', () => {
 		});
 		expect(getGame('window-garden')).toMatchObject({
 			title: '窗前庭园',
-			summary: '把四十多种植物养熟，认出益虫和害虫。园子没有通关。',
+			summary: '把六十多种植物养熟，认出益虫和害虫。园子没有通关。',
 			category: '经营',
 			tags: ['种植', '虫鸣'],
 			status: 'playable',

@@ -64,6 +64,14 @@ test('card opens detail then play chrome', async ({ page }) => {
 	await expect(page.getByRole('button', { name: '重新开始' })).toBeVisible();
 	await expect(page.getByText('现金')).toBeVisible();
 	await expect(page.getByRole('button', { name: '从库房补货' })).toBeVisible();
+	await page
+		.getByRole('button', { name: /矿泉水/ })
+		.first()
+		.click();
+	await page.getByRole('button', { name: '从库房补货' }).click();
+	await expect(page.locator('canvas[data-shoppers]')).toHaveAttribute('data-shoppers', /[1-9]/, {
+		timeout: 20_000
+	});
 	await page.screenshot({ path: 'screenshots/store-play-smoke-390.png' });
 	await page.getByRole('link', { name: '← 返回目录' }).click();
 	await expect(page.getByRole('heading', { name: '轻心游戏' })).toBeVisible();
@@ -103,7 +111,11 @@ test('garden opens from catalog into play chrome', async ({ page }) => {
 	await page.getByRole('link', { name: '开始种植' }).click();
 	await expect(page).toHaveURL(/\/modules\/games\/window-garden\/play/);
 	await expect(page.getByRole('link', { name: '← 返回目录' })).toBeVisible();
+	await expect(page.locator('canvas[aria-label="窗前庭园"]')).toBeVisible();
+	await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 	await expect(page.getByRole('button', { name: '浇水' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '修剪' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '换盆' })).toBeVisible();
 	await expect(page.getByRole('button', { name: /种下番茄/ })).toBeVisible();
 	await expect(page.getByRole('button', { name: '暂停' })).toBeVisible();
 	await page.screenshot({ path: 'screenshots/garden-play-smoke-390.png' });
@@ -112,34 +124,41 @@ test('garden opens from catalog into play chrome', async ({ page }) => {
 test('garden plant, care, bugs, harvest, and reload', async ({ page }) => {
 	test.setTimeout(90_000);
 	await boot(page);
+	await page.addInitScript(() => {
+		(window as { __qingxinE2E?: boolean }).__qingxinE2E = true;
+	});
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/modules/games/window-garden/play', { waitUntil: 'networkidle' });
+	await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 	await page.getByRole('button', { name: '番茄' }).first().click();
 	await page.getByRole('button', { name: /种下番茄/ }).click();
 	await expect(page.locator('[data-bed="0"]')).toContainText('番茄');
 	await page.getByRole('button', { name: '浇水' }).click();
 	await page.getByRole('button', { name: '施肥' }).click();
-	const bug = page.getByRole('button', { name: /害虫|益虫/ });
-	await expect(bug.first()).toBeVisible({ timeout: 25_000 });
+	await page.getByRole('button', { name: '修剪' }).click();
+	await expect(page.getByText(/剪不得|修了一枝|剪得太勤/)).toBeVisible();
+	await page.evaluate(() => {
+		(window as { __qingxinGardenTest?: { seedDemo: () => void } }).__qingxinGardenTest?.seedDemo();
+	});
+	await expect(page.locator('[data-bed="0"]')).toContainText('番茄');
+	await expect(page.locator('[data-bed="1"]')).toContainText('向日葵');
+	await expect(page.locator('[data-bed="2"]')).toContainText('肾蕨');
+	await page
+		.getByRole('button', { name: /害虫|益虫/ })
+		.first()
+		.waitFor({ timeout: 20_000 });
 	const pest = page.getByRole('button', { name: /害虫/ });
 	if ((await pest.count()) > 0) {
 		await pest.first().click();
-		await expect(page.getByText('害虫')).toBeVisible();
+		await expect(page.getByText('捉走了害虫')).toBeVisible();
 	} else {
 		await expect(page.getByRole('button', { name: /益虫/ }).first()).toBeVisible();
 	}
+	await page.getByRole('button', { name: '换盆' }).click();
 	await page.reload({ waitUntil: 'networkidle' });
 	await expect(page.locator('[data-bed="0"]')).toContainText('番茄');
-	for (let i = 0; i < 16; i++) {
-		await page.getByRole('button', { name: '浇水' }).click();
-		const nextPest = page.getByRole('button', { name: /害虫/ });
-		if ((await nextPest.count()) > 0) await nextPest.first().click();
-		if (await page.getByRole('button', { name: '收获' }).isEnabled()) break;
-		await page.waitForTimeout(1200);
-	}
-	await expect(page.getByRole('button', { name: '收获' })).toBeEnabled();
-	await page.getByRole('button', { name: '收获' }).click();
-	await expect(page.locator('[data-bed="0"]')).toContainText('空畦');
+	await page.getByRole('button', { name: '收获', exact: true }).click();
+	await expect(page.locator('[data-bed="0"]')).toContainText('空盆');
 });
 
 test('old florist and night routes redirect', async ({ page }) => {

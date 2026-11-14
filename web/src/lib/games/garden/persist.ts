@@ -1,10 +1,23 @@
-import { BED_COUNT, createGarden, type Bed, type Bug, type GardenState, type Stage } from './sim';
+import {
+	BED_COUNT,
+	createGarden,
+	emptyBed,
+	roleFor,
+	type Bed,
+	type Bug,
+	type BugKind,
+	type BugPhase,
+	type GardenState,
+	type Stage
+} from './sim';
 import { plantById } from './plants';
 
 export const GARDEN_SAVE_KEY = 'qingxin.games.window-garden';
-export const GARDEN_SCHEMA = 1;
+export const GARDEN_SCHEMA = 2;
 
 const STAGES: Stage[] = ['empty', 'seed', 'sprout', 'leaf', 'bud', 'bloom', 'ripe', 'wilt'];
+const KINDS: BugKind[] = ['aphid', 'snail', 'bee', 'ladybug', 'butterfly', 'caterpillar'];
+const PHASES: BugPhase[] = ['arrive', 'visit', 'leave'];
 
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return value && typeof value === 'object' && !Array.isArray(value)
@@ -18,32 +31,34 @@ function clamp(n: unknown, min: number, max: number, fallback: number) {
 	return Math.min(max, Math.max(min, Math.round(value)));
 }
 
-function parseBug(value: unknown, nextId: { n: number }): Bug | null {
+function parseBug(value: unknown, nextId: { n: number }, fallbackBed: number): Bug | null {
 	const rec = asRecord(value);
 	if (!rec) return null;
 	const kind = rec.kind;
-	if (kind !== 'aphid' && kind !== 'snail' && kind !== 'bee' && kind !== 'ladybug') return null;
-	const role = kind === 'bee' ? 'pollinator' : kind === 'ladybug' ? 'predator' : 'pest';
-	return { id: nextId.n++, kind, role };
+	if (!KINDS.includes(kind as BugKind)) return null;
+	const typed = kind as BugKind;
+	const phase = PHASES.includes(rec.phase as BugPhase) ? (rec.phase as BugPhase) : 'visit';
+	const bedId = clamp(rec.bedId, 0, BED_COUNT - 1, fallbackBed);
+	return {
+		id: nextId.n++,
+		kind: typed,
+		role: roleFor(typed),
+		bedId,
+		phase,
+		age: clamp(rec.age, 0, 400, 0),
+		ttl: clamp(rec.ttl, 1, 200, 40)
+	};
 }
 
 function parseBed(value: unknown, id: number, nextId: { n: number }): Bed {
 	const rec = asRecord(value);
-	const fallback: Bed = {
-		id,
-		plantId: null,
-		stage: 'empty',
-		progress: 0,
-		water: 1,
-		light: 2,
-		nutrient: 1,
-		health: 3,
-		shade: false,
-		bugs: []
-	};
+	const fallback = emptyBed(id);
 	if (!rec) return fallback;
 	const plantId = typeof rec.plantId === 'string' && plantById(rec.plantId) ? rec.plantId : null;
 	const stage = STAGES.includes(rec.stage as Stage) ? (rec.stage as Stage) : 'empty';
+	const bugs = Array.isArray(rec.bugs)
+		? rec.bugs.map((bug) => parseBug(bug, nextId, id)).filter((bug): bug is Bug => Boolean(bug))
+		: [];
 	return {
 		id,
 		plantId: plantId && stage !== 'empty' ? plantId : null,
@@ -54,9 +69,10 @@ function parseBed(value: unknown, id: number, nextId: { n: number }): Bed {
 		nutrient: clamp(rec.nutrient, 0, 3, 1),
 		health: clamp(rec.health, 0, 3, 3),
 		shade: rec.shade === true,
-		bugs: Array.isArray(rec.bugs)
-			? rec.bugs.map((bug) => parseBug(bug, nextId)).filter((bug): bug is Bug => Boolean(bug))
-			: []
+		bugs,
+		potSize: clamp(rec.potSize, 1, 2, 1),
+		pruned: clamp(rec.pruned, 0, 20, 0),
+		lastPrune: clamp(rec.lastPrune, -999, 1_000_000, -999)
 	};
 }
 
@@ -70,6 +86,7 @@ export function serializeGarden(garden: GardenState) {
 		harvests: garden.harvests,
 		seeds: garden.seeds,
 		beds: garden.beds,
+		bugs: garden.bugs,
 		nextId: garden.nextId
 	};
 }
@@ -93,7 +110,7 @@ export function readGardenSave(
 		if (!raw) return createGarden();
 		const parsed = JSON.parse(raw) as unknown;
 		const rec = asRecord(parsed);
-		if (!rec || rec.schema !== GARDEN_SCHEMA) {
+		if (!rec || (rec.schema !== 1 && rec.schema !== 2)) {
 			const fresh = createGarden();
 			fresh.recovered = true;
 			fresh.notice = '存档读不出来，园子重新起土了。';
@@ -109,6 +126,9 @@ export function readGardenSave(
 		}
 		const listed = Array.isArray(rec.beds) ? rec.beds : [];
 		const beds = Array.from({ length: BED_COUNT }, (_, id) => parseBed(listed[id], id, nextId));
+		const worldBugs = Array.isArray(rec.bugs)
+			? rec.bugs.map((bug) => parseBug(bug, nextId, 0)).filter((bug): bug is Bug => Boolean(bug))
+			: beds.flatMap((bed) => bed.bugs);
 		const garden = createGarden();
 		garden.tick = clamp(rec.tick, 0, 1_000_000, 0);
 		garden.coins = clamp(rec.coins, 0, 9999, 0);
@@ -117,6 +137,10 @@ export function readGardenSave(
 		garden.harvests = clamp(rec.harvests, 0, 9999, 0);
 		garden.seeds = seeds;
 		garden.beds = beds;
+		garden.bugs = worldBugs;
+		for (const bed of garden.beds) {
+			bed.bugs = garden.bugs.filter((bug) => bug.bedId === bed.id && bug.phase === 'visit');
+		}
 		garden.nextId = nextId.n;
 		garden.recovered = false;
 		garden.notice = '园子还在。';

@@ -82,6 +82,16 @@
 		let onUp: ((event: PointerEvent) => void) | undefined;
 		let cancelled = false;
 
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key >= '1' && event.key <= '5') selected = Number(event.key) - 1;
+			if (event.key === 'r' || event.key === 'R') restockSelected();
+		};
+		window.addEventListener('keydown', onKey);
+		const onVis = () => {
+			if (document.hidden) sim.paused = true;
+		};
+		document.addEventListener('visibilitychange', onVis);
+
 		void (async () => {
 			const { mountStoreScene } = await import('./render');
 			if (cancelled) return;
@@ -127,13 +137,14 @@
 			const loop = (now: number) => {
 				const dt = Math.min(0.05, (now - last) / 1000);
 				last = now;
-				if (!sim.paused && !sim.over) {
+				if (!sim.paused && !sim.over && !document.hidden) {
 					acc += dt;
 					while (acc >= 0.1) {
 						tick(sim);
 						acc -= 0.1;
 					}
 				}
+				if (canvas) canvas.dataset.shoppers = String(sim.shoppers.length);
 				scene?.sync(sim, selected);
 				scene?.render(now);
 				raf = requestAnimationFrame(loop);
@@ -152,6 +163,8 @@
 				stage.removeEventListener('pointerup', onUp);
 				stage.removeEventListener('pointercancel', onUp);
 			}
+			window.removeEventListener('keydown', onKey);
+			document.removeEventListener('visibilitychange', onVis);
 			scene?.dispose();
 		};
 	});
@@ -212,18 +225,20 @@
 			class="mx-auto max-w-4xl rounded-3xl bg-[color-mix(in_srgb,var(--qx-card)_90%,transparent)] p-3 ring-1 ring-[var(--qx-line)] backdrop-blur-xl md:p-4"
 		>
 			<p class="mb-2 text-sm text-[var(--qx-muted)]">
-				点货架或点下面的货。库房有货就能补上；钱够再进一箱。
+				点货架。空了会亮红。从库房补上，钱够再进箱。
 			</p>
 			<div class="flex gap-2 overflow-x-auto pb-1">
 				{#each sim.shelves as shelf (shelf.id)}
 					{@const goods = GOODS[shelf.sku]}
 					<button
 						type="button"
-						class="sku-card {selected === shelf.id ? 'sku-card-on' : ''}"
+						class="sku-card {selected === shelf.id ? 'sku-card-on' : ''} {shelf.stock <= 2
+							? 'sku-low'
+							: ''}"
 						onclick={() => (selected = shelf.id)}
 					>
 						<span class="swatch" style="background:{goods.color}"></span>
-						<span class="font-medium">{goods.name}</span>
+						<span class="font-medium">{goods.name}{shelf.stock <= 2 ? ' 缺货' : ''}</span>
 						<span class="meta">架上 {shelf.stock}/{shelf.capacity}</span>
 						<span class="meta">库房 {sim.storage[shelf.sku]}</span>
 						<span class="meta">{yuan(goods.price)} / 件</span>
@@ -231,7 +246,9 @@
 				{/each}
 			</div>
 			<div class="mt-3 flex flex-wrap gap-2">
-				<Button onclick={restockSelected} disabled={sim.over}>从库房补货</Button>
+				<Button class="min-h-12 min-w-36 px-6" onclick={restockSelected} disabled={sim.over}
+					>从库房补货</Button
+				>
 				{#if selectedShelf}
 					<Button
 						variant="secondary"
@@ -332,6 +349,10 @@
 	.sku-card-on {
 		box-shadow: 0 0 0 2px var(--qx-primary);
 		background: var(--qx-card);
+	}
+
+	.sku-low {
+		box-shadow: 0 0 0 2px var(--qx-accent-coral);
 	}
 
 	.swatch {

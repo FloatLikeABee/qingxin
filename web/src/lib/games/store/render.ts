@@ -58,6 +58,18 @@ function floorTexture(dark: boolean) {
 	});
 }
 
+function labelTexture(title: string, fill: string, ink = '#fff7ed') {
+	return canvasTexture((ctx, size) => {
+		ctx.fillStyle = fill;
+		ctx.fillRect(0, 0, size, size);
+		ctx.fillStyle = ink;
+		ctx.font = '700 120px "Noto Sans SC", sans-serif';
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillText(title, size / 2, size / 2);
+	}, 256);
+}
+
 function signTexture() {
 	return canvasTexture((ctx, size) => {
 		ctx.fillStyle = '#2563eb';
@@ -132,7 +144,19 @@ export function mountStoreScene(canvas: HTMLCanvasElement): StoreScene | null {
 		mat(0xbfdbfe, { transparent: true, opacity: 0.38, roughness: 0.12, metalness: 0.2 })
 	);
 	const skuMats = Object.fromEntries(
-		SKUS.map((sku) => [sku, keep(mat(Number.parseInt(GOODS[sku].color.slice(1), 16)))])
+		SKUS.map((sku) => {
+			const tex = labelTexture(GOODS[sku].name.slice(0, 2), GOODS[sku].color);
+			textures.push(tex);
+			return [
+				sku,
+				keep(
+					mat(Number.parseInt(GOODS[sku].color.slice(1), 16), {
+						map: tex,
+						roughness: 0.45
+					})
+				)
+			];
+		})
 	) as Record<SkuId, ReturnType<typeof mat>>;
 	const clothMats = CLOTHES.map((hex) => keep(mat(hex)));
 	const skinMat = keep(mat(0xf2c7a4));
@@ -249,6 +273,12 @@ export function mountStoreScene(canvas: HTMLCanvasElement): StoreScene | null {
 		addBox(root, glass, -halfW + 0.04, 1.45, worldZ(3), 0.05, 1.2, 2.4);
 		addBox(root, glass, -halfW + 0.04, 1.45, worldZ(6.2), 0.05, 1.2, 1.6);
 		addBox(root, trim, 0, 0.08, -halfD + 0.12, COLS * TILE, 0.16, 0.08);
+		addBox(root, cream, worldX(3), 2.48, worldZ(3.2), 1.6, 0.06, 0.6);
+		addBox(root, cream, worldX(6), 2.48, worldZ(5.1), 1.6, 0.06, 0.6);
+		addBox(root, gold, worldX(3), 2.42, worldZ(3.2), 0.28, 0.08, 0.28);
+		addBox(root, gold, worldX(6), 2.42, worldZ(5.1), 0.28, 0.08, 0.28);
+		addBox(root, coral, worldX(2.2), 1.7, -halfD + 0.16, 1.1, 0.7, 0.04);
+		addBox(root, teal, worldX(6.4), 1.7, -halfD + 0.16, 1.1, 0.7, 0.04);
 
 		signMesh = addBox(root, signMat, 0, 2.05, -halfD + 0.14, 3.2, 0.9, 0.08);
 
@@ -339,6 +369,72 @@ export function mountStoreScene(canvas: HTMLCanvasElement): StoreScene | null {
 		root.add(cord);
 	}
 
+	const capMat = keep(mat(0xf8fafc));
+	const paperMat = keep(mat(0xfef3c7));
+	const trayMat = keep(mat(0xf8efe2));
+	const coolLight = keep(mat(0x67e8f9, { emissive: 0x67e8f9, emissiveIntensity: 0.35 }));
+
+	function packItem(sku: SkuId) {
+		const item = new THREE.Group();
+		const material = skuMats[sku];
+		if (sku === 'water') {
+			const body = new THREE.Mesh(unitCyl, material);
+			body.scale.set(0.18, 0.4, 0.18);
+			body.position.y = 0.2;
+			const cap = new THREE.Mesh(unitCyl, capMat);
+			cap.scale.set(0.08, 0.07, 0.08);
+			cap.position.y = 0.43;
+			const neck = new THREE.Mesh(unitCyl, material);
+			neck.scale.set(0.08, 0.09, 0.08);
+			neck.position.y = 0.38;
+			item.add(body, cap, neck);
+		} else if (sku === 'bread') {
+			const loaf = new THREE.Mesh(unitBox, material);
+			loaf.scale.set(0.3, 0.14, 0.18);
+			loaf.position.y = 0.07;
+			const band = new THREE.Mesh(unitBox, paperMat);
+			band.scale.set(0.32, 0.045, 0.19);
+			band.position.y = 0.09;
+			item.add(loaf, band);
+		} else if (sku === 'milk') {
+			const carton = new THREE.Mesh(unitBox, material);
+			carton.scale.set(0.16, 0.32, 0.12);
+			carton.position.y = 0.16;
+			const peak = new THREE.Mesh(unitCyl, material);
+			peak.scale.set(0.12, 0.1, 0.1);
+			peak.position.y = 0.35;
+			const stripe = new THREE.Mesh(unitBox, capMat);
+			stripe.scale.set(0.17, 0.035, 0.13);
+			stripe.position.y = 0.22;
+			item.add(carton, peak, stripe);
+		} else if (sku === 'bento') {
+			const tray = new THREE.Mesh(unitBox, trayMat);
+			tray.scale.set(0.32, 0.07, 0.22);
+			tray.position.y = 0.035;
+			const lid = new THREE.Mesh(unitBox, material);
+			lid.scale.set(0.3, 0.045, 0.2);
+			lid.position.y = 0.09;
+			const window = new THREE.Mesh(unitBox, glass);
+			window.scale.set(0.18, 0.025, 0.13);
+			window.position.y = 0.12;
+			item.add(tray, lid, window);
+		} else {
+			const bag = new THREE.Mesh(unitBox, material);
+			bag.scale.set(0.2, 0.26, 0.1);
+			bag.position.y = 0.13;
+			bag.rotation.z = 0.08;
+			const clip = new THREE.Mesh(unitBox, gold);
+			clip.scale.set(0.21, 0.035, 0.11);
+			clip.position.y = 0.27;
+			item.add(bag, clip);
+		}
+		for (const child of item.children) {
+			const mesh = child as { castShadow?: boolean };
+			if ('castShadow' in mesh) mesh.castShadow = true;
+		}
+		return item;
+	}
+
 	function fillStock(
 		group: { children: unknown[]; remove: (child: unknown) => void; add: (child: unknown) => void },
 		sku: SkuId,
@@ -346,22 +442,20 @@ export function mountStoreScene(canvas: HTMLCanvasElement): StoreScene | null {
 		cooler: boolean
 	) {
 		while (group.children.length) group.remove(group.children[0]);
-		const material = skuMats[sku];
+		if (cooler) {
+			const glow = new THREE.Mesh(unitBox, coolLight);
+			glow.position.set(0, 1.05, -0.18);
+			glow.scale.set(0.72, 1.55, 0.04);
+			group.add(glow);
+		}
 		const boards = cooler ? [0.78, 1.36] : [0.68, 1.14, 1.52];
 		for (let i = 0; i < count; i++) {
 			const cols = 3;
 			const col = i % cols;
 			const row = Math.min(boards.length - 1, Math.floor(i / cols));
-			const mesh =
-				sku === 'water' ? new THREE.Mesh(unitCyl, material) : new THREE.Mesh(unitBox, material);
-			mesh.position.set((col - 1) * 0.26, boards[row] ?? 0.68, 0.06);
-			if (sku === 'water') mesh.scale.set(0.16, 0.36, 0.16);
-			else if (sku === 'bread') mesh.scale.set(0.24, 0.12, 0.18);
-			else if (sku === 'milk') mesh.scale.set(0.14, 0.3, 0.14);
-			else if (sku === 'bento') mesh.scale.set(0.26, 0.1, 0.2);
-			else mesh.scale.set(0.18, 0.2, 0.14);
-			mesh.castShadow = true;
-			group.add(mesh);
+			const item = packItem(sku);
+			item.position.set((col - 1) * 0.26, boards[row] ?? 0.68, 0.08);
+			group.add(item);
 		}
 	}
 
@@ -393,11 +487,27 @@ export function mountStoreScene(canvas: HTMLCanvasElement): StoreScene | null {
 		const hair = new THREE.Mesh(unitSphere, hairMat);
 		hair.position.set(0, 1.2, -0.02);
 		hair.scale.set(0.34, 0.2, 0.3);
+		const armL = new THREE.Mesh(unitBox, cloth);
+		armL.name = 'armL';
+		armL.position.set(-0.28, 0.62, 0.02);
+		armL.scale.set(0.1, 0.46, 0.1);
+		const armR = new THREE.Mesh(unitBox, cloth);
+		armR.name = 'armR';
+		armR.position.set(0.28, 0.62, 0.02);
+		armR.scale.set(0.1, 0.46, 0.1);
+		const legL = new THREE.Mesh(unitBox, cloth);
+		legL.name = 'legL';
+		legL.position.set(-0.1, 0.22, 0);
+		legL.scale.set(0.1, 0.44, 0.12);
+		const legR = new THREE.Mesh(unitBox, cloth);
+		legR.name = 'legR';
+		legR.position.set(0.1, 0.22, 0);
+		legR.scale.set(0.1, 0.44, 0.12);
 		const bag = new THREE.Mesh(unitBox, bagMat);
 		bag.name = 'bag';
 		bag.position.set(0.22, 0.42, 0);
 		bag.scale.set(0.14, 0.18, 0.12);
-		group.add(body, head, hair, bag);
+		group.add(body, head, hair, armL, armR, legL, legR, bag);
 		group.userData.id = id;
 		shoppersRoot.add(group);
 		return group;
@@ -414,8 +524,8 @@ export function mountStoreScene(canvas: HTMLCanvasElement): StoreScene | null {
 	const lastStorage: number[] = SKUS.map(() => -1);
 
 	function placeCamera() {
-		const radius = 14.2;
-		camera.position.set(Math.cos(yaw) * radius, 9.1, Math.sin(yaw) * radius);
+		const radius = 14.6;
+		camera.position.set(Math.cos(yaw) * radius, 9.7, Math.sin(yaw) * radius);
 		camera.lookAt(look);
 		camera.updateProjectionMatrix();
 	}
@@ -425,13 +535,13 @@ export function mountStoreScene(canvas: HTMLCanvasElement): StoreScene | null {
 		const w = Math.max(1, parent.clientWidth);
 		const h = Math.max(1, parent.clientHeight);
 		const aspect = w / h;
-		const frustum = h < 700 ? 6.9 : 7.35;
+		const frustum = h < 700 ? 7.35 : 7.6;
 		camera.left = -frustum * aspect;
 		camera.right = frustum * aspect;
 		camera.top = frustum;
 		camera.bottom = -frustum;
 		camera.updateProjectionMatrix();
-		renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+		renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, h < 700 ? 1.35 : 2));
 		renderer.setSize(w, h, false);
 		placeCamera();
 	}
@@ -480,7 +590,11 @@ export function mountStoreScene(canvas: HTMLCanvasElement): StoreScene | null {
 			}
 			const bag = group.getObjectByName('bag');
 			if (bag) bag.visible = shopper.basket.length > 0;
-			group.position.y = shopper.phase === 'pick' ? 0.04 : 0;
+			group.userData.phase = shopper.phase;
+			const armL = group.getObjectByName('armL');
+			if (armL)
+				armL.rotation.x = shopper.phase === 'pick' ? -0.95 : shopper.phase === 'pay' ? -0.35 : 0;
+			group.position.y = shopper.phase === 'pick' ? 0.05 : shopper.phase === 'pay' ? 0.02 : 0;
 			if (shopper.disappointed) group.scale.setScalar(0.92);
 			else group.scale.setScalar(1);
 		}
@@ -511,6 +625,18 @@ export function mountStoreScene(canvas: HTMLCanvasElement): StoreScene | null {
 	function render(now: number) {
 		pendant.intensity = 1.05 + Math.sin(now * 0.0016) * 0.08;
 		if (signMesh) signMesh.position.y = 3.15 + Math.sin(now * 0.0012) * 0.02;
+		for (const group of shopperMap.values()) {
+			const phase = group.userData.phase as string;
+			const walking = phase === 'toShelf' || phase === 'toQueue' || phase === 'leave';
+			if (walking) {
+				group.position.y = Math.abs(Math.sin(now * 0.012 + group.userData.id)) * 0.05;
+				const swing = Math.sin(now * 0.014 + group.userData.id) * 0.45;
+				const legL = group.getObjectByName('legL');
+				const legR = group.getObjectByName('legR');
+				if (legL) legL.rotation.x = swing;
+				if (legR) legR.rotation.x = -swing;
+			}
+		}
 		renderer.render(scene, camera);
 	}
 

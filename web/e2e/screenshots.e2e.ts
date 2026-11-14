@@ -333,6 +333,8 @@ for (const view of views) {
 			await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 			await expect(page.getByRole('button', { name: '从库房补货' })).toBeVisible();
 			await page.waitForTimeout(1200);
+			const storeScroll = await page.evaluate(() => document.documentElement.scrollWidth);
+			expect(storeScroll).toBeLessThanOrEqual(view.width + 2);
 			await page.screenshot({
 				path: `screenshots/store-play-${view.name}-${theme}.png`
 			});
@@ -345,10 +347,23 @@ for (const view of views) {
 		test(`garden play ${view.name} ${theme}`, async ({ page }) => {
 			await page.setViewportSize({ width: view.width, height: view.height });
 			await boot(page, theme);
+			await page.addInitScript(() => {
+				(window as { __qingxinE2E?: boolean }).__qingxinE2E = true;
+			});
 			await openReady(page, '/modules/games/window-garden/play');
+			await expect(page.locator('canvas[aria-label="窗前庭园"]')).toBeVisible();
+			await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 			await expect(page.getByRole('button', { name: '浇水' })).toBeVisible();
-			await page.getByRole('button', { name: /种下番茄/ }).click();
-			await page.waitForTimeout(600);
+			await page.evaluate(() => {
+				(
+					window as { __qingxinGardenTest?: { seedDemo: () => void } }
+				).__qingxinGardenTest?.seedDemo();
+			});
+			await expect(page.locator('[data-bed="0"]')).toContainText('番茄');
+			await expect(page.locator('[data-bed="1"]')).toContainText('向日葵');
+			await page.waitForTimeout(700);
+			const gardenScroll = await page.evaluate(() => document.documentElement.scrollWidth);
+			expect(gardenScroll).toBeLessThanOrEqual(view.width + 2);
 			await page.screenshot({
 				path: `screenshots/garden-play-${view.name}-${theme}.png`
 			});
