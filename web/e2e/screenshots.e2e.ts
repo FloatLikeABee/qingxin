@@ -299,6 +299,130 @@ for (const view of views) {
 
 for (const view of views) {
 	for (const theme of themes) {
+		test(`games catalog ${view.name} ${theme}`, async ({ page }) => {
+			await page.setViewportSize({ width: view.width, height: view.height });
+			await boot(page, theme);
+			await openReady(page, '/modules/games');
+			await expect(page.getByRole('heading', { name: '轻心游戏' })).toBeVisible();
+			await expect(page.getByRole('heading', { name: '便利店经理' }).first()).toBeVisible();
+			await expect(page.getByRole('heading', { name: '窗前庭园' }).first()).toBeVisible();
+			await expect(page.getByRole('heading', { name: '晴空出击' }).first()).toBeVisible();
+			await expect(page.getByRole('button', { name: '经营' })).toBeVisible();
+			const garden = page.locator('a.game-card').filter({ hasText: '窗前庭园' });
+			const jet = page.locator('a.game-card').filter({ hasText: '晴空出击' });
+			await expect(garden.getByText('即将到来')).toHaveCount(0);
+			await expect(jet.getByText('即将到来')).toHaveCount(0);
+			if (view.width < 800) {
+				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
+			}
+			await page.screenshot({
+				path: `screenshots/games-catalog-${view.name}-${theme}.png`,
+				fullPage: true
+			});
+		});
+	}
+}
+
+for (const view of views) {
+	for (const theme of themes) {
+		test(`store play ${view.name} ${theme}`, async ({ page }) => {
+			await page.setViewportSize({ width: view.width, height: view.height });
+			await boot(page, theme);
+			await openReady(page, '/modules/games/convenient-store/play');
+			await expect(page.locator('canvas[aria-label="便利店三维店面"]')).toBeVisible();
+			await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
+			await expect(page.getByRole('button', { name: '从库房补货' })).toBeVisible();
+			await page.waitForTimeout(1200);
+			const storeScroll = await page.evaluate(() => document.documentElement.scrollWidth);
+			expect(storeScroll).toBeLessThanOrEqual(view.width + 2);
+			await page.screenshot({
+				path: `screenshots/store-play-${view.name}-${theme}.png`
+			});
+		});
+	}
+}
+
+for (const view of views) {
+	for (const theme of themes) {
+		test(`garden play ${view.name} ${theme}`, async ({ page }) => {
+			await page.setViewportSize({ width: view.width, height: view.height });
+			await boot(page, theme);
+			await page.addInitScript(() => {
+				if (!sessionStorage.getItem('qingxin.keepGarden')) {
+					localStorage.removeItem('qingxin.games.window-garden');
+				}
+				(window as { __qingxinE2E?: boolean }).__qingxinE2E = true;
+			});
+			await openReady(page, '/modules/games/window-garden/play');
+			await expect(page.locator('canvas[aria-label="窗前庭园"]')).toBeVisible();
+			await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
+			await expect(page.getByRole('button', { name: '浇水' })).toBeVisible();
+			await page.waitForFunction(
+				() =>
+					Boolean(
+						(window as { __qingxinGardenTest?: { potClient: (id: number) => unknown } })
+							.__qingxinGardenTest?.potClient(0)
+					)
+			);
+			await page.evaluate(() => {
+				(window as { __qingxinGardenTest?: { setPaused: (paused: boolean) => void } })
+					.__qingxinGardenTest?.setPaused(true);
+			});
+			const clickPot = async (id: number) => {
+				const pt = await page.evaluate((bedId) => {
+					return (
+						window as {
+							__qingxinGardenTest?: { potClient: (id: number) => { x: number; y: number } | null };
+						}
+					).__qingxinGardenTest?.potClient(bedId);
+				}, id);
+				if (!pt) throw new Error(`pot ${id}`);
+				await page.mouse.click(pt.x, pt.y);
+			};
+			await clickPot(0);
+			await page.getByRole('button', { name: '番茄', exact: true }).click();
+			await page.getByRole('button', { name: '种下番茄' }).click();
+			await clickPot(1);
+			await page.getByRole('button', { name: '生菜', exact: true }).click();
+			await page.getByRole('button', { name: '种下生菜' }).click();
+			await page.evaluate(() => {
+				const api = (
+					window as { __qingxinGardenTest?: { tick: (n: number) => void; setPaused: (paused: boolean) => void } }
+				).__qingxinGardenTest;
+				api?.tick(24);
+				api?.setPaused(false);
+			});
+			await expect(page.locator('canvas[aria-label="窗前庭园"]')).toHaveAttribute(
+				'data-plants',
+				/tomato,lettuce/
+			);
+			const gardenScroll = await page.evaluate(() => document.documentElement.scrollWidth);
+			expect(gardenScroll).toBeLessThanOrEqual(view.width + 2);
+			await page.screenshot({
+				path: `screenshots/garden-play-${view.name}-${theme}.png`
+			});
+		});
+	}
+}
+
+for (const view of views) {
+	for (const theme of themes) {
+		test(`sky play ${view.name} ${theme}`, async ({ page }) => {
+			await page.setViewportSize({ width: view.width, height: view.height });
+			await boot(page, theme);
+			await openReady(page, '/modules/games/sky-sortie/play');
+			const canvas = page.locator('canvas[aria-label="晴空出击"]');
+			await expect(canvas).toHaveAttribute('data-ready', '1', { timeout: 20_000 });
+			await page.waitForTimeout(800);
+			await page.screenshot({
+				path: `screenshots/sky-play-${view.name}-${theme}.png`
+			});
+		});
+	}
+}
+
+for (const view of views) {
+	for (const theme of themes) {
 		test(`settings ${view.name} ${theme}`, async ({ page }) => {
 			await page.setViewportSize({ width: view.width, height: view.height });
 			await boot(page, theme);

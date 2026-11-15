@@ -15,7 +15,8 @@ export const entries: EntryGenerator = () =>
 				'create',
 				'study',
 				'ai',
-				'secrets'
+				'secrets',
+				'games'
 			].includes(item.slug)
 	).map((item) => ({
 		slug: item.slug
