@@ -6,17 +6,17 @@ Ge asked for better, more realistic Window Garden and Convenient Store UI in the
 
 ## What Changes
 
-- 窗前庭园: Three.js window garden, ≥60 morphologically distinct plants, prune/repot, arrive/visit/leave bugs, pictured seed browser, schema 2 with schema 1 migration.
-- 便利店经理: visual Three.js upgrade (packaging, fridge, checkout, shopper actions, lighting, HUD). Simulation/scoring unchanged.
+- 窗前庭园: Three.js window garden of ten common vegetables, prune/repot, arrive/visit/leave bugs, pictured seed browser, scene pot picking, glassy dock, schema 3 with schema 1/2 vegetable remapping.
+- 便利店经理: visual Three.js upgrade (packaging, fridge, checkout, shopper actions, lighting, glassy HUD). Simulation/scoring unchanged.
 - 晴空出击 unchanged.
 
 ## Capabilities
 
 ### Modified Capabilities
 
-- `window-garden`: 60 plants, Three.js play, prune/repot, travelling bugs, schema 2.
-- `convenient-store`: richer scene and HUD; same sim.
-- `games-catalog`: garden copy says 六十多种.
+- `window-garden`: ten vegetables, Three.js play, prune/repot, travelling bugs, schema 3.
+- `convenient-store`: richer scene and glassy HUD; same sim.
+- `games-catalog`: garden copy names the ten vegetables.
 
 ## Impact
 

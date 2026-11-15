@@ -32,17 +32,51 @@ test('record sky sortie play', async ({ page }) => {
 
 test('record window garden play', async ({ page }) => {
 	await boot(page);
+	await page.addInitScript(() => {
+		if (!sessionStorage.getItem('qingxin.keepGarden')) {
+			localStorage.removeItem('qingxin.games.window-garden');
+		}
+	});
 	await page.setViewportSize({ width: 1280, height: 720 });
 	await page.goto('/modules/games/window-garden/play', { waitUntil: 'networkidle' });
 	await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
-	await page.getByRole('button', { name: /种下番茄/ }).click();
+	await page.waitForFunction(() =>
+		Boolean(
+			(window as { __qingxinGardenTest?: { potClient: (id: number) => unknown } }).__qingxinGardenTest
+				?.potClient(0)
+		)
+	);
+	await page.evaluate(() => {
+		(window as { __qingxinGardenTest?: { setPaused: (paused: boolean) => void } })
+			.__qingxinGardenTest?.setPaused(true);
+	});
+	const pot = async (id: number) => {
+		const pt = await page.evaluate((bedId) => {
+			return (
+				window as {
+					__qingxinGardenTest?: { potClient: (id: number) => { x: number; y: number } | null };
+				}
+			).__qingxinGardenTest?.potClient(bedId);
+		}, id);
+		if (!pt) throw new Error('pot');
+		await page.mouse.click(pt.x, pt.y);
+	};
+	await pot(0);
+	await page.getByRole('button', { name: '番茄', exact: true }).click();
+	await page.getByRole('button', { name: '种下番茄' }).click();
+	await pot(1);
+	await page.getByRole('button', { name: '生菜', exact: true }).click();
+	await page.getByRole('button', { name: '种下生菜' }).click();
 	await page.getByRole('button', { name: '浇水' }).click();
 	await page.getByRole('button', { name: '施肥' }).click();
-	await page.getByRole('button', { name: '修剪' }).click();
 	await page.evaluate(() => {
-		(window as { __qingxinGardenTest?: { seedDemo: () => void } }).__qingxinGardenTest?.seedDemo();
+		const api = (
+			window as { __qingxinGardenTest?: { tick: (n: number) => void; setPaused: (paused: boolean) => void } }
+		).__qingxinGardenTest;
+		api?.tick(28);
+		api?.setPaused(false);
 	});
-	await page.waitForTimeout(1600);
+	await page.waitForTimeout(400);
 	await page.screenshot({ path: 'screenshots/garden-play-gameplay.png' });
 });
 

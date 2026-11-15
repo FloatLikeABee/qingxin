@@ -10,10 +10,10 @@ import {
 	type GardenState,
 	type Stage
 } from './sim';
-import { plantById } from './plants';
+import { remapPlantId, remapSeedBag } from './plants';
 
 export const GARDEN_SAVE_KEY = 'qingxin.games.window-garden';
-export const GARDEN_SCHEMA = 2;
+export const GARDEN_SCHEMA = 3;
 
 const STAGES: Stage[] = ['empty', 'seed', 'sprout', 'leaf', 'bud', 'bloom', 'ripe', 'wilt'];
 const KINDS: BugKind[] = ['aphid', 'snail', 'bee', 'ladybug', 'butterfly', 'caterpillar'];
@@ -54,8 +54,9 @@ function parseBed(value: unknown, id: number, nextId: { n: number }): Bed {
 	const rec = asRecord(value);
 	const fallback = emptyBed(id);
 	if (!rec) return fallback;
-	const plantId = typeof rec.plantId === 'string' && plantById(rec.plantId) ? rec.plantId : null;
 	const stage = STAGES.includes(rec.stage as Stage) ? (rec.stage as Stage) : 'empty';
+	const rawId = typeof rec.plantId === 'string' ? rec.plantId : null;
+	const plantId = stage === 'empty' && !rawId ? null : remapPlantId(rawId);
 	const bugs = Array.isArray(rec.bugs)
 		? rec.bugs.map((bug) => parseBug(bug, nextId, id)).filter((bug): bug is Bug => Boolean(bug))
 		: [];
@@ -110,20 +111,20 @@ export function readGardenSave(
 		if (!raw) return createGarden();
 		const parsed = JSON.parse(raw) as unknown;
 		const rec = asRecord(parsed);
-		if (!rec || (rec.schema !== 1 && rec.schema !== 2)) {
+		if (!rec || (rec.schema !== 1 && rec.schema !== 2 && rec.schema !== 3)) {
 			const fresh = createGarden();
 			fresh.recovered = true;
 			fresh.notice = '存档读不出来，园子重新起土了。';
 			return fresh;
 		}
 		const nextId = { n: clamp(rec.nextId, 1, 1_000_000, 1) };
-		const seeds: Record<string, number> = {};
+		const rawSeeds: Record<string, number> = {};
 		const seedRec = asRecord(rec.seeds) ?? {};
 		for (const [id, count] of Object.entries(seedRec)) {
-			if (!plantById(id)) continue;
 			const n = clamp(count, 0, 99, 0);
-			if (n > 0) seeds[id] = n;
+			if (n > 0) rawSeeds[id] = n;
 		}
+		const seeds = remapSeedBag(rawSeeds);
 		const listed = Array.isArray(rec.beds) ? rec.beds : [];
 		const beds = Array.from({ length: BED_COUNT }, (_, id) => parseBed(listed[id], id, nextId));
 		const worldBugs = Array.isArray(rec.bugs)

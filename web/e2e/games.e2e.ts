@@ -1,4 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
+import {
+	assertPotsAboveDock,
+	bootGarden,
+	gardenPause,
+	gardenSnap,
+	gardenTick,
+	plantOnPot,
+	spawnPest,
+	tapPot,
+	waitGarden
+} from './garden-harness';
 
 async function boot(page: Page, theme: 'light' | 'dark' = 'light') {
 	await page.addInitScript((nextTheme) => {
@@ -108,6 +119,7 @@ test('garden opens from catalog into play chrome', async ({ page }) => {
 	await expect(garden.getByText('即将到来')).toHaveCount(0);
 	await garden.click();
 	await expect(page.getByRole('heading', { name: '窗前庭园', level: 1 })).toBeVisible();
+	await expect(page.getByText('番茄、黄瓜、茄子、辣椒、胡萝卜、萝卜、白菜、生菜、菠菜、小葱')).toBeVisible();
 	await page.getByRole('link', { name: '开始种植' }).click();
 	await expect(page).toHaveURL(/\/modules\/games\/window-garden\/play/);
 	await expect(page.getByRole('link', { name: '← 返回目录' })).toBeVisible();
@@ -118,47 +130,95 @@ test('garden opens from catalog into play chrome', async ({ page }) => {
 	await expect(page.getByRole('button', { name: '换盆' })).toBeVisible();
 	await expect(page.getByRole('button', { name: /种下番茄/ })).toBeVisible();
 	await expect(page.getByRole('button', { name: '暂停' })).toBeVisible();
+	await expect(page.getByRole('button', { name: /^空盆$/ })).toHaveCount(0);
 	await page.screenshot({ path: 'screenshots/garden-play-smoke-390.png' });
 });
 
-test('garden plant, care, bugs, harvest, and reload', async ({ page }) => {
+test('garden plants first, second, and last pots from scene taps and they grow independently', async ({
+	page
+}) => {
 	test.setTimeout(90_000);
-	await boot(page);
-	await page.addInitScript(() => {
-		(window as { __qingxinE2E?: boolean }).__qingxinE2E = true;
-	});
+	await bootGarden(page);
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/modules/games/window-garden/play', { waitUntil: 'networkidle' });
-	await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
-	await page.getByRole('button', { name: '番茄' }).first().click();
-	await page.getByRole('button', { name: /种下番茄/ }).click();
-	await expect(page.locator('[data-bed="0"]')).toContainText('番茄');
+	await waitGarden(page);
+	await gardenPause(page, true);
+	await expect(page.locator('[data-seed-browser]')).toBeVisible();
+	for (const name of ['番茄', '黄瓜', '茄子', '辣椒', '胡萝卜', '萝卜', '白菜', '生菜', '菠菜', '小葱']) {
+		await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+	}
+	await plantOnPot(page, 0, '番茄');
+	await plantOnPot(page, 1, '生菜');
+	await plantOnPot(page, 11, '黄瓜');
+	await tapPot(page, 0);
+	const planted = await gardenSnap(page);
+	expect(planted.selected).toBe(0);
+	expect(planted.beds[1]?.plantId).toBe('lettuce');
+	expect(planted.beds[1]?.stage).toBe('seed');
+	await gardenTick(page, 20);
+	const grown = await gardenSnap(page);
+	expect(grown.beds[0]?.stage).not.toBe('seed');
+	expect(grown.beds[1]?.stage).not.toBe('seed');
+	expect(grown.beds[11]?.stage).not.toBe('seed');
+	expect(page.locator('canvas')).toHaveAttribute('data-stages', /^(?!seed,seed).+/);
+	const stagesAfter20 = await page.locator('canvas[aria-label="窗前庭园"]').getAttribute('data-stages');
+	expect(stagesAfter20?.split(',')[0]).not.toBe('seed');
+	expect(stagesAfter20?.split(',')[1]).not.toBe('seed');
+	expect(stagesAfter20?.split(',')[11]).not.toBe('seed');
+	await gardenPause(page, false);
+	await page.screenshot({ path: 'screenshots/garden-two-pot-growth-390.png' });
+	await gardenPause(page, true);
+	await gardenTick(page, 40);
+	const ripe = await gardenSnap(page);
+	expect(ripe.beds[0]?.stage).toBe('ripe');
+	expect(ripe.beds[1]?.stage).toBe('ripe');
+	expect(ripe.beds[11]?.stage).toBe('ripe');
+	const stagesRipe = await page.locator('canvas[aria-label="窗前庭园"]').getAttribute('data-stages');
+	expect(stagesRipe?.split(',')[1]).toBe('ripe');
+	await page.evaluate(() => sessionStorage.setItem('qingxin.keepGarden', '1'));
+	await page.reload({ waitUntil: 'networkidle' });
+	await waitGarden(page);
+	const reloaded = await gardenSnap(page);
+	expect(reloaded.beds[0]?.plantId).toBe('tomato');
+	expect(reloaded.beds[1]?.plantId).toBe('lettuce');
+	expect(reloaded.beds[11]?.plantId).toBe('cucumber');
+	expect(reloaded.beds[1]?.stage).toBe('ripe');
+	await gardenPause(page, true);
+	await tapPot(page, 0);
+	await page.getByRole('button', { name: '收获', exact: true }).click();
+	await expect.poll(async () => (await gardenSnap(page)).beds[0]?.stage).toBe('empty');
+	for (let id = 0; id < 12; id++) {
+		await tapPot(page, id);
+	}
+	await assertPotsAboveDock(page);
+});
+
+test('garden care, bugs, harvest, and desktop pot taps', async ({ page }) => {
+	test.setTimeout(90_000);
+	await bootGarden(page);
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await page.goto('/modules/games/window-garden/play', { waitUntil: 'networkidle' });
+	await waitGarden(page);
+	await gardenPause(page, true);
+	await plantOnPot(page, 0, '番茄');
 	await page.getByRole('button', { name: '浇水' }).click();
 	await page.getByRole('button', { name: '施肥' }).click();
 	await page.getByRole('button', { name: '修剪' }).click();
 	await expect(page.getByText(/剪不得|修了一枝|剪得太勤/)).toBeVisible();
-	await page.evaluate(() => {
-		(window as { __qingxinGardenTest?: { seedDemo: () => void } }).__qingxinGardenTest?.seedDemo();
-	});
-	await expect(page.locator('[data-bed="0"]')).toContainText('番茄');
-	await expect(page.locator('[data-bed="1"]')).toContainText('向日葵');
-	await expect(page.locator('[data-bed="2"]')).toContainText('肾蕨');
-	await page
-		.getByRole('button', { name: /害虫|益虫/ })
-		.first()
-		.waitFor({ timeout: 20_000 });
-	const pest = page.getByRole('button', { name: /害虫/ });
-	if ((await pest.count()) > 0) {
-		await pest.first().click();
-		await expect(page.getByText('捉走了害虫')).toBeVisible();
-	} else {
-		await expect(page.getByRole('button', { name: /益虫/ }).first()).toBeVisible();
-	}
+	await gardenTick(page, 16);
+	await spawnPest(page, 0);
+	await tapPot(page, 0);
+	await page.getByRole('button', { name: /害虫/ }).first().click();
+	await expect(page.getByText('捉走了害虫')).toBeVisible();
+	await gardenTick(page, 48);
 	await page.getByRole('button', { name: '换盆' }).click();
-	await page.reload({ waitUntil: 'networkidle' });
-	await expect(page.locator('[data-bed="0"]')).toContainText('番茄');
 	await page.getByRole('button', { name: '收获', exact: true }).click();
-	await expect(page.locator('[data-bed="0"]')).toContainText('空盆');
+	await expect.poll(async () => (await gardenSnap(page)).beds[0]?.stage).toBe('empty');
+	for (let id = 0; id < 12; id++) {
+		await tapPot(page, id);
+	}
+	await assertPotsAboveDock(page);
+	await page.screenshot({ path: 'screenshots/garden-play-glass-1280.png' });
 });
 
 test('old florist and night routes redirect', async ({ page }) => {

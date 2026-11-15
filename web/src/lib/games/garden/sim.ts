@@ -1,9 +1,9 @@
-import { plantById, unlockedPlants, type PlantDef } from './plants';
+import { plantById, starterSeeds, unlockedPlants } from './plants';
 
 export const BED_COUNT = 12;
 export const START_COINS = 36;
 export const WATER_MAX = 12;
-export const SCHEMA = 2;
+export const SCHEMA = 3;
 export const MAX_BUGS = 8;
 export const GARDEN_TICK_MS = 100;
 export const REPOT_COST = 6;
@@ -77,12 +77,6 @@ function mulberry32(seed: number): () => number {
 	};
 }
 
-function needValue(need: PlantDef['water']): number {
-	if (need === 'low') return 1;
-	if (need === 'high') return 3;
-	return 2;
-}
-
 export function roleFor(kind: BugKind): BugRole {
 	if (kind === 'bee' || kind === 'butterfly') return 'pollinator';
 	if (kind === 'ladybug') return 'predator';
@@ -116,10 +110,10 @@ export function createGarden(options: GardenOptions = {}): GardenState {
 		waterCan: 8,
 		fertilizer: 2,
 		harvests: 0,
-		seeds: { tomato: 2, lettuce: 2, mint: 2 },
+		seeds: starterSeeds(),
 		beds: Array.from({ length: BED_COUNT }, (_, id) => emptyBed(id)),
 		bugs: [],
-		notice: '先点一盆，再选种子。',
+		notice: '点窗台上的花盆，再选种子。',
 		recovered: false,
 		autoBugs: options.autoBugs ?? true,
 		nextId: 1,
@@ -130,6 +124,11 @@ export function createGarden(options: GardenOptions = {}): GardenState {
 
 export function restartGarden(garden: GardenState, seed?: number) {
 	Object.assign(garden, createGarden({ seed, autoBugs: garden.autoBugs }));
+}
+
+function fail(garden: GardenState, notice: string): false {
+	garden.notice = notice;
+	return false;
 }
 
 function bedAt(garden: GardenState, id: number): Bed | undefined {
@@ -145,9 +144,9 @@ function clearBedBugs(garden: GardenState, bedId: number) {
 export function plantSeed(garden: GardenState, bedId: number, plantId: string): boolean {
 	const bed = bedAt(garden, bedId);
 	const def = plantById(plantId);
-	if (!bed || !def || bed.stage !== 'empty') return false;
-	if ((garden.seeds[plantId] ?? 0) < 1) return false;
-	if (def.unlockAt > garden.harvests) return false;
+	if (!bed || !def) return fail(garden, '没有这种种子。');
+	if (bed.stage !== 'empty') return fail(garden, '这盆已经有菜了。');
+	if ((garden.seeds[plantId] ?? 0) < 1) return fail(garden, `${def.name}种子用完了。`);
 	garden.seeds[plantId] -= 1;
 	if (garden.seeds[plantId] <= 0) delete garden.seeds[plantId];
 	bed.plantId = plantId;
@@ -156,6 +155,9 @@ export function plantSeed(garden: GardenState, bedId: number, plantId: string): 
 	bed.health = 3;
 	bed.potSize = 1;
 	bed.pruned = 0;
+	bed.water = Math.max(bed.water, 2);
+	bed.nutrient = Math.max(bed.nutrient, 2);
+	bed.light = Math.max(bed.light, 2);
 	clearBedBugs(garden, bedId);
 	garden.notice = `种下了${def.name}。`;
 	return true;
@@ -283,7 +285,7 @@ export function catchBug(
 
 export function buySeed(garden: GardenState, plantId: string): boolean {
 	const def = plantById(plantId);
-	if (!def || def.unlockAt > garden.harvests || garden.coins < def.seedCost) return false;
+	if (!def || garden.coins < def.seedCost) return false;
 	garden.coins -= def.seedCost;
 	garden.seeds[plantId] = (garden.seeds[plantId] ?? 0) + 1;
 	garden.notice = `买下了${def.name}种子。`;
@@ -332,13 +334,15 @@ export function emergencyKit(garden: GardenState): boolean {
 	return true;
 }
 
-function matched(def: PlantDef, bed: Bed): boolean {
-	const light = bed.shade ? 1 : bed.light;
-	return (
-		Math.abs(bed.water - needValue(def.water)) <= 1 &&
-		Math.abs(light - needValue(def.light)) <= 1 &&
-		Math.abs(bed.nutrient - needValue(def.nutrient)) <= 1
-	);
+function canGrow(bed: Bed): boolean {
+	return bed.water >= 1 && bed.nutrient >= 1;
+}
+
+export function growthBlock(bed: Bed): string | null {
+	if (bed.stage === 'empty' || bed.stage === 'ripe') return null;
+	if (bed.water < 1) return '渴了';
+	if (bed.nutrient < 1) return '饿了';
+	return null;
 }
 
 function advanceStage(bed: Bed) {
@@ -442,7 +446,8 @@ export function tickGarden(garden: GardenState) {
 			bed.stage = 'empty';
 			continue;
 		}
-		if (garden.tick % 36 === 0) bed.water = Math.max(0, bed.water - 1);
+		if (garden.tick % 90 === 0) bed.water = Math.max(0, bed.water - 1);
+		if (garden.tick % 140 === 0) bed.nutrient = Math.max(0, bed.nutrient - 1);
 		const visiting = garden.bugs.filter((bug) => bug.bedId === bed.id && bug.phase === 'visit');
 		bed.bugs = visiting;
 		const pests = visiting.filter((bug) => bug.role === 'pest');
@@ -466,7 +471,7 @@ export function tickGarden(garden: GardenState) {
 			garden.notice = `${def.name}枯了。`;
 			continue;
 		}
-		if (bed.stage !== 'ripe' && matched(def, bed)) {
+		if (bed.stage !== 'ripe' && canGrow(bed)) {
 			bed.progress += 1 + bees.length;
 			if (bed.progress >= def.stageTicks) advanceStage(bed);
 		}
@@ -486,7 +491,7 @@ export function stepGarden(garden: GardenState, elapsedMs: number) {
 }
 
 export function seedGardenDemo(garden: GardenState) {
-	const ripe = ['tomato', 'sunflower', 'fern', 'cactus', 'grape', 'rose'] as const;
+	const ripe = ['tomato', 'lettuce', 'cucumber', 'carrot', 'chili', 'scallion'] as const;
 	garden.harvests = 30;
 	garden.coins = 80;
 	garden.waterCan = 12;

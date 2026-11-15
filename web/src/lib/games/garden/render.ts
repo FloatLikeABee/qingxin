@@ -9,6 +9,7 @@ export interface GardenScene {
 	resize(): void;
 	dispose(): void;
 	pick(clientX: number, clientY: number): number | null;
+	projectPot(id: number): { x: number; y: number } | null;
 }
 
 const COLS = 4;
@@ -58,10 +59,10 @@ export function mountGardenScene(canvas: HTMLCanvasElement): GardenScene | null 
 	const scene = new THREE.Scene();
 	const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 48);
 	function placeCamera(aspect: number) {
-		const portrait = aspect < 0.78;
-		camera.fov = portrait ? 44 : 34;
-		camera.position.set(0, portrait ? 5.55 : 4.25, portrait ? 7.35 : 5.35);
-		camera.lookAt(0, portrait ? 0.62 : 0.7, portrait ? 0.15 : -0.35);
+		const portrait = aspect < 0.9;
+		camera.fov = portrait ? 34 : 28;
+		camera.position.set(0, portrait ? 7.45 : 6.35, portrait ? 5.15 : 4.85);
+		camera.lookAt(0, 0.18, portrait ? 0.22 : 0.05);
 		camera.updateProjectionMatrix();
 	}
 	placeCamera(1);
@@ -71,6 +72,7 @@ export function mountGardenScene(canvas: HTMLCanvasElement): GardenScene | null 
 	const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 14);
 	const cone = new THREE.ConeGeometry(0.5, 1, 10);
 	const potBody = new THREE.CylinderGeometry(0.46, 0.34, 1, 14);
+	const ringGeo = new THREE.TorusGeometry(0.52, 0.038, 8, 28);
 	const geos: Record<GeoKind, unknown> = { box, sphere, cyl, cone };
 	const materials: Array<{ dispose: () => void }> = [];
 	const matCache = new Map<string, ReturnType<typeof mat>>();
@@ -99,7 +101,13 @@ export function mountGardenScene(canvas: HTMLCanvasElement): GardenScene | null 
 		'curtain'
 	);
 	let city = keep(mat(0x64748b), 'city');
-	const selectMat = cached('select', 0x3b82f6, { emissive: 0x3b82f6, emissiveIntensity: 0.45 });
+	const selectMat = cached('select', 0x60a5fa, { emissive: 0x3b82f6, emissiveIntensity: 0.95 });
+	const pickMat = new THREE.MeshBasicMaterial({
+		transparent: true,
+		opacity: 0,
+		depthWrite: false
+	});
+	materials.push(pickMat);
 	const dropMat = cached('drop', 0x3b82f6, { emissive: 0x3b82f6, emissiveIntensity: 0.35 });
 	const feedMat = cached('feed', 0xeab308, { emissive: 0xeab308, emissiveIntensity: 0.28 });
 	const hurtMat = cached('hurt', 0xc45c6a, { emissive: 0xc45c6a, emissiveIntensity: 0.3 });
@@ -234,13 +242,13 @@ export function mountGardenScene(canvas: HTMLCanvasElement): GardenScene | null 
 		while (group.children.length) group.remove(group.children[0]!);
 		if (!bed.plantId || bed.stage === 'empty') return;
 		let x = -0.12;
-		if (bed.water <= 1) {
-			addMesh(group, sphere, dropMat, x, 0, 0, 0.08, 0.11, 0.08);
-			x += 0.14;
+		if (bed.water < 1) {
+			addMesh(group, sphere, dropMat, x, 0, 0, 0.1, 0.14, 0.1);
+			x += 0.16;
 		}
-		if (bed.nutrient <= 1) {
-			addMesh(group, sphere, feedMat, x, 0, 0, 0.08, 0.08, 0.08);
-			x += 0.14;
+		if (bed.nutrient < 1) {
+			addMesh(group, sphere, feedMat, x, 0, 0, 0.1, 0.1, 0.1);
+			x += 0.16;
 		}
 		if (bed.health <= 1) addMesh(group, sphere, hurtMat, x, 0, 0, 0.08, 0.08, 0.08);
 	}
@@ -254,10 +262,15 @@ export function mountGardenScene(canvas: HTMLCanvasElement): GardenScene | null 
 		const terra = cached(`pot-${id % 3}`, glaze);
 		const pot = addMesh(group, potBody, terra, 0, 0.18, 0, 0.72, 0.36, 0.72);
 		pot.userData.bedId = id;
-		pickables.push(pot);
+		const hit = addMesh(group, potBody, pickMat, 0, 0.32, 0, 1.02, 0.72, 1.02);
+		hit.userData.bedId = id;
+		hit.castShadow = false;
+		hit.receiveShadow = false;
+		pickables.push(hit, pot);
 		addMesh(group, cyl, terra, 0, 0.35, 0, 0.82, 0.06, 0.82);
 		addMesh(group, cyl, soil, 0, 0.34, 0, 0.62, 0.05, 0.62);
-		const ring = addMesh(group, cyl, selectMat, 0, 0.02, 0, 0.95, 0.03, 0.95);
+		const ring = addMesh(group, ringGeo, selectMat, 0, 0.03, 0, 1, 1, 1);
+		ring.rotation.x = Math.PI / 2;
 		ring.visible = false;
 		rings[id] = ring;
 		const cloth = addMesh(group, box, shadeMat, 0, 0.42, 0, 0.7, 0.04, 0.7);
@@ -403,12 +416,40 @@ export function mountGardenScene(canvas: HTMLCanvasElement): GardenScene | null 
 	function pick(clientX: number, clientY: number): number | null {
 		const rect = canvas.getBoundingClientRect();
 		if (rect.width === 0 || rect.height === 0) return null;
+		let best: number | null = null;
+		let bestDist = Infinity;
+		const limit = Math.max(48, Math.min(rect.width, rect.height) * 0.11);
+		for (let id = 0; id < 12; id++) {
+			const point = projectPot(id);
+			if (!point) continue;
+			const dx = point.x - clientX;
+			const dy = point.y - clientY;
+			const dist = Math.hypot(dx, dy);
+			if (dist < bestDist) {
+				bestDist = dist;
+				best = id;
+			}
+		}
+		if (best != null && bestDist <= limit) return best;
 		pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
 		pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 		raycaster.setFromCamera(pointer, camera);
 		const hits = raycaster.intersectObjects(pickables, false);
 		const id = hits[0]?.object.userData.bedId;
 		return typeof id === 'number' ? id : null;
+	}
+
+	function projectPot(id: number): { x: number; y: number } | null {
+		const pos = potPos(id);
+		if (!pos) return null;
+		const point = new THREE.Vector3(pos.x, 0.62, pos.z);
+		point.project(camera);
+		const rect = canvas.getBoundingClientRect();
+		if (rect.width === 0 || rect.height === 0) return null;
+		return {
+			x: rect.left + (point.x * 0.5 + 0.5) * rect.width,
+			y: rect.top + (-point.y * 0.5 + 0.5) * rect.height
+		};
 	}
 
 	function render(now: number) {
@@ -441,9 +482,10 @@ export function mountGardenScene(canvas: HTMLCanvasElement): GardenScene | null 
 		cyl.dispose();
 		cone.dispose();
 		potBody.dispose();
+		ringGeo.dispose();
 		for (const material of materials) material.dispose();
 	}
 
 	resize();
-	return { sync, render, resize, dispose, pick };
+	return { sync, render, resize, dispose, pick, projectPot };
 }

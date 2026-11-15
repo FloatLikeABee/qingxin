@@ -3,17 +3,18 @@
 	import Button from '#lib/components/Button.svelte';
 	import { LINK_CLASS } from '#lib/ui/affordance';
 	import PlantView from './PlantView.svelte';
-	import { FAMILY_LABEL, MORPH_FAMILIES, type MorphFamily } from './morph';
 	import { readGardenSave, writeGardenSave } from './persist';
-	import { PLANTS, plantById, unlockedPlants, type Need } from './plants';
+	import { PLANTS, plantById } from './plants';
 	import type { GardenScene } from './render';
 	import {
+		BED_COUNT,
 		buyFertilizer,
 		buySeed,
 		catchBug,
 		clearWilt,
 		emergencyKit,
 		feedBed,
+		growthBlock,
 		harvestBed,
 		isDeadlocked,
 		plantSeed,
@@ -21,8 +22,9 @@
 		refillWater,
 		repotBed,
 		restartGarden,
-		seedGardenDemo,
+		roleFor,
 		stepGarden,
+		tickGarden,
 		toggleShade,
 		waterBed,
 		type BugKind,
@@ -34,7 +36,6 @@
 	let garden = $state<GardenState>(readGardenSave());
 	let selected = $state(0);
 	let pickSeed = $state('tomato');
-	let familyFilter = $state<'all' | MorphFamily>('all');
 	let shopOpen = $state(false);
 	let sceneFailed = $state(false);
 	let canvasEl = $state<HTMLCanvasElement | null>(null);
@@ -42,20 +43,11 @@
 
 	const bed = $derived(garden.beds[selected]);
 	const def = $derived(bed?.plantId ? plantById(bed.plantId) : undefined);
-	const nursery = $derived(
-		unlockedPlants(garden.harvests).filter(
-			(plant) => familyFilter === 'all' || plant.morph.family === familyFilter
-		)
-	);
 	const deadlocked = $derived(isDeadlocked(garden));
 	const visiting = $derived(
 		garden.bugs.filter((bug) => bug.bedId === selected && bug.phase !== 'leave')
 	);
-	const ownedSeeds = $derived(
-		unlockedPlants(garden.harvests).filter(
-			(plant) => (garden.seeds[plant.id] ?? 0) > 0 || plant.unlockAt === 0
-		)
-	);
+	const block = $derived(bed ? growthBlock(bed) : null);
 
 	const bugName: Record<BugKind, string> = {
 		aphid: '蚜虫',
@@ -67,7 +59,7 @@
 	};
 
 	const stageName: Record<string, string> = {
-		empty: '空盆',
+		empty: '空着',
 		seed: '种子',
 		sprout: '嫩芽',
 		leaf: '展叶',
@@ -77,22 +69,12 @@
 		wilt: '枯了'
 	};
 
-	const needZh: Record<Need, string> = { low: '少', mid: '中', high: '多' };
-
-	function needOf(need: Need) {
-		if (need === 'low') return 1;
-		if (need === 'high') return 3;
-		return 2;
-	}
-
-	const thirsty = $derived(Boolean(def && bed && bed.water < needOf(def.water)));
-	const hungry = $derived(Boolean(def && bed && bed.nutrient < needOf(def.nutrient)));
 	const primary: 'plant' | 'harvest' | 'clear' | 'water' | 'feed' = $derived.by(() => {
 		if (!bed || bed.stage === 'empty') return 'plant';
 		if (bed.stage === 'ripe') return 'harvest';
 		if (bed.stage === 'wilt') return 'clear';
-		if (thirsty) return 'water';
-		if (hungry) return 'feed';
+		if (block === '渴了') return 'water';
+		if (block === '饿了') return 'feed';
 		return 'water';
 	});
 
@@ -100,8 +82,12 @@
 		writeGardenSave(garden);
 	}
 
-	function chooseBed(id: number) {
-		selected = id;
+	function paintCanvas() {
+		const canvas = canvasEl;
+		if (!canvas) return;
+		canvas.dataset.stages = garden.beds.map((item) => item.stage).join(',');
+		canvas.dataset.plants = garden.beds.map((item) => item.plantId ?? '').join(',');
+		canvas.dataset.selected = String(selected);
 	}
 
 	function plantSelected() {
@@ -181,13 +167,16 @@
 	}
 
 	function onKey(event: KeyboardEvent) {
-		if (event.target instanceof HTMLInputElement) return;
-		if (event.key === 'ArrowRight') selected = (selected + 1) % 12;
-		if (event.key === 'ArrowLeft') selected = (selected + 11) % 12;
-		if (event.key === 'ArrowDown') selected = (selected + 4) % 12;
-		if (event.key === 'ArrowUp') selected = (selected + 8) % 12;
+		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
+			return;
+		if (event.key === 'ArrowRight') selected = (selected + 1) % BED_COUNT;
+		if (event.key === 'ArrowLeft') selected = (selected + (BED_COUNT - 1)) % BED_COUNT;
+		if (event.key === 'ArrowDown') selected = (selected + 4) % BED_COUNT;
+		if (event.key === 'ArrowUp') selected = (selected + 8) % BED_COUNT;
 		if (/^[1-9]$/.test(event.key)) selected = Number(event.key) - 1;
 		if (event.key === '0') selected = 9;
+		if (event.key === '-' || event.key === '_') selected = 10;
+		if (event.key === '=' || event.key === '+') selected = 11;
 		if (event.key === 'w' || event.key === 'W') doWater();
 		if (event.key === 'f' || event.key === 'F') doFeed();
 		if (event.key === 'p' || event.key === 'P') doPrune();
@@ -197,9 +186,7 @@
 
 	onMount(() => {
 		garden = readGardenSave();
-		if (!unlockedPlants(garden.harvests).some((plant) => plant.id === pickSeed)) {
-			pickSeed = 'tomato';
-		}
+		if (!plantById(pickSeed)) pickSeed = 'tomato';
 		let scene: GardenScene | null = null;
 		let raf = 0;
 		let last = performance.now();
@@ -219,6 +206,7 @@
 			}
 			scene.resize();
 			canvas.dataset.ready = '1';
+			paintCanvas();
 			resizeObserver = new ResizeObserver(() => scene?.resize());
 			resizeObserver.observe(stage);
 			onDown = (event: PointerEvent) => {
@@ -232,16 +220,72 @@
 				if (!garden.paused && !document.hidden) stepGarden(garden, dt);
 				scene?.sync(garden, selected);
 				scene?.render(now);
+				paintCanvas();
 				raf = requestAnimationFrame(loop);
 			};
 			raf = requestAnimationFrame(loop);
 		})();
 
 		if (typeof window !== 'undefined' && (window as { __qingxinE2E?: boolean }).__qingxinE2E) {
-			(window as { __qingxinGardenTest?: { seedDemo: () => void } }).__qingxinGardenTest = {
-				seedDemo() {
-					seedGardenDemo(garden);
+			(
+				window as {
+					__qingxinGardenTest?: {
+						tick: (n: number) => void;
+						potClient: (id: number) => { x: number; y: number } | null;
+						snapshot: () => {
+							selected: number;
+							paused: boolean;
+							beds: Array<{ id: number; plantId: string | null; stage: string }>;
+						};
+						spawnPest: (bedId: number) => void;
+						select: (id: number) => void;
+						setPaused: (paused: boolean) => void;
+					};
+				}
+			).__qingxinGardenTest = {
+				tick(n: number) {
+					const paused = garden.paused;
+					garden.paused = false;
+					for (let i = 0; i < n; i++) tickGarden(garden);
+					garden.paused = paused;
 					save();
+					paintCanvas();
+				},
+				potClient(id: number) {
+					return scene?.projectPot(id) ?? null;
+				},
+				snapshot() {
+					return {
+						selected,
+						paused: garden.paused,
+						beds: garden.beds.map((item) => ({
+							id: item.id,
+							plantId: item.plantId,
+							stage: item.stage
+						}))
+					};
+				},
+				spawnPest(bedId: number) {
+					const host = garden.beds[bedId];
+					if (!host) return;
+					const bug = {
+						id: garden.nextId++,
+						kind: 'aphid' as const,
+						role: roleFor('aphid'),
+						bedId,
+						phase: 'visit' as const,
+						age: 6,
+						ttl: 90
+					};
+					garden.bugs.push(bug);
+					host.bugs = [...host.bugs, bug];
+					save();
+				},
+				select(id: number) {
+					if (id >= 0 && id < BED_COUNT) selected = id;
+				},
+				setPaused(paused: boolean) {
+					garden.paused = paused;
 				}
 			};
 		}
@@ -273,21 +317,16 @@
 	<title>轻心 · {title}</title>
 </svelte:head>
 
-<div class="garden-play relative h-dvh min-h-0 w-full overflow-hidden bg-[var(--qx-bg)]">
-	<div bind:this={stageEl} class="absolute inset-0 touch-none" data-play="garden">
-		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="窗前庭园"></canvas>
-		{#if sceneFailed}
-			<p class="fail">这台设备画不出窗台。下面的盆仍可点选照料。</p>
-		{/if}
-	</div>
-
-	<header
-		class="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-3 pt-[max(0.55rem,env(safe-area-inset-top))] md:px-5"
-	>
-		<a href="/modules/games" class="{LINK_CLASS} chip-bg pointer-events-auto shrink-0">← 返回目录</a
-		>
+<div class="garden-play">
+	<header class="top qx-glass">
+		<a href="/modules/games" class="{LINK_CLASS} shrink-0">← 返回目录</a>
 		<h1 class="sr-only">{title}</h1>
-		<div class="pointer-events-auto ml-auto flex gap-2">
+		<ul class="stats" aria-label="园子资源">
+			<li><b>{garden.coins}</b><span>收成币</span></li>
+			<li><b>{garden.waterCan}</b><span>清水</span></li>
+			<li><b>{garden.fertilizer}</b><span>肥料</span></li>
+		</ul>
+		<div class="top-actions">
 			<Button variant="secondary" class="px-4" onclick={togglePause}>
 				{garden.paused ? '继续' : '暂停'}
 			</Button>
@@ -295,134 +334,93 @@
 		</div>
 	</header>
 
-	<ul
-		class="pointer-events-none absolute inset-x-0 top-14 z-10 mx-auto grid w-full max-w-3xl grid-cols-3 gap-2 px-3 md:top-16 md:px-5"
-	>
-		<li class="stat">{garden.coins} <span>收成币</span></li>
-		<li class="stat">{garden.waterCan} <span>清水</span></li>
-		<li class="stat">{garden.fertilizer} <span>肥料</span></li>
-	</ul>
-
-	<section class="dock" aria-label="照料">
-		<p class="notice" aria-live="polite">{garden.notice}</p>
-		<ul class="twins">
+	<div bind:this={stageEl} class="stage" data-play="garden">
+		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="窗前庭园"></canvas>
+		{#if sceneFailed}
+			<p class="fail">这台设备画不出窗台。用键盘左右键选盆，再照料。</p>
+		{/if}
+		<nav class="bed-nav" aria-label="花盆">
 			{#each garden.beds as plot (plot.id)}
-				<li>
-					<button
-						type="button"
-						class="twin {selected === plot.id ? 'on' : ''}"
-						data-bed={plot.id}
-						aria-pressed={selected === plot.id}
-						aria-label="盆 {plot.id + 1} {plot.plantId
-							? plantById(plot.plantId)?.name
-							: '空盆'} {stageName[plot.stage]}"
-						onclick={() => chooseBed(plot.id)}
-					>
-						{plot.plantId ? plantById(plot.plantId)?.name : '空盆'}
-						<span>{stageName[plot.stage]}</span>
-					</button>
-				</li>
+				<button
+					type="button"
+					class="bed-hit"
+					data-bed={plot.id}
+					aria-pressed={selected === plot.id}
+					aria-label="盆 {plot.id + 1} {plot.plantId
+						? plantById(plot.plantId)?.name
+						: '空着'} {stageName[plot.stage]}"
+					onclick={() => (selected = plot.id)}
+				>
+					{plot.id + 1}
+				</button>
 			{/each}
-		</ul>
+		</nav>
+	</div>
 
-		<div class="sheet">
+	<section class="dock qx-glass" aria-label="照料" data-garden-dock>
+		<p class="notice" aria-live="polite">{garden.notice}</p>
+		<p class="need">
 			{#if def && bed}
-				<p class="need">
-					{def.name}
-					{stageName[bed.stage]}
-					{#if thirsty}<strong>渴了</strong>{/if}
-					{#if hungry}<strong>饿了</strong>{/if}
-					需要水{needZh[def.water]} 光{needZh[def.light]} 肥{needZh[def.nutrient]}
-					现在水{bed.water} 光{bed.light} 肥{bed.nutrient}
-					生机{bed.health}
-					{bed.potSize >= 2 ? '大盆' : '小盆'}
-				</p>
+				{def.name} · {stageName[bed.stage]}
+				{#if block}<strong>{block}</strong>{/if}
 			{:else}
-				<p class="need muted">点窗台上的盆。浇水施肥，熟了再收。蜜蜂蝴蝶瓢虫请留着。</p>
+				点窗台上的花盆，再选种子。
 			{/if}
+		</p>
 
-			{#if visiting.length}
-				<div class="bugs">
-					{#each visiting as bug (bug.id)}
-						<button type="button" class="bug {bug.role}" onclick={() => doCatch(bug.id)}>
-							{bug.role === 'pest' ? '捉走' : '留下'}{bugName[bug.kind]}
-							<span>{bug.role === 'pest' ? '害虫' : '益虫'}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
+		{#if visiting.length}
+			<div class="bugs">
+				{#each visiting as bug (bug.id)}
+					<button type="button" class="bug {bug.role}" onclick={() => doCatch(bug.id)}>
+						{bug.role === 'pest' ? '捉走' : '留下'}{bugName[bug.kind]}
+						<span>{bug.role === 'pest' ? '害虫' : '益虫'}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
 
-			{#if !bed || bed.stage === 'empty' || shopOpen}
-				<div class="seeds">
-					{#each ownedSeeds as plant (plant.id)}
-						<button
-							type="button"
-							class="seed {pickSeed === plant.id ? 'on' : ''}"
-							aria-label={plant.name}
-							onclick={() => (pickSeed = plant.id)}
-						>
-							<PlantView plantId={plant.id} stage="bloom" compact />
-							<span>{plant.name}</span>
-							<span class="meta">{garden.seeds[plant.id] ?? 0} 粒</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
-
-			{#if shopOpen}
-				<div class="chips">
-					<button
-						type="button"
-						class="chip {familyFilter === 'all' ? 'on' : ''}"
-						onclick={() => (familyFilter = 'all')}>全部</button
-					>
-					{#each MORPH_FAMILIES as family (family)}
-						<button
-							type="button"
-							class="chip {familyFilter === family ? 'on' : ''}"
-							onclick={() => (familyFilter = family)}>{FAMILY_LABEL[family]}</button
-						>
-					{/each}
-				</div>
-				<div class="seed-grid">
-					{#each nursery as plant (plant.id)}
-						<button
-							type="button"
-							class="seed {pickSeed === plant.id ? 'on' : ''}"
-							aria-label={plant.name}
-							onclick={() => (pickSeed = plant.id)}
-						>
-							<PlantView plantId={plant.id} stage="bloom" compact />
-							<span>{plant.name}</span>
-							<span class="meta">{garden.seeds[plant.id] ?? 0} 粒</span>
-						</button>
-					{/each}
-				</div>
-				<div class="buys">
-					{#each PLANTS.filter((plant) => plant.unlockAt <= garden.harvests).slice(0, 8) as plant (plant.id)}
-						<button type="button" class="buy" onclick={() => doBuy(plant.id)}>
-							买{plant.name}
-							{plant.seedCost}
-						</button>
-					{/each}
-					<button type="button" class="buy" onclick={doRefill}>加水 5</button>
-					<button type="button" class="buy" onclick={doFert}>买肥 4</button>
-				</div>
-			{/if}
-
-			{#if deadlocked}
-				<div class="mt-2">
-					<Button onclick={doKit}>空园补给</Button>
-				</div>
-			{/if}
+		<div class="seeds" data-seed-browser>
+			{#each PLANTS as plant (plant.id)}
+				<button
+					type="button"
+					class="seed {pickSeed === plant.id ? 'on' : ''}"
+					aria-label={plant.name}
+					onclick={() => (pickSeed = plant.id)}
+				>
+					<PlantView plantId={plant.id} stage="bloom" compact />
+					<span>{plant.name}</span>
+					<span class="meta">{garden.seeds[plant.id] ?? 0} 粒</span>
+				</button>
+			{/each}
 		</div>
+
+		{#if shopOpen}
+			<div class="buys">
+				{#each PLANTS as plant (plant.id)}
+					<button type="button" class="buy" onclick={() => doBuy(plant.id)}>
+						买{plant.name}
+						{plant.seedCost}
+					</button>
+				{/each}
+				<button type="button" class="buy" onclick={doRefill}>加水 5</button>
+				<button type="button" class="buy" onclick={doFert}>买肥 4</button>
+			</div>
+		{/if}
+
+		{#if deadlocked}
+			<div class="mt-2">
+				<Button onclick={doKit}>空园补给</Button>
+			</div>
+		{/if}
+
 		<div class="actions">
 			<Button
 				class="min-h-12 min-w-20 px-5"
-				variant={primary === 'harvest' ? 'primary' : 'secondary'}
-				onclick={doHarvest}
-				disabled={bed?.stage !== 'ripe'}>收获</Button
+				variant={primary === 'plant' ? 'primary' : 'secondary'}
+				onclick={plantSelected}
 			>
+				种下{plantById(pickSeed)?.name ?? ''}
+			</Button>
 			<Button
 				class="min-h-12 min-w-20 px-5"
 				variant={primary === 'water' ? 'primary' : 'secondary'}
@@ -433,15 +431,14 @@
 				variant={primary === 'feed' ? 'primary' : 'secondary'}
 				onclick={doFeed}>施肥</Button
 			>
+			<Button
+				class="min-h-12 min-w-20 px-5"
+				variant={primary === 'harvest' ? 'primary' : 'secondary'}
+				onclick={doHarvest}
+				disabled={bed?.stage !== 'ripe'}>收获</Button
+			>
 			<Button class="min-h-12 min-w-20 px-5" variant="secondary" onclick={doPrune}>修剪</Button>
 			<Button class="min-h-12 min-w-20 px-5" variant="secondary" onclick={doRepot}>换盆</Button>
-			<Button
-				class="min-h-12 min-w-24 px-5"
-				variant={primary === 'plant' ? 'primary' : 'secondary'}
-				onclick={plantSelected}
-			>
-				种下{plantById(pickSeed)?.name ?? ''}
-			</Button>
 			<Button class="min-h-12 min-w-20 px-5" variant="secondary" onclick={doShade}>遮荫</Button>
 			<Button
 				class="min-h-12 min-w-20 px-5"
@@ -450,40 +447,70 @@
 				disabled={bed?.stage !== 'wilt'}>清空</Button
 			>
 			<Button class="min-h-12 px-5" variant="secondary" onclick={() => (shopOpen = !shopOpen)}>
-				{shopOpen ? '收起种子' : '种子柜'}
+				{shopOpen ? '收起购买' : '买种子'}
 			</Button>
 		</div>
 	</section>
 
-	{#if garden.paused}
-		<div class="overlay">
-			<p class="text-lg font-semibold">园子先歇着</p>
-			<Button class="mt-4" onclick={togglePause}>继续</Button>
-		</div>
-	{/if}
 </div>
 
 <style>
-	.chip-bg {
-		background: color-mix(in srgb, var(--qx-card) 88%, transparent);
-		padding-inline: 0.75rem;
-		backdrop-filter: blur(16px);
+	.garden-play {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		height: 100dvh;
+		min-height: 0;
+		overflow: hidden;
+		background: var(--qx-bg);
 	}
 
-	.stat {
-		border-radius: 1rem;
-		background: color-mix(in srgb, var(--qx-card) 88%, transparent);
-		padding: 0.4rem 0.65rem;
+	.top {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin: 0.4rem 0.65rem 0;
+		padding: 0.4rem 0.6rem;
+		padding-top: max(0.4rem, env(safe-area-inset-top));
+		border-radius: 1.15rem;
+		z-index: 10;
+	}
+
+	.stats {
+		display: flex;
+		flex: 1;
+		justify-content: center;
+		gap: 0.7rem;
+		min-width: 0;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.stats li {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		white-space: nowrap;
 		font-weight: 600;
-		backdrop-filter: blur(16px);
-		box-shadow: 0 10px 24px -18px color-mix(in srgb, var(--qx-text) 50%, transparent);
+		line-height: 1.15;
 	}
 
-	.stat span {
-		display: block;
-		font-size: 0.75rem;
+	.stats span {
+		font-size: 0.65rem;
 		font-weight: 500;
 		color: var(--qx-muted);
+	}
+
+	.top-actions {
+		display: flex;
+		gap: 0.35rem;
+		flex-shrink: 0;
+	}
+
+	.stage {
+		position: relative;
+		flex: 1;
+		min-height: 0;
+		touch-action: none;
 	}
 
 	.fail {
@@ -497,133 +524,91 @@
 		color: var(--qx-muted);
 	}
 
-	.dock {
+	.bed-nav {
 		position: absolute;
-		inset-inline: 0;
-		bottom: 0;
+		left: 0.4rem;
+		top: 0.4rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		max-height: calc(100% - 0.8rem);
+		overflow: auto;
+		opacity: 0;
+		pointer-events: none;
+		z-index: 4;
+	}
+
+	.bed-nav:focus-within {
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	.bed-hit {
+		min-height: 2.75rem;
+		min-width: 2.75rem;
+		border-radius: 0.8rem;
+		background: color-mix(in oklab, var(--qx-card) 82%, transparent);
+		font-weight: 600;
+	}
+
+	.dock {
+		flex-shrink: 0;
+		margin: 0.35rem 0.65rem max(0.4rem, env(safe-area-inset-bottom));
+		padding: 0.7rem 0.75rem 0.65rem;
+		border-radius: 1.35rem;
 		z-index: 10;
-		padding: 0 0.75rem max(0.55rem, env(safe-area-inset-bottom));
 	}
 
 	.notice {
-		margin: 0 auto 0.35rem;
-		max-width: 48rem;
+		margin: 0;
 		font-size: 0.85rem;
 		color: var(--qx-muted);
-		text-shadow: 0 1px 8px color-mix(in srgb, var(--qx-bg) 80%, transparent);
-	}
-
-	.twins {
-		display: flex;
-		gap: 0.3rem;
-		max-width: 48rem;
-		margin: 0 auto 0.4rem;
-		overflow-x: auto;
-		padding-bottom: 0.15rem;
-	}
-
-	.twin {
-		min-height: 2.75rem;
-		min-width: 3.4rem;
-		border-radius: 0.8rem;
-		background: color-mix(in srgb, var(--qx-card) 90%, transparent);
-		font-size: 0.7rem;
-		padding: 0.25rem 0.4rem;
-		backdrop-filter: blur(12px);
-	}
-
-	.twin span {
-		display: block;
-		color: var(--qx-muted);
-	}
-
-	.twin.on {
-		box-shadow: inset 0 0 0 2px var(--qx-primary);
-	}
-
-	.sheet {
-		margin: 0 auto;
-		max-width: 48rem;
-		max-height: 18dvh;
-		overflow: auto;
-		border-radius: 1.4rem 1.4rem 0.6rem 0.6rem;
-		background: color-mix(in srgb, var(--qx-card) 92%, transparent);
-		padding: 0.75rem;
-		box-shadow: 0 -12px 32px -24px color-mix(in srgb, var(--qx-text) 55%, transparent);
-		overscroll-behavior: contain;
-		backdrop-filter: blur(18px);
 	}
 
 	.need {
-		font-size: 0.85rem;
+		margin: 0.2rem 0 0;
+		font-size: 0.95rem;
+		font-weight: 600;
 	}
 
 	.need strong {
-		margin-right: 0.35rem;
+		margin-left: 0.4rem;
 		color: var(--qx-accent-coral);
-	}
-
-	.muted {
-		color: var(--qx-muted);
 	}
 
 	.bugs,
 	.seeds,
 	.actions,
-	.chips,
 	.buys {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.45rem;
-		margin-top: 0.55rem;
-	}
-
-	.actions {
-		margin: 0.45rem auto 0;
-		max-width: 48rem;
-		padding: 0.45rem;
-		border-radius: 1.1rem;
-		background: color-mix(in srgb, var(--qx-card) 92%, transparent);
-		backdrop-filter: blur(16px);
+		gap: 0.4rem;
+		margin-top: 0.5rem;
 	}
 
 	.seeds {
 		flex-wrap: nowrap;
 		overflow-x: auto;
-		padding-bottom: 0.15rem;
-	}
-
-	.seed-grid {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 0.4rem;
-		margin-top: 0.5rem;
+		padding-bottom: 0.1rem;
 	}
 
 	.seed,
 	.buy,
-	.bug,
-	.chip {
+	.bug {
 		min-height: 2.75rem;
 		border-radius: 0.9rem;
-		padding: 0.35rem 0.55rem;
-		background: var(--qx-surface);
-	}
-
-	.bug {
-		min-width: 6.5rem;
-		min-height: 2.75rem;
-		font-weight: 600;
+		padding: 0.3rem 0.5rem;
+		background: color-mix(in oklab, var(--qx-surface) 70%, transparent);
+		border: 1px solid color-mix(in oklab, white 28%, var(--qx-line));
 	}
 
 	.seed {
 		text-align: center;
 		font-size: 0.75rem;
-		min-width: 4.4rem;
+		min-width: 4.2rem;
 	}
 
-	.seed.on,
-	.chip.on {
+	.seed.on {
 		box-shadow: inset 0 0 0 2px var(--qx-primary);
 	}
 
@@ -634,51 +619,43 @@
 		font-weight: 500;
 	}
 
+	.bug {
+		min-width: 6.5rem;
+		font-weight: 600;
+	}
+
 	.bug.pest {
-		background: color-mix(in srgb, var(--qx-accent-coral) 22%, var(--qx-card));
+		background: color-mix(in oklab, var(--qx-accent-coral) 22%, var(--qx-card));
 	}
 
 	.bug.pollinator,
 	.bug.predator {
-		background: color-mix(in srgb, var(--qx-accent-teal) 22%, var(--qx-card));
+		background: color-mix(in oklab, var(--qx-accent-teal) 22%, var(--qx-card));
 	}
 
-	.overlay {
-		position: absolute;
-		inset: 0;
-		z-index: 20;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--qx-bg) 72%, transparent);
+	.actions {
+		margin-top: 0.55rem;
 	}
 
-	.twin:focus-visible,
 	.seed:focus-visible,
 	.buy:focus-visible,
 	.bug:focus-visible,
-	.chip:focus-visible {
+	.bed-hit:focus-visible {
 		outline: 2px solid var(--qx-primary);
 		outline-offset: 2px;
 	}
 
-	@media (min-width: 768px) {
-		.seed-grid {
-			grid-template-columns: repeat(8, minmax(0, 1fr));
-		}
-
-		.sheet {
-			max-height: 22dvh;
+	@media (max-width: 430px) {
+		.top-actions :global(button) {
+			min-width: 0;
+			padding-inline: 0.7rem;
 		}
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.chip-bg,
-		.stat,
-		.twin,
-		.sheet {
-			backdrop-filter: none;
+	@media (min-width: 768px) {
+		.seeds {
+			flex-wrap: wrap;
+			overflow: visible;
 		}
 	}
 </style>

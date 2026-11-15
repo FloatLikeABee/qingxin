@@ -174,34 +174,20 @@
 	<title>轻心 · {title}</title>
 </svelte:head>
 
-<div class="store-play relative h-dvh min-h-0 w-full overflow-hidden bg-[var(--qx-bg)]">
-	<div bind:this={stageEl} class="absolute inset-0 touch-none" data-play="store">
-		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="便利店三维店面"></canvas>
-		{#if sceneFailed}
-			<p
-				class="absolute inset-0 flex items-center justify-center px-6 text-center text-[var(--qx-muted)]"
-			>
-				这台设备画不出店面，货架操作仍可用。
-			</p>
-		{/if}
-	</div>
-
-	<header
-		class="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-3 pt-[max(0.6rem,env(safe-area-inset-top))] md:px-5"
-	>
-		<a
-			href="/modules/games"
-			class="{LINK_CLASS} pointer-events-auto shrink-0 bg-[color-mix(in_srgb,var(--qx-card)_88%,transparent)] px-3 backdrop-blur-xl"
-		>
-			← 返回目录
-		</a>
+<div class="store-play">
+	<header class="top qx-glass">
+		<a href="/modules/games" class="{LINK_CLASS} shrink-0">← 返回目录</a>
 		<h1 class="sr-only">{title}</h1>
-		<p
-			class="hidden min-w-0 flex-1 truncate rounded-2xl bg-[color-mix(in_srgb,var(--qx-card)_88%,transparent)] px-3 py-2 font-[Outfit] text-base font-semibold backdrop-blur-xl md:block md:text-lg"
-		>
+		<p class="hidden min-w-0 flex-1 truncate font-[Outfit] text-base font-semibold md:block md:text-lg">
 			{title}
 		</p>
-		<div class="pointer-events-auto flex shrink-0 gap-2">
+		<ul class="stats" aria-label="店内数字">
+			<li><b>{yuan(sim.cash)}</b><span>现金</span></li>
+			<li><b>{yuan(sim.stats.revenue)}</b><span>营收</span></li>
+			<li><b>{clock}</b><span>班次</span></li>
+			<li><b>{sim.stats.customersHappy}/{Math.max(guests, 0)}</b><span>满意</span></li>
+		</ul>
+		<div class="top-actions">
 			<Button variant="secondary" class="px-4" onclick={togglePause} disabled={sim.over}>
 				{sim.paused ? '继续' : '暂停'}
 			</Button>
@@ -209,57 +195,47 @@
 		</div>
 	</header>
 
-	<ul
-		class="pointer-events-none absolute inset-x-0 top-16 z-10 mx-auto grid max-w-3xl grid-cols-2 gap-2 px-3 md:top-20 md:grid-cols-4 md:px-5"
-	>
-		<li class="stat">{yuan(sim.cash)} <span>现金</span></li>
-		<li class="stat">{yuan(sim.stats.revenue)} <span>营收</span></li>
-		<li class="stat">{clock} <span>班次</span></li>
-		<li class="stat">{sim.stats.customersHappy}/{Math.max(guests, 0)} <span>满意</span></li>
-	</ul>
+	<div bind:this={stageEl} class="stage" data-play="store">
+		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="便利店三维店面"></canvas>
+		{#if sceneFailed}
+			<p class="fail">这台设备画不出店面，货架操作仍可用。</p>
+		{/if}
+	</div>
 
-	<section
-		class="absolute inset-x-0 bottom-0 z-10 px-3 pb-[max(0.7rem,env(safe-area-inset-bottom))] md:px-5"
-	>
-		<div
-			class="mx-auto max-w-4xl rounded-3xl bg-[color-mix(in_srgb,var(--qx-card)_90%,transparent)] p-3 ring-1 ring-[var(--qx-line)] backdrop-blur-xl md:p-4"
-		>
-			<p class="mb-2 text-sm text-[var(--qx-muted)]">
-				点货架。空了会亮红。从库房补上，钱够再进箱。
-			</p>
-			<div class="flex gap-2 overflow-x-auto pb-1">
-				{#each sim.shelves as shelf (shelf.id)}
-					{@const goods = GOODS[shelf.sku]}
-					<button
-						type="button"
-						class="sku-card {selected === shelf.id ? 'sku-card-on' : ''} {shelf.stock <= 2
-							? 'sku-low'
-							: ''}"
-						onclick={() => (selected = shelf.id)}
-					>
-						<span class="swatch" style="background:{goods.color}"></span>
-						<span class="font-medium">{goods.name}{shelf.stock <= 2 ? ' 缺货' : ''}</span>
-						<span class="meta">架上 {shelf.stock}/{shelf.capacity}</span>
-						<span class="meta">库房 {sim.storage[shelf.sku]}</span>
-						<span class="meta">{yuan(goods.price)} / 件</span>
-					</button>
-				{/each}
-			</div>
-			<div class="mt-3 flex flex-wrap gap-2">
-				<Button class="min-h-12 min-w-36 px-6" onclick={restockSelected} disabled={sim.over}
-					>从库房补货</Button
+	<section class="dock qx-glass" aria-label="补货" data-store-dock>
+		<p class="hint">点货架。空了会亮红。从库房补上，钱够再进箱。</p>
+		<div class="flex gap-2 overflow-x-auto pb-1">
+			{#each sim.shelves as shelf (shelf.id)}
+				{@const goods = GOODS[shelf.sku]}
+				<button
+					type="button"
+					class="sku-card {selected === shelf.id ? 'sku-card-on' : ''} {shelf.stock <= 2
+						? 'sku-low'
+						: ''}"
+					onclick={() => (selected = shelf.id)}
 				>
-				{#if selectedShelf}
-					<Button
-						variant="secondary"
-						onclick={() => orderSku(selectedShelf.sku)}
-						disabled={sim.over || sim.cash < GOODS[selectedShelf.sku].crateCost}
-					>
-						进一箱 {GOODS[selectedShelf.sku].name}
-						{yuan(GOODS[selectedShelf.sku].crateCost)}
-					</Button>
-				{/if}
-			</div>
+					<span class="swatch" style="background:{goods.color}"></span>
+					<span class="font-medium">{goods.name}{shelf.stock <= 2 ? ' 缺货' : ''}</span>
+					<span class="meta">架上 {shelf.stock}/{shelf.capacity}</span>
+					<span class="meta">库房 {sim.storage[shelf.sku]}</span>
+					<span class="meta">{yuan(goods.price)} / 件</span>
+				</button>
+			{/each}
+		</div>
+		<div class="mt-3 flex flex-wrap gap-2">
+			<Button class="min-h-12 min-w-36 px-6" onclick={restockSelected} disabled={sim.over}
+				>从库房补货</Button
+			>
+			{#if selectedShelf}
+				<Button
+					variant="secondary"
+					onclick={() => orderSku(selectedShelf.sku)}
+					disabled={sim.over || sim.cash < GOODS[selectedShelf.sku].crateCost}
+				>
+					进一箱 {GOODS[selectedShelf.sku].name}
+					{yuan(GOODS[selectedShelf.sku].crateCost)}
+				</Button>
+			{/if}
 		</div>
 	</section>
 
@@ -309,24 +285,90 @@
 </div>
 
 <style>
-	.stat {
-		pointer-events: none;
+	.store-play {
+		position: relative;
 		display: flex;
 		flex-direction: column;
-		gap: 0.1rem;
-		border-radius: 1rem;
-		background: color-mix(in srgb, var(--qx-card) 88%, transparent);
-		padding: 0.55rem 0.75rem;
-		font-family: Outfit, var(--font-sans);
-		font-size: 1.05rem;
-		font-weight: 600;
-		backdrop-filter: blur(16px);
+		height: 100dvh;
+		min-height: 0;
+		overflow: hidden;
+		background: var(--qx-bg);
 	}
 
-	.stat span {
+	.top {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem 0.5rem;
+		margin: 0.4rem 0.65rem 0;
+		padding: 0.4rem 0.55rem;
+		padding-top: max(0.4rem, env(safe-area-inset-top));
+		border-radius: 1.15rem;
+		z-index: 10;
+	}
+
+	.stats {
+		display: flex;
+		flex: 1;
+		justify-content: space-evenly;
+		gap: 0.35rem;
+		min-width: 0;
+		font-family: Outfit, var(--font-sans);
+		font-size: 0.95rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.stats li {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		white-space: nowrap;
+		line-height: 1.15;
+	}
+
+	.stats span {
 		font-family: var(--font-sans);
-		font-size: 0.75rem;
+		font-size: 0.62rem;
 		font-weight: 400;
+		color: var(--qx-muted);
+	}
+
+	.top-actions {
+		display: flex;
+		flex-shrink: 0;
+		gap: 0.35rem;
+	}
+
+	.stage {
+		position: relative;
+		flex: 1;
+		min-height: 0;
+		touch-action: none;
+	}
+
+	.fail {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+		text-align: center;
+		color: var(--qx-muted);
+	}
+
+	.dock {
+		flex-shrink: 0;
+		margin: 0.35rem 0.65rem max(0.45rem, env(safe-area-inset-bottom));
+		padding: 0.7rem 0.8rem 0.75rem;
+		border-radius: 1.35rem;
+		z-index: 10;
+	}
+
+	.hint {
+		margin: 0 0 0.45rem;
+		font-size: 0.85rem;
 		color: var(--qx-muted);
 	}
 
@@ -338,7 +380,8 @@
 		align-items: flex-start;
 		gap: 0.15rem;
 		border-radius: 1rem;
-		background: var(--qx-surface);
+		background: color-mix(in oklab, var(--qx-surface) 70%, transparent);
+		border: 1px solid color-mix(in oklab, white 28%, var(--qx-line));
 		padding: 0.65rem 0.75rem;
 		text-align: left;
 		transition:
@@ -377,6 +420,25 @@
 		background: color-mix(in srgb, var(--qx-bg) 72%, transparent);
 		padding: 1rem;
 		text-align: center;
+	}
+
+	@media (max-width: 430px) {
+		.stats {
+			flex: 1 1 100%;
+			order: 3;
+			justify-content: space-between;
+			font-size: 0.9rem;
+			padding-top: 0.2rem;
+		}
+
+		.top-actions {
+			margin-left: auto;
+		}
+
+		.top-actions :global(button) {
+			min-width: 0;
+			padding-inline: 0.65rem;
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {

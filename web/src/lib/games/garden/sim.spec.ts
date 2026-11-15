@@ -4,6 +4,7 @@ import {
 	catchBug,
 	clearWilt,
 	createGarden,
+	growthBlock,
 	emergencyKit,
 	harvestBed,
 	isDeadlocked,
@@ -17,6 +18,7 @@ import {
 	feedBed,
 	type GardenState
 } from './sim';
+import { VEG_IDS } from './plants';
 
 function drive(garden: GardenState, n: number) {
 	for (let i = 0; i < n; i++) tickGarden(garden);
@@ -51,7 +53,7 @@ describe('窗前庭园 simulation', () => {
 	it('plants, waters, grows, harvests, and replants', () => {
 		const garden = createGarden({ seed: 1, autoBugs: false });
 		expect(plantSeed(garden, 0, 'tomato')).toBe(true);
-		expect(garden.seeds.tomato).toBe(1);
+		expect(garden.seeds.tomato ?? 0).toBe(0);
 		expect(garden.beds[0]?.stage).toBe('seed');
 		expect(waterBed(garden, 0)).toBe(true);
 		expect(feedBed(garden, 0)).toBe(true);
@@ -106,7 +108,7 @@ describe('窗前庭园 simulation', () => {
 
 	it('lets pollinators speed growth and scolds mistaken removal', () => {
 		const garden = createGarden({ seed: 2, autoBugs: false });
-		plantSeed(garden, 0, 'mint');
+		plantSeed(garden, 0, 'scallion');
 		garden.beds[0]!.stage = 'bloom';
 		garden.beds[0]!.progress = 0;
 		garden.beds[0]!.water = 2;
@@ -123,8 +125,8 @@ describe('窗前庭园 simulation', () => {
 		};
 		garden.bugs.push(bee);
 		garden.beds[0]!.bugs.push(bee);
-		drive(garden, 4);
-		expect(garden.beds[0]!.progress).toBeGreaterThan(4);
+		drive(garden, 3);
+		expect(garden.beds[0]!.progress).toBeGreaterThan(3);
 		const coins = garden.coins;
 		const result = catchBug(garden, 0, bee.id);
 		expect(result.role).toBe('pollinator');
@@ -190,7 +192,7 @@ describe('窗前庭园 simulation', () => {
 
 	it('caps elapsed-time stepping so a long pause cannot spiral', () => {
 		const garden = createGarden({ seed: 1, autoBugs: false });
-		plantSeed(garden, 0, 'mint');
+		plantSeed(garden, 0, 'scallion');
 		const before = garden.tick;
 		stepGarden(garden, 5000);
 		expect(garden.tick - before).toBeLessThanOrEqual(8);
@@ -242,5 +244,64 @@ describe('窗前庭园 simulation', () => {
 		toggleShade(garden, 0);
 		expect(garden.beds[0]?.shade).toBe(true);
 		expect(clearWilt(garden, 0)).toBe(false);
+	});
+
+	it('grows first, second, and last pots independently without extra watering', () => {
+		const garden = createGarden({ seed: 1, autoBugs: false });
+		expect(plantSeed(garden, 0, 'tomato')).toBe(true);
+		expect(plantSeed(garden, 1, 'lettuce')).toBe(true);
+		expect(plantSeed(garden, 11, 'cucumber')).toBe(true);
+		drive(garden, 20);
+		expect(garden.beds[0]?.stage).not.toBe('seed');
+		expect(garden.beds[1]?.stage).not.toBe('seed');
+		expect(garden.beds[11]?.stage).not.toBe('seed');
+		drive(garden, 80);
+		expect(garden.beds[0]?.stage).toBe('ripe');
+		expect(garden.beds[1]?.stage).toBe('ripe');
+		expect(garden.beds[11]?.stage).toBe('ripe');
+		expect(garden.beds[1]?.plantId).toBe('lettuce');
+	});
+
+	it('lets every pot grow without a selected bed', () => {
+		const garden = createGarden({ seed: 1, autoBugs: false });
+		for (let i = 0; i < 12; i++) {
+			const id = VEG_IDS[i % VEG_IDS.length]!;
+			garden.seeds[id] = (garden.seeds[id] ?? 0) + 1;
+			expect(plantSeed(garden, i, id)).toBe(true);
+		}
+		drive(garden, 48);
+		for (const bed of garden.beds) {
+			expect(bed.stage).toBe('ripe');
+			expect(growthBlock(bed)).toBeNull();
+		}
+	});
+
+	it('names thirst and hunger instead of silently stalling', () => {
+		const garden = createGarden({ seed: 1, autoBugs: false });
+		expect(plantSeed(garden, 1, 'lettuce')).toBe(true);
+		garden.beds[1]!.water = 0;
+		drive(garden, 16);
+		expect(garden.beds[1]?.stage).toBe('seed');
+		expect(growthBlock(garden.beds[1]!)).toBe('渴了');
+		garden.beds[1]!.water = 2;
+		garden.beds[1]!.nutrient = 0;
+		drive(garden, 16);
+		expect(garden.beds[1]?.stage).toBe('seed');
+		expect(growthBlock(garden.beds[1]!)).toBe('饿了');
+		garden.beds[1]!.nutrient = 2;
+		drive(garden, 16);
+		expect(garden.beds[1]?.stage).not.toBe('seed');
+		expect(growthBlock(garden.beds[1]!)).toBeNull();
+	});
+
+	it('starts with one seed of every vegetable and no hidden unlocks', () => {
+		const garden = createGarden({ seed: 1, autoBugs: false });
+		for (const [index, id] of VEG_IDS.entries()) {
+			expect(garden.seeds[id]).toBe(1);
+			expect(plantSeed(garden, index, id)).toBe(true);
+			expect(garden.beds[index]?.plantId).toBe(id);
+		}
+		expect(buySeed(garden, 'scallion')).toBe(true);
+		expect(garden.seeds.scallion).toBe(1);
 	});
 });

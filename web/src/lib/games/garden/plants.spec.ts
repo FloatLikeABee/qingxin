@@ -1,33 +1,47 @@
 import { describe, expect, it } from 'vitest';
-import { MORPH_FAMILIES, morphKey } from './morph';
-import { PLANTS, plantById } from './plants';
+import { morphKey } from './morph';
+import { PLANTS, plantById, remapPlantId, remapSeedBag, VEG_IDS } from './plants';
 
 describe('窗前庭园 plant catalog', () => {
-	it('has at least 60 unique plants with unique names and morphologies', () => {
-		expect(PLANTS.length).toBeGreaterThanOrEqual(60);
-		const ids = PLANTS.map((plant) => plant.id);
-		const names = PLANTS.map((plant) => plant.name);
-		const keys = PLANTS.map((plant) => morphKey(plant.morph));
-		expect(new Set(ids).size).toBe(ids.length);
-		expect(new Set(names).size).toBe(names.length);
-		expect(new Set(keys).size).toBe(keys.length);
+	it('has exactly ten common vegetables, all available at the start', () => {
+		expect(VEG_IDS).toEqual([
+			'tomato',
+			'cucumber',
+			'eggplant',
+			'chili',
+			'carrot',
+			'radish',
+			'cabbage',
+			'lettuce',
+			'spinach',
+			'scallion'
+		]);
+		expect(PLANTS.map((plant) => plant.id)).toEqual(VEG_IDS);
+		expect(new Set(PLANTS.map((plant) => plant.name)).size).toBe(10);
+		expect(new Set(PLANTS.map((plant) => morphKey(plant.morph))).size).toBe(10);
+		expect(PLANTS.every((plant) => plant.unlockAt === 0)).toBe(true);
 		expect(PLANTS.every((plant) => plant.name.length >= 2)).toBe(true);
-		expect(
-			PLANTS.every(
-				(plant) =>
-					['low', 'mid', 'high'].includes(plant.water) &&
-					['low', 'mid', 'high'].includes(plant.light) &&
-					['low', 'mid', 'high'].includes(plant.nutrient)
-			)
-		).toBe(true);
-		for (const family of MORPH_FAMILIES) {
-			expect(PLANTS.some((plant) => plant.morph.family === family)).toBe(true);
-		}
-		expect(plantById('tomato')?.unlockAt).toBe(0);
-		expect(plantById('lettuce')?.unlockAt).toBe(0);
-		expect(plantById('mint')?.unlockAt).toBe(0);
-		expect(plantById('bokchoy')?.name).toBe('小白菜');
-		expect(PLANTS.filter((plant) => plant.unlockAt === 0).length).toBe(3);
-		expect(PLANTS.some((plant) => plant.unlockAt > 0)).toBe(true);
+		expect(plantById('tomato')?.name).toBe('番茄');
+		expect(plantById('scallion')?.name).toBe('小葱');
+		expect(plantById('mint')).toBeUndefined();
+		expect(plantById('sunflower')).toBeUndefined();
+	});
+
+	it('maps legacy ornamental and extra crops onto the ten vegetables', () => {
+		expect(remapPlantId('tomato')).toBe('tomato');
+		expect(remapPlantId('mint')).toBe('scallion');
+		expect(remapPlantId('sunflower')).toBe('chili');
+		expect(remapPlantId('fern')).toBe('lettuce');
+		expect(remapPlantId('cactus')).toBe('radish');
+		expect(remapPlantId('grape')).toBe('cucumber');
+		expect(remapPlantId('not-a-plant')).toBe('tomato');
+	});
+
+	it('merges legacy seed bags onto vegetable ids', () => {
+		expect(remapSeedBag({ mint: 2, scallion: 1, sunflower: 3, grape: 1 })).toEqual({
+			scallion: 3,
+			chili: 3,
+			cucumber: 1
+		});
 	});
 });

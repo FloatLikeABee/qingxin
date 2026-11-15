@@ -348,20 +348,54 @@ for (const view of views) {
 			await page.setViewportSize({ width: view.width, height: view.height });
 			await boot(page, theme);
 			await page.addInitScript(() => {
+				if (!sessionStorage.getItem('qingxin.keepGarden')) {
+					localStorage.removeItem('qingxin.games.window-garden');
+				}
 				(window as { __qingxinE2E?: boolean }).__qingxinE2E = true;
 			});
 			await openReady(page, '/modules/games/window-garden/play');
 			await expect(page.locator('canvas[aria-label="窗前庭园"]')).toBeVisible();
 			await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 			await expect(page.getByRole('button', { name: '浇水' })).toBeVisible();
+			await page.waitForFunction(
+				() =>
+					Boolean(
+						(window as { __qingxinGardenTest?: { potClient: (id: number) => unknown } })
+							.__qingxinGardenTest?.potClient(0)
+					)
+			);
 			await page.evaluate(() => {
-				(
-					window as { __qingxinGardenTest?: { seedDemo: () => void } }
-				).__qingxinGardenTest?.seedDemo();
+				(window as { __qingxinGardenTest?: { setPaused: (paused: boolean) => void } })
+					.__qingxinGardenTest?.setPaused(true);
 			});
-			await expect(page.locator('[data-bed="0"]')).toContainText('番茄');
-			await expect(page.locator('[data-bed="1"]')).toContainText('向日葵');
-			await page.waitForTimeout(700);
+			const clickPot = async (id: number) => {
+				const pt = await page.evaluate((bedId) => {
+					return (
+						window as {
+							__qingxinGardenTest?: { potClient: (id: number) => { x: number; y: number } | null };
+						}
+					).__qingxinGardenTest?.potClient(bedId);
+				}, id);
+				if (!pt) throw new Error(`pot ${id}`);
+				await page.mouse.click(pt.x, pt.y);
+			};
+			await clickPot(0);
+			await page.getByRole('button', { name: '番茄', exact: true }).click();
+			await page.getByRole('button', { name: '种下番茄' }).click();
+			await clickPot(1);
+			await page.getByRole('button', { name: '生菜', exact: true }).click();
+			await page.getByRole('button', { name: '种下生菜' }).click();
+			await page.evaluate(() => {
+				const api = (
+					window as { __qingxinGardenTest?: { tick: (n: number) => void; setPaused: (paused: boolean) => void } }
+				).__qingxinGardenTest;
+				api?.tick(24);
+				api?.setPaused(false);
+			});
+			await expect(page.locator('canvas[aria-label="窗前庭园"]')).toHaveAttribute(
+				'data-plants',
+				/tomato,lettuce/
+			);
 			const gardenScroll = await page.evaluate(() => document.documentElement.scrollWidth);
 			expect(gardenScroll).toBeLessThanOrEqual(view.width + 2);
 			await page.screenshot({
