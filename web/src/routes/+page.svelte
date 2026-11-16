@@ -12,8 +12,8 @@
 	import { funnelStages, type Application } from '#lib/hustle/funnel';
 	import { statusTone } from '#lib/hustle/status';
 	import { todayTodos } from '#lib/hustle/todos';
-	import { INSPIRATION, PLATFORMS } from '#lib/create/catalog';
 	import { MODULES } from '#lib/modules';
+	import { FLOORS } from '#lib/shangban/floors';
 	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { planBentoSpans } from '#lib/ui/bento';
 
@@ -98,34 +98,26 @@
 			<Card class="flex h-full flex-col">
 				<div class="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
 					<div>
-						<h2 class="text-lg font-semibold">内容创作</h2>
+						<h2 class="text-lg font-semibold">上班</h2>
 						<p class="mt-1 text-sm text-[var(--qx-muted)]">
-							选一个场景，把灵感写成可发出去的草稿。
+							五层大厦，自己选岗位。走路、坐电梯、做手头的活。
 						</p>
 					</div>
-					<Button href="/modules/create" variant="secondary" class="shrink-0 whitespace-nowrap"
-						>打开内容创作</Button
+					<Button href="/modules/shangban" variant="secondary" class="shrink-0 whitespace-nowrap"
+						>去上班</Button
 					>
 				</div>
 				<div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-					{#each PLATFORMS as item (item)}
+					{#each FLOORS as floor (floor.id)}
 						<a
-							href="/modules/create?platform={encodeURIComponent(item)}"
+							href="/modules/shangban"
 							class="flex min-h-11 flex-col justify-center rounded-2xl bg-[var(--qx-surface)] px-4 py-3 text-[var(--qx-text)]"
 						>
-							<p class="font-medium">{item}</p>
-							<p class="text-sm text-[var(--qx-muted)]">平台模板与预览</p>
+							<p class="font-medium">{floor.id}F {floor.name}</p>
+							<p class="text-sm text-[var(--qx-muted)]">进楼层做事</p>
 						</a>
 					{/each}
 				</div>
-				<ul class="mt-4 space-y-2">
-					{#each INSPIRATION as item (item.id)}
-						<li class="rounded-2xl bg-[var(--qx-surface)] px-4 py-3">
-							<p class="font-medium">{item.topic}</p>
-							<p class="text-sm text-[var(--qx-muted)]">{item.platform} · {item.hook}</p>
-						</li>
-					{/each}
-				</ul>
 			</Card>
 		</BentoItem>
 

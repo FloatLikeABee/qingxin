@@ -11,7 +11,9 @@
 	let { children }: { children: Snippet } = $props();
 
 	const pathname = $derived(page.url.pathname);
-	const playView = $derived(/\/play\/?$/.test(pathname));
+	const playView = $derived(
+		/\/play\/?$/.test(pathname) || pathname.startsWith('/modules/shangban')
+	);
 	const hideTabs = $derived(['/login', '/register'].includes(pathname) || playView);
 </script>
 

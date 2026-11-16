@@ -8,11 +8,11 @@ export interface ModuleInfo {
 
 export const MODULES: ModuleInfo[] = [
 	{
-		slug: 'create',
-		name: '内容创作',
-		summary: '写成可发出去的草稿，再用系统分享或复制发到小红书、微信、抖音。',
-		accent: '#38BDF8',
-		icon: 'pen'
+		slug: 'shangban',
+		name: '上班',
+		summary: '走进五层大厦，自己选岗位，做分拣、谈判、维修和经营决定。',
+		accent: '#3B82F6',
+		icon: 'briefcase'
 	},
 	{
 		slug: 'secrets',

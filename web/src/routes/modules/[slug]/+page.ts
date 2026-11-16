@@ -13,6 +13,7 @@ export const entries: EntryGenerator = () =>
 				'local',
 				'health',
 				'create',
+				'shangban',
 				'study',
 				'ai',
 				'secrets',

@@ -351,7 +351,10 @@
 			<Tag tone="primary">工具辅助 · 示意文案</Tag>
 			<h1 class="mt-3 text-3xl font-semibold">内容创作</h1>
 			<p class="mt-2 max-w-xl text-base text-[var(--qx-muted)]">
-				选一个场景，写下主题，生成后再润色。不构成专业文案或营销建议。
+				主入口已换成上班。这里还留着旧草稿，不会删。选一个场景，写下主题，生成后再润色。不构成专业文案或营销建议。
+			</p>
+			<p class="mt-2">
+				<a class={LINK_CLASS} href="/modules/shangban">去上班 →</a>
 			</p>
 		</div>
 		<a class={LINK_CLASS} href="/modules">← 返回模块中心</a>

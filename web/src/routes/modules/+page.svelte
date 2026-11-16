@@ -20,7 +20,7 @@
 			<div>
 				<h1 class="font-[Outfit] text-3xl font-semibold tracking-tight">模块中心</h1>
 				<p class="mt-2 text-[var(--qx-muted)]">
-					内容创作是主产品。秘密信箱单独收信。游戏可以进店里过一个班次。
+					上班是主产品场景。秘密信箱单独收信。游戏可以进店里过一个班次。旧的内容草稿还在原地址。
 				</p>
 			</div>
 		</BentoItem>

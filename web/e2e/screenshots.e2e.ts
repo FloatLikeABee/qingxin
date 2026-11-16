@@ -39,11 +39,9 @@ for (const view of views) {
 			await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 			await expect(page.getByRole('heading', { name: '求职概览' })).toBeVisible();
 			await expect(page.getByText('轻心实验室').first()).toBeVisible();
-			await expect(page.getByRole('heading', { name: '内容创作' })).toBeVisible();
-			await expect(page.getByText('小红书').first()).toBeVisible();
-			await expect(page.getByText('公众号').first()).toBeVisible();
-			await expect(page.getByText('抖音').first()).toBeVisible();
-			await expect(page.getByText('周报').first()).toBeVisible();
+			await expect(page.getByRole('heading', { name: '上班' })).toBeVisible();
+			await expect(page.getByText('后勤与物流').first()).toBeVisible();
+			await expect(page.getByText('经营管理').first()).toBeVisible();
 			if (view.width < 800) {
 				await expect(page.locator('nav.fixed')).toBeVisible();
 			} else {
@@ -357,16 +355,17 @@ for (const view of views) {
 			await expect(page.locator('canvas[aria-label="窗前庭园"]')).toBeVisible();
 			await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 			await expect(page.getByRole('button', { name: '浇水' })).toBeVisible();
-			await page.waitForFunction(
-				() =>
-					Boolean(
-						(window as { __qingxinGardenTest?: { potClient: (id: number) => unknown } })
-							.__qingxinGardenTest?.potClient(0)
-					)
+			await page.waitForFunction(() =>
+				Boolean(
+					(
+						window as { __qingxinGardenTest?: { potClient: (id: number) => unknown } }
+					).__qingxinGardenTest?.potClient(0)
+				)
 			);
 			await page.evaluate(() => {
-				(window as { __qingxinGardenTest?: { setPaused: (paused: boolean) => void } })
-					.__qingxinGardenTest?.setPaused(true);
+				(
+					window as { __qingxinGardenTest?: { setPaused: (paused: boolean) => void } }
+				).__qingxinGardenTest?.setPaused(true);
 			});
 			const clickPot = async (id: number) => {
 				const pt = await page.evaluate((bedId) => {
@@ -387,7 +386,12 @@ for (const view of views) {
 			await page.getByRole('button', { name: '种下生菜' }).click();
 			await page.evaluate(() => {
 				const api = (
-					window as { __qingxinGardenTest?: { tick: (n: number) => void; setPaused: (paused: boolean) => void } }
+					window as {
+						__qingxinGardenTest?: {
+							tick: (n: number) => void;
+							setPaused: (paused: boolean) => void;
+						};
+					}
 				).__qingxinGardenTest;
 				api?.tick(24);
 				api?.setPaused(false);
