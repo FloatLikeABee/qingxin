@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { getApi } from '#lib/api/client';
 	import Bento from '#lib/components/Bento.svelte';
 	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Button from '#lib/components/Button.svelte';
@@ -8,11 +6,8 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Tag from '#lib/components/Tag.svelte';
-	import FunnelChart from '#lib/hustle/FunnelChart.svelte';
-	import { funnelStages, type Application } from '#lib/hustle/funnel';
-	import { statusTone } from '#lib/hustle/status';
-	import { todayTodos } from '#lib/hustle/todos';
 	import { MODULES } from '#lib/modules';
+	import { SHAPES } from '#lib/jimutai/pieces';
 	import { FLOORS } from '#lib/shangban/floors';
 	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { planBentoSpans } from '#lib/ui/bento';
@@ -20,24 +15,10 @@
 	const hour = new Date().getHours();
 	const greeting = hour < 12 ? '早安' : hour < 18 ? '下午好' : '夜安';
 	const featured = MODULES.filter((item) =>
-		['mood', 'finance', 'elder', 'local'].includes(item.slug)
+		['mood', 'finance', 'elder', 'pet'].includes(item.slug)
 	);
 	const featuredSpans = planBentoSpans(4);
-	let applications = $state<Application[]>([]);
-	const stages = $derived(funnelStages(applications));
-	const todos = $derived(todayTodos(applications, new Date().toISOString().slice(0, 10)));
-
-	onMount(() => {
-		void (async () => {
-			const session = await getApi().getSession();
-			if (!session) return;
-			try {
-				applications = await getApi().listApplications();
-			} catch {
-				applications = [];
-			}
-		})();
-	});
+	const pieceNames = Object.values(SHAPES).map((item) => item.name);
 </script>
 
 <svelte:head>
@@ -64,33 +45,25 @@
 			<Card class="flex h-full flex-col">
 				<div class="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
 					<div>
-						<h2 class="text-lg font-semibold">求职概览</h2>
-						<p class="mt-1 text-sm text-[var(--qx-muted)]">今天的面试和待跟进投递。</p>
+						<h2 class="text-lg font-semibold">积木台</h2>
+						<p class="mt-1 text-sm text-[var(--qx-muted)]">
+							五块小积木，放到桌上拼在一起。没有输赢，拼完再给五块。
+						</p>
 					</div>
-					<Button href="/modules/hustle" variant="secondary" class="shrink-0 whitespace-nowrap"
-						>打开求职副业</Button
+					<Button href="/modules/jimutai" variant="secondary" class="shrink-0 whitespace-nowrap"
+						>去搭积木</Button
 					>
 				</div>
-				<div class="mt-4 flex flex-wrap gap-2">
-					{#each stages as stage (stage.status)}
-						<Tag tone={statusTone(stage.status)}>{stage.status} {stage.count}</Tag>
+				<div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+					{#each pieceNames as name (name)}
+						<a
+							href="/modules/jimutai"
+							class="flex min-h-11 items-center rounded-2xl bg-[var(--qx-surface)] px-4 py-3 text-[var(--qx-text)]"
+						>
+							{name}
+						</a>
 					{/each}
 				</div>
-				<FunnelChart {stages} />
-				{#if todos.length === 0}
-					<p class="text-sm text-[var(--qx-muted)]">
-						今天还没有面试。把投递放进看板后会出现在这里。
-					</p>
-				{:else}
-					<ul class="mt-2 space-y-2">
-						{#each todos as item (item.id)}
-							<li class="rounded-2xl bg-[var(--qx-surface)] px-4 py-3">
-								<p class="font-medium">{item.title}</p>
-								<p class="text-sm text-[var(--qx-muted)]">{item.detail}</p>
-							</li>
-						{/each}
-					</ul>
-				{/if}
 			</Card>
 		</BentoItem>
 

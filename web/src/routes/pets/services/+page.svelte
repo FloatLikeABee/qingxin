@@ -3,7 +3,6 @@
 	import Card from '#lib/components/Card.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import DisclaimerBanner from '#lib/pets/DisclaimerBanner.svelte';
-	import { LOCAL_LIFE_HREF } from '#lib/pets/disclaimer';
 </script>
 
 <svelte:head>
@@ -15,12 +14,12 @@
 
 <Card>
 	<EmptyState
-		title="附近服务即将接入"
-		body="24 小时宠物医院、寄养和洗护会放在本地生活地图里。这里先跳转到那个入口，不重复做一份名单。"
+		title="附近服务名单暂不开放"
+		body="本地生活入口已经从轻心撤下。这里不再跳转过去。宠物模块里的记录还在。"
 		icon="spark"
 	>
 		{#snippet action()}
-			<Button href={LOCAL_LIFE_HREF}>打开本地生活</Button>
+			<Button href="/pets">返回宠物</Button>
 		{/snippet}
 	</EmptyState>
 </Card>

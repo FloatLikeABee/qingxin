@@ -209,19 +209,33 @@ test.describe('上班 Stage 1', () => {
 			await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-role', 'tech');
 			await acceptOffer(page);
 			await clickVisible(page, '检查');
-			await expect(page.locator('.notice')).toHaveText(/电源|排线|散热|主板/, { timeout: 8_000 });
-			const clue = (await page.locator('.notice').innerText()) ?? '';
+			await expect(page.locator('.notice')).toHaveText(/电源|插座|排线|花屏|散热|风道|主板|自检/, {
+				timeout: 8_000
+			});
 			const parts = ['电源', '排线', '散热', '主板'] as const;
-			const correct = parts.find((part) => clue.includes(part)) ?? '电源';
+			const partFromClue = (text: string) =>
+				text.includes('插座') || text.includes('电源')
+					? '电源'
+					: text.includes('花屏') || text.includes('排线')
+						? '排线'
+						: text.includes('风道') || text.includes('散热')
+							? '散热'
+							: text.includes('自检') || text.includes('主板')
+								? '主板'
+								: '电源';
+			const clue = (await page.locator('.notice').innerText()) ?? '';
+			const correct = partFromClue(clue);
 			const wrong = parts.find((part) => part !== correct) ?? '排线';
 			await clickVisible(page, wrong);
 			await expect(page.getByRole('button', { name: '重试' })).toBeVisible({ timeout: 8_000 });
 			await clickVisible(page, '重试');
 			await acceptOffer(page);
 			await clickVisible(page, '检查');
-			await expect(page.locator('.notice')).toHaveText(/电源|排线|散热|主板/, { timeout: 8_000 });
+			await expect(page.locator('.notice')).toHaveText(/电源|插座|排线|花屏|散热|风道|主板|自检/, {
+				timeout: 8_000
+			});
 			const retryClue = (await page.locator('.notice').innerText()) ?? '';
-			const retryPart = parts.find((part) => retryClue.includes(part)) ?? '电源';
+			const retryPart = partFromClue(retryClue);
 			const techPay = Number(
 				(await page.locator('[data-shangban="1"]').getAttribute('data-pay')) ?? '0'
 			);
@@ -374,6 +388,9 @@ test.describe('上班 Stage 1', () => {
 		await expect(page.getByRole('heading', { name: '上班' })).toBeVisible();
 		await expect(page.getByRole('heading', { name: '内容创作' })).toHaveCount(0);
 		await expect(page.getByRole('heading', { name: '秘密' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: '积木台' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: '求职副业' })).toHaveCount(0);
+		await expect(page.getByRole('heading', { name: '本地生活' })).toHaveCount(0);
 		await page.goto('/modules/create', { waitUntil: 'networkidle' });
 		await expect(page.getByRole('heading', { name: '内容创作' })).toBeVisible();
 		await expect(page.getByText('主入口已换成上班')).toBeVisible();

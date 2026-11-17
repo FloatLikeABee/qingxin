@@ -19,4 +19,18 @@ describe('module catalog', () => {
 		});
 		expect(MODULES.some((item) => item.slug === 'kit' || item.name === '组件')).toBe(false);
 	});
+
+	it('lists 积木台 and hides the four retired modules', () => {
+		expect(getModule('jimutai')).toMatchObject({
+			slug: 'jimutai',
+			name: '积木台'
+		});
+		expect(MODULES.some((item) => ['local', 'ai', 'study', 'hustle'].includes(item.slug))).toBe(
+			false
+		);
+		expect(MODULES.some((item) => item.name === '本地生活')).toBe(false);
+		expect(MODULES.some((item) => item.name === 'AI效率工具箱')).toBe(false);
+		expect(MODULES.some((item) => item.name === '学习打卡')).toBe(false);
+		expect(MODULES.some((item) => item.name === '求职副业')).toBe(false);
+	});
 });

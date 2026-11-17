@@ -42,30 +42,12 @@ test('adding a pet saves through the API and survives reload', async ({ page }) 
 	await expect(page.getByText('4.20 kg')).toBeVisible({ timeout: 15_000 });
 });
 
-test('study challenge check-in and flashcard review hit the API', async ({ page }) => {
+test('study routes redirect to the retired notice without mounting check-in', async ({ page }) => {
 	await registerFresh(page);
 	await page.goto('/study');
-	await expect(page.getByText('还没有挑战')).toBeVisible();
-
+	await expect(page.getByText('学习打卡已经从轻心主入口撤下')).toBeVisible();
+	await expect(page.getByText('还没有挑战')).toHaveCount(0);
 	await page.goto('/study/checkin');
-	await page.getByLabel('名称').fill('背单词');
-	await page.getByRole('button', { name: '21 天' }).click();
-	await page.getByRole('button', { name: '开始挑战' }).click();
-	await expect(page.getByRole('heading', { name: '背单词' })).toBeVisible({ timeout: 15_000 });
-	await page.getByRole('button', { name: '完成今日任务' }).click();
-	await expect(page.getByRole('button', { name: '今日已完成' })).toBeVisible({ timeout: 15_000 });
-	await expect(page.getByText('1 天连续')).toBeVisible();
-
-	await page.goto('/study');
-	await expect(page.getByRole('heading', { name: '背单词' })).toBeVisible({ timeout: 15_000 });
-	await expect(page.getByText('今日已打卡')).toBeVisible();
-	await expect(page.getByText('1 天连续')).toBeVisible();
-
-	await page.goto('/study/cards');
-	await page.getByLabel('正面').fill('过去分词');
-	await page.getByLabel('背面').fill('done');
-	await page.getByRole('button', { name: '加入卡片' }).click();
-	await expect(page.getByText('过去分词')).toBeVisible({ timeout: 15_000 });
-	await page.getByRole('button', { name: '记得' }).click();
-	await expect(page.getByText(/间隔 1 天/)).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByText('学习打卡已经从轻心主入口撤下')).toBeVisible();
+	await expect(page.getByLabel('名称')).toHaveCount(0);
 });

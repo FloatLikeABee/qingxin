@@ -53,5 +53,6 @@ test('pets and study link back to the hub', async ({ page }) => {
 	await page.goto('/pets');
 	await expect(page.getByRole('link', { name: '返回模块中心' })).toBeVisible();
 	await page.goto('/study');
-	await expect(page.getByRole('link', { name: '返回模块中心' })).toBeVisible();
+	await expect(page.getByText('学习打卡已经从轻心主入口撤下')).toBeVisible();
+	await expect(page.getByRole('link', { name: '返回模块中心' }).first()).toBeVisible();
 });
