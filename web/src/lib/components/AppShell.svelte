@@ -12,7 +12,9 @@
 
 	const pathname = $derived(page.url.pathname);
 	const playView = $derived(
-		/\/play\/?$/.test(pathname) || pathname.startsWith('/modules/shangban')
+		/\/play\/?$/.test(pathname) ||
+			pathname.startsWith('/modules/shangban') ||
+			pathname.startsWith('/modules/jimutai')
 	);
 	const hideTabs = $derived(['/login', '/register'].includes(pathname) || playView);
 </script>
