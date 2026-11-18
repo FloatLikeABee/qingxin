@@ -58,7 +58,7 @@
 	{:else}
 		<ul class="mt-3 space-y-2">
 			{#each sleep as row (row.id)}
-				<li class="rounded-2xl bg-[var(--qx-surface)] px-4 py-3 text-base">
+				<li class="qx-glass-field rounded-2xl px-4 py-3 text-base">
 					质量 {row.quality}/5
 					{#if row.note}
 						· {row.note}

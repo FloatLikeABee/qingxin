@@ -28,13 +28,13 @@
 	<div class="flex items-center justify-between">
 		<button
 			type="button"
-			class="inline-flex min-h-11 items-center rounded-2xl bg-[var(--qx-surface)] px-4 text-base"
+			class="qx-chip inline-flex min-h-11 items-center rounded-2xl px-4 text-base"
 			onclick={() => (month = shiftMonth(month, -1))}>上月</button
 		>
 		<p class="text-lg font-semibold">{month}</p>
 		<button
 			type="button"
-			class="inline-flex min-h-11 items-center rounded-2xl bg-[var(--qx-surface)] px-4 text-base"
+			class="qx-chip inline-flex min-h-11 items-center rounded-2xl px-4 text-base"
 			onclick={() => (month = shiftMonth(month, 1))}>下月</button
 		>
 	</div>
@@ -47,7 +47,7 @@
 		{#each days as day (day.date)}
 			<div
 				class="min-h-14 rounded-xl px-1 py-2 text-sm {day.inMonth
-					? 'bg-[var(--qx-surface)] text-[var(--qx-text)]'
+					? 'qx-chip text-[var(--qx-text)]'
 					: 'text-[var(--qx-muted)]'}"
 			>
 				<span>{day.date.slice(8)}</span>

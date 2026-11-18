@@ -8,7 +8,7 @@
 
 <a
 	href={gameHref(game)}
-	class="game-card group flex min-h-0 min-w-0 flex-col overflow-hidden rounded-3xl bg-[var(--qx-card)] ring-1 ring-[var(--qx-line)] transition duration-200 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--qx-primary)] motion-safe:hover:-translate-y-1 motion-safe:hover:shadow-[0_22px_40px_-28px_rgba(15,23,42,0.55)]"
+	class="game-card qx-glass group flex min-h-0 min-w-0 flex-col overflow-hidden rounded-3xl transition duration-200 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--qx-primary)] motion-safe:hover:-translate-y-1"
 >
 	<div class="relative h-40 min-w-0 overflow-hidden">
 		<GameCover

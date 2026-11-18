@@ -6,18 +6,13 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Tag from '#lib/components/Tag.svelte';
-	import { MODULES } from '#lib/modules';
 	import { SHAPES } from '#lib/jimutai/pieces';
 	import { FLOORS } from '#lib/shangban/floors';
+	import ModuleBoard from '#lib/shell/ModuleBoard.svelte';
 	import { LINK_CLASS } from '#lib/ui/affordance';
-	import { planBentoSpans } from '#lib/ui/bento';
 
 	const hour = new Date().getHours();
 	const greeting = hour < 12 ? '早安' : hour < 18 ? '下午好' : '夜安';
-	const featured = MODULES.filter((item) =>
-		['mood', 'finance', 'elder', 'pet'].includes(item.slug)
-	);
-	const featuredSpans = planBentoSpans(4);
 	const pieceNames = Object.values(SHAPES).map((item) => item.name);
 </script>
 
@@ -58,7 +53,7 @@
 					{#each pieceNames as name (name)}
 						<a
 							href="/modules/jimutai"
-							class="flex min-h-11 items-center rounded-2xl bg-[var(--qx-surface)] px-4 py-3 text-[var(--qx-text)]"
+							class="qx-chip flex min-h-11 items-center rounded-2xl px-4 py-3 text-[var(--qx-text)]"
 						>
 							{name}
 						</a>
@@ -84,7 +79,7 @@
 					{#each FLOORS as floor (floor.id)}
 						<a
 							href="/modules/shangban"
-							class="flex min-h-11 flex-col justify-center rounded-2xl bg-[var(--qx-surface)] px-4 py-3 text-[var(--qx-text)]"
+							class="qx-chip flex min-h-11 flex-col justify-center rounded-2xl px-4 py-3 text-[var(--qx-text)]"
 						>
 							<p class="font-medium">{floor.id}F {floor.name}</p>
 							<p class="text-sm text-[var(--qx-muted)]">进楼层做事</p>
@@ -111,37 +106,21 @@
 				</Card>
 			</a>
 		</BentoItem>
-
-		{#each featured as item, index (item.slug)}
-			<BentoItem span={featuredSpans[index] ?? 'unit'}>
-				<a href="/modules/{item.slug}" class="group block h-full">
-					<Card class="h-full transition motion-safe:group-hover:-translate-y-0.5">
-						<div
-							class="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl text-white"
-							style="background:{item.accent}"
-						>
-							<Icon name={item.icon} />
-						</div>
-						<h2 class="text-lg font-semibold">{item.name}</h2>
-						<p class="mt-1 text-base text-[var(--qx-muted)]">{item.summary}</p>
-						<span class="{LINK_CLASS} mt-3">打开 <Icon name="chevron" class="h-4 w-4" /></span>
-					</Card>
-				</a>
-			</BentoItem>
-		{/each}
-
-		<BentoItem span="full">
-			<Card>
-				<EmptyState
-					title="今天还没有新的记录"
-					body="离线时也会为你保存草稿，网络恢复后会静默同步。"
-					icon="cloud"
-				>
-					{#snippet action()}
-						<Button href="/modules">打开模块中心</Button>
-					{/snippet}
-				</EmptyState>
-			</Card>
-		</BentoItem>
 	</Bento>
+	<div class="mt-6">
+		<ModuleBoard />
+	</div>
+	<div class="mt-6">
+		<Card>
+			<EmptyState
+				title="今天还没有新的记录"
+				body="离线时也会为你保存草稿，网络恢复后会静默同步。"
+				icon="cloud"
+			>
+				{#snippet action()}
+					<Button href="/modules">打开模块中心</Button>
+				{/snippet}
+			</EmptyState>
+		</Card>
+	</div>
 </section>

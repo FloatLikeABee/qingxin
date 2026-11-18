@@ -549,8 +549,9 @@
 		justify-content: center;
 		gap: 0.05rem;
 		border-radius: 0.9rem;
-		border: 1px solid var(--qx-line);
-		background: var(--qx-surface);
+		border: 1px solid color-mix(in oklab, white 26%, var(--qx-line));
+		background: color-mix(in oklab, var(--qx-card) 58%, transparent);
+		backdrop-filter: blur(12px);
 		color: var(--qx-text);
 		font-size: 0.72rem;
 		line-height: 1.1;
@@ -622,6 +623,8 @@
 	@media (prefers-reduced-motion: reduce) {
 		.slot {
 			transition: none;
+			backdrop-filter: none;
+			background: var(--qx-card);
 		}
 	}
 </style>

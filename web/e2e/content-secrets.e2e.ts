@@ -53,9 +53,10 @@ test('primary nav dropped 组件 and added 上班', async ({ page }) => {
 	await boot(page);
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/');
-	const nav = page.locator('nav.fixed');
-	await expect(nav.getByText('上班')).toBeVisible();
+	const nav = page.locator('[data-qx-topbar]');
+	await expect(nav.getByText('模块中心')).toBeVisible();
 	await expect(nav.getByText('内容')).toHaveCount(0);
 	await expect(nav.getByText('组件')).toHaveCount(0);
-	await expect(page.getByRole('heading', { name: '秘密' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: '上班' }).first()).toBeVisible();
+	await expect(page.getByRole('heading', { name: '秘密' }).first()).toBeVisible();
 });

@@ -34,11 +34,9 @@
 			{id}
 			bind:value
 			type={resolvedType}
-			class="min-h-11 w-full rounded-2xl border bg-[var(--qx-bg)] px-4 text-base text-[var(--qx-text)] outline-none ring-[var(--qx-primary)] placeholder:text-[var(--qx-muted)] focus:ring-2 {isPassword
+			class="qx-glass-field min-h-11 w-full rounded-2xl border px-4 text-base ring-[var(--qx-primary)] outline-none placeholder:text-[var(--qx-muted)] focus:ring-2 {isPassword}
 				? 'pe-14'
-				: ''} {error
-				? 'border-[var(--qx-danger)]'
-				: 'border-[var(--qx-line)]'}"
+				: ''} {error ? 'border-[var(--qx-danger)]' : 'border-[var(--qx-line)]'}"
 			{...rest}
 		/>
 		{#if isPassword}

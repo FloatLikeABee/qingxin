@@ -37,19 +37,14 @@ for (const view of views) {
 			await boot(page, theme);
 			await openReady(page, '/');
 			await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-			await expect(page.getByRole('heading', { name: '积木台' })).toBeVisible();
-			await expect(page.getByText('轻心实验室').first()).toBeVisible();
-			await expect(page.getByRole('heading', { name: '上班' })).toBeVisible();
+			await expect(page.getByRole('heading', { name: '积木台' }).first()).toBeVisible();
+			await expect(page.getByRole('heading', { name: '模块中心' }).first()).toBeVisible();
+			await expect(page.getByRole('heading', { name: '上班' }).first()).toBeVisible();
 			await expect(page.getByText('后勤与物流').first()).toBeVisible();
 			await expect(page.getByText('经营管理').first()).toBeVisible();
-			if (view.width < 800) {
-				await expect(page.locator('nav.fixed')).toBeVisible();
-			} else {
-				await expect(page.locator('aside')).toBeVisible();
-			}
-			if (view.width < 800) {
-				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
-			}
+			await expect(page.locator('aside')).toHaveCount(0);
+			await expect(page.locator('nav.fixed')).toHaveCount(0);
+			await expect(page.locator('[data-qx-topbar]')).toBeVisible();
 			await page.screenshot({
 				path: `screenshots/home-${view.name}-${theme}.png`,
 				fullPage: true
@@ -66,9 +61,6 @@ for (const view of views) {
 			await openReady(page, '/modules/create');
 			await expect(page.getByRole('heading', { name: '发布到社交平台' })).toBeVisible();
 			await expect(page.getByRole('button', { name: '系统分享' })).toBeVisible();
-			if (view.width < 800) {
-				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
-			}
 			await page.screenshot({
 				path: `screenshots/create-posting-${view.name}-${theme}.png`,
 				fullPage: true
@@ -92,9 +84,6 @@ for (const view of views) {
 			if (await closeToast.count()) {
 				await closeToast.first().click();
 			}
-			if (view.width < 800) {
-				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
-			}
 			await page.screenshot({
 				path: `screenshots/secrets-mailbox-${view.name}-${theme}.png`,
 				fullPage: true
@@ -115,9 +104,6 @@ for (const view of views) {
 			await expect(page.getByRole('heading', { name: '健康' })).toBeVisible();
 			await expect(page.getByRole('heading', { name: '本地生活' })).toHaveCount(0);
 			await expect(page.getByRole('heading', { name: '求职副业' })).toHaveCount(0);
-			if (view.width < 800) {
-				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
-			}
 			await page.screenshot({
 				path: `screenshots/modules-${view.name}-${theme}.png`,
 				fullPage: true
@@ -144,9 +130,6 @@ for (const view of views) {
 				await expect(page.getByText('示意洞察')).toBeVisible({ timeout: 10_000 });
 				await page.getByRole('tab', { name: screen.tab }).click();
 				await expect(page.getByText(screen.ready).first()).toBeVisible();
-				if (view.width < 800) {
-					await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
-				}
 				await page.screenshot({
 					path: `screenshots/mood-${screen.key}-${view.name}-${theme}.png`,
 					fullPage: true
@@ -172,9 +155,6 @@ for (const view of views) {
 				await openReady(page, screen.path);
 				await expect(page.getByText(`${screen.name}已经从轻心主入口撤下`)).toBeVisible();
 				await expect(page.getByRole('link', { name: '返回模块中心' }).first()).toBeVisible();
-				if (view.width < 800) {
-					await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
-				}
 				await page.screenshot({
 					path: `screenshots/retired-${screen.key}-${view.name}-${theme}.png`,
 					fullPage: true
@@ -201,9 +181,6 @@ for (const view of views) {
 				await expect(page.getByRole('button', { name: '生成' })).toBeVisible();
 				await page.getByRole('tab', { name: screen.tab }).click();
 				await expect(page.getByText(screen.ready).first()).toBeVisible();
-				if (view.width < 800) {
-					await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
-				}
 				await page.screenshot({
 					path: `screenshots/create-${screen.key}-${view.name}-${theme}.png`,
 					fullPage: true
@@ -228,9 +205,6 @@ for (const view of views) {
 			const jet = page.locator('a.game-card').filter({ hasText: '晴空出击' });
 			await expect(garden.getByText('即将到来')).toHaveCount(0);
 			await expect(jet.getByText('即将到来')).toHaveCount(0);
-			if (view.width < 800) {
-				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
-			}
 			await page.screenshot({
 				path: `screenshots/games-catalog-${view.name}-${theme}.png`,
 				fullPage: true
@@ -351,9 +325,6 @@ for (const view of views) {
 			await openReady(page, '/settings');
 			await expect(page.getByRole('heading', { name: '我的' })).toBeVisible();
 			await expect(page.getByText('仅夜间开启')).toBeVisible();
-			if (view.width < 800) {
-				await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
-			}
 			await page.screenshot({
 				path: `screenshots/settings-${view.name}-${theme}.png`,
 				fullPage: true

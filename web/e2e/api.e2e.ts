@@ -47,7 +47,8 @@ test('finance health pets study share shell chrome', async ({ page }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
 
 	await page.goto('/finance');
-	await expect(page.locator('aside')).toBeVisible();
+	await expect(page.locator('aside')).toHaveCount(0);
+	await expect(page.locator('[data-qx-topbar]')).toBeVisible();
 	await expect(page.getByRole('heading', { name: '财务' })).toBeVisible();
 	await expect(page.getByRole('link', { name: '返回模块中心' })).toBeVisible();
 
@@ -169,12 +170,10 @@ test('create generate falls back to the zh-CN stub and hustle resume fits mobile
 	await page.goto('/modules/create');
 	await expect(page.locator('#create-final')).not.toHaveValue('', { timeout: 15_000 });
 	await expect(page.getByText('示意文案暂时不可用')).toHaveCount(0);
-	await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
 	await page.screenshot({ path: 'screenshots/create-http-editor-390-dark.png', fullPage: true });
 
 	await page.goto('/modules/hustle');
 	await expect(page.getByText('求职副业已经从轻心主入口撤下')).toBeVisible();
-	await page.addStyleTag({ content: 'nav.fixed { position: static; }' });
 	await page.screenshot({ path: 'screenshots/hustle-http-resume-390-dark.png', fullPage: true });
 });
 

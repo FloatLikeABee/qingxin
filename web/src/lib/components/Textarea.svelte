@@ -20,7 +20,6 @@
 	<textarea
 		{id}
 		bind:value
-		class="min-h-28 w-full rounded-2xl border border-[var(--qx-line)] bg-[var(--qx-bg)] px-4 py-3 text-base text-[var(--qx-text)] outline-none ring-[var(--qx-primary)] placeholder:text-[var(--qx-muted)] focus:ring-2"
-		{...rest}
-	></textarea>
+		class="qx-glass-field min-h-28 w-full rounded-2xl px-4 py-3 text-base ring-[var(--qx-primary)] outline-none placeholder:text-[var(--qx-muted)] focus:ring-2"
+		{...rest}></textarea>
 </label>

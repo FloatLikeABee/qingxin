@@ -7,6 +7,7 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import Modal from '#lib/components/Modal.svelte';
 	import { planBentoSpans } from '#lib/ui/bento';
+	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { getElderStore } from '#lib/elder/store';
 	import { shanghaiClock } from '#lib/elder/due';
 	import type { ElderContact, ElderReminder } from '#lib/elder/demo';
@@ -67,11 +68,12 @@
 	<title>轻心 · 老人助手</title>
 </svelte:head>
 
-<section class="elder-home mx-auto min-w-0 max-w-5xl">
+<section class="elder-home mx-auto max-w-5xl min-w-0">
 	<Bento>
 		<BentoItem span="full">
 			<div>
-				<p class="text-sm text-[var(--qx-muted)]">老人助手</p>
+				<a href="/modules" class={LINK_CLASS}>← 返回模块中心</a>
+				<p class="mt-3 text-sm text-[var(--qx-muted)]">老人助手</p>
 				<h1 class="text-3xl font-semibold">今天先做这几件</h1>
 				<p class="sr-only">{shanghaiClock(new Date()).date}</p>
 			</div>
@@ -85,7 +87,7 @@
 				{:else}
 					<ul class="space-y-3">
 						{#each reminders as item (item.id)}
-							<li class="rounded-2xl bg-[var(--qx-surface)] p-4">
+							<li class="qx-glass-field rounded-2xl p-4">
 								<p class="text-xl font-semibold">{item.time} · {item.title}</p>
 								<p class="text-lg">{item.body}</p>
 								<p class="text-sm text-[var(--qx-muted)]">
@@ -120,7 +122,7 @@
 			<BentoItem span={toolSpans[index] ?? 'unit'}>
 				<a
 					href={tool.href}
-					class="flex h-full min-h-14 flex-col items-center justify-center gap-2 rounded-3xl bg-[var(--qx-card)] p-5 text-lg font-medium ring-1 ring-[var(--qx-line)]"
+					class="qx-glass flex h-full min-h-14 flex-col items-center justify-center gap-2 rounded-3xl p-5 text-lg font-medium"
 				>
 					<Icon name={tool.icon} class="h-7 w-7" />
 					{tool.label}

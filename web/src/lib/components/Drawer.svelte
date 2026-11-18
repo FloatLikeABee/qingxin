@@ -28,7 +28,7 @@
 
 <dialog
 	bind:this={dialog}
-	class="qx-drawer mt-auto mb-0 w-full max-w-none rounded-t-[28px] border-0 bg-[var(--qx-card)] p-0 text-[var(--qx-text)] shadow-2xl backdrop:bg-slate-950/40"
+	class="qx-drawer qx-glass mt-auto mb-0 w-full max-w-none rounded-t-[28px] border-0 p-0 text-[var(--qx-text)] backdrop:bg-slate-950/50"
 	closedby="any"
 	aria-labelledby="qx-drawer-title"
 	onclose={() => (open = false)}

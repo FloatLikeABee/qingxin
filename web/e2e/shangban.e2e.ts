@@ -378,12 +378,13 @@ test.describe('上班 Stage 1', () => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await guestBoot(page);
 		await page.goto('/', { waitUntil: 'networkidle' });
-		await expect(page.getByRole('heading', { name: '上班' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: '上班' }).first()).toBeVisible();
 		await expect(page.getByRole('link', { name: '去上班' })).toBeVisible();
 		await expect(page.getByText('后勤与物流').first()).toBeVisible();
-		const nav = page.locator('nav.fixed');
-		await expect(nav.getByText('上班')).toBeVisible();
+		const nav = page.locator('[data-qx-topbar]');
+		await expect(nav.getByText('模块中心')).toBeVisible();
 		await expect(nav.getByText('内容')).toHaveCount(0);
+		await expect(page.getByRole('heading', { name: '上班' }).first()).toBeVisible();
 		await page.goto('/modules', { waitUntil: 'networkidle' });
 		await expect(page.getByRole('heading', { name: '上班' })).toBeVisible();
 		await expect(page.getByRole('heading', { name: '内容创作' })).toHaveCount(0);

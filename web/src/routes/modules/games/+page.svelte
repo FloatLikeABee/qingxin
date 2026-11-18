@@ -52,7 +52,7 @@
 	<a href="/modules" class="{LINK_CLASS} mb-3">← 返回模块中心</a>
 
 	<header
-		class="games-hero mt-3 flex flex-col gap-4 rounded-3xl bg-[color-mix(in_srgb,var(--qx-card)_78%,transparent)] px-4 py-4 ring-1 ring-[var(--qx-line)] sm:flex-row sm:items-center sm:justify-between"
+		class="games-hero qx-glass mt-3 flex flex-col gap-4 rounded-3xl px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
 	>
 		<div class="min-w-0">
 			<h1 class="font-[Outfit] text-3xl font-semibold tracking-tight">轻心游戏</h1>
@@ -99,7 +99,7 @@
 			type="search"
 			bind:value={search}
 			placeholder="找一款想玩的"
-			class="min-h-11 w-full rounded-2xl border border-[var(--qx-line)] bg-[var(--qx-card)] py-2 pr-4 pl-11 text-base text-[var(--qx-text)] outline-none placeholder:text-[var(--qx-muted)] focus:ring-2 focus:ring-[var(--qx-primary)]"
+			class="qx-glass-field min-h-11 w-full rounded-2xl py-2 pr-4 pl-11 text-base text-[var(--qx-text)] outline-none placeholder:text-[var(--qx-muted)] focus:ring-2 focus:ring-[var(--qx-primary)]"
 		/>
 		<span
 			class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--qx-muted)]"
@@ -109,9 +109,7 @@
 	</form>
 
 	{#if featured && !search.trim() && (category === '全部' || featured.category === category)}
-		<article
-			class="mt-5 overflow-hidden rounded-3xl bg-[var(--qx-card)] ring-1 ring-[var(--qx-line)] md:grid md:grid-cols-2"
-		>
+		<article class="qx-glass mt-5 overflow-hidden rounded-3xl md:grid md:grid-cols-2">
 			<a
 				href={gameHref(featured)}
 				class="block min-h-48 min-w-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--qx-primary)]"
@@ -146,9 +144,7 @@
 	</div>
 
 	{#if visible.length === 0}
-		<p
-			class="rounded-3xl bg-[var(--qx-card)] px-4 py-10 text-center text-base text-[var(--qx-muted)] ring-1 ring-[var(--qx-line)]"
-		>
+		<p class="qx-glass rounded-3xl px-4 py-10 text-center text-base text-[var(--qx-muted)]">
 			没有找到这款游戏。换个词，或看全部。
 		</p>
 	{:else}

@@ -178,7 +178,9 @@
 	<header class="top qx-glass">
 		<a href="/modules/games" class="{LINK_CLASS} shrink-0">← 返回目录</a>
 		<h1 class="sr-only">{title}</h1>
-		<p class="hidden min-w-0 flex-1 truncate font-[Outfit] text-base font-semibold md:block md:text-lg">
+		<p
+			class="hidden min-w-0 flex-1 truncate font-[Outfit] text-base font-semibold md:block md:text-lg"
+		>
 			{title}
 		</p>
 		<ul class="stats" aria-label="店内数字">
@@ -249,9 +251,7 @@
 
 	{#if summary}
 		<div class="overlay">
-			<article
-				class="w-full max-w-md rounded-3xl bg-[var(--qx-card)] p-6 text-left ring-1 ring-[var(--qx-line)]"
-			>
+			<article class="qx-glass w-full max-w-md rounded-3xl p-6 text-left">
 				<h2 class="font-[Outfit] text-2xl font-semibold">班次结束</h2>
 				<p class="mt-2 text-[var(--qx-muted)]">今天店里过完了。剩货会过夜，钱留在柜里。</p>
 				<dl class="mt-5 grid grid-cols-2 gap-3 text-base">

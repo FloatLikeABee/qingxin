@@ -10,7 +10,7 @@
 	} = $props();
 
 	const tones = {
-		default: 'bg-[var(--qx-surface)] text-[var(--qx-muted)]',
+		default: 'qx-chip text-[var(--qx-muted)]',
 		primary: 'bg-[color-mix(in_srgb,var(--qx-primary)_16%,transparent)] text-[var(--qx-primary)]',
 		warm: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200',
 		applied:

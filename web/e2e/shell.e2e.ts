@@ -32,11 +32,12 @@ test('logged-out settings still offers login', async ({ page }) => {
 	await expect(page.getByRole('link', { name: '登录 / 注册' })).toBeVisible();
 });
 
-test('finance has sidebar, title, and hub link', async ({ page }) => {
+test('finance has top bar, title, and hub link', async ({ page }) => {
 	await boot(page);
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await page.goto('/finance');
-	await expect(page.locator('aside')).toBeVisible();
+	await expect(page.locator('aside')).toHaveCount(0);
+	await expect(page.locator('[data-qx-topbar]')).toBeVisible();
 	await expect(page.getByRole('heading', { name: '财务' })).toBeVisible();
 	await expect(page.getByRole('link', { name: '返回模块中心' })).toBeVisible();
 });

@@ -32,7 +32,7 @@
 			{#each SYSTEM_TUTORIALS as item (item.id)}
 				<button
 					type="button"
-					class="flex min-h-14 w-full items-center rounded-3xl bg-[var(--qx-card)] px-5 text-left text-xl font-semibold ring-1 ring-[var(--qx-line)]"
+					class="qx-glass flex min-h-14 w-full items-center rounded-3xl px-5 text-left text-xl font-semibold"
 					onclick={() => open(item)}
 				>
 					{item.title}

@@ -321,10 +321,7 @@
 	<header
 		class="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-3 pt-[max(0.6rem,env(safe-area-inset-top))] md:px-5"
 	>
-		<a
-			href="/modules/games"
-			class="{LINK_CLASS} pointer-events-auto shrink-0 bg-[color-mix(in_srgb,var(--qx-card)_88%,transparent)] px-3 backdrop-blur-xl"
-		>
+		<a href="/modules/games" class="{LINK_CLASS} qx-glass pointer-events-auto shrink-0 px-3">
 			← 返回目录
 		</a>
 		<h1 class="sr-only">{title}</h1>
@@ -339,8 +336,8 @@
 	<ul
 		class="pointer-events-none absolute inset-x-0 top-16 z-10 mx-auto grid max-w-lg grid-cols-3 gap-2 px-3 md:top-20"
 	>
-		<li class="stat">{world.score} <span>分数</span></li>
-		<li class="stat" data-lives={world.lives}>
+		<li class="stat qx-glass">{world.score} <span>分数</span></li>
+		<li class="stat qx-glass" data-lives={world.lives}>
 			<span class="pips" aria-label="{world.lives} 条命">
 				{#each [1, 2, 3] as pip (pip)}
 					<i class:on={pip <= world.lives}></i>
@@ -348,7 +345,7 @@
 			</span>
 			<span>生命</span>
 		</li>
-		<li class="stat">{world.wave} <span>波次</span></li>
+		<li class="stat qx-glass">{world.wave} <span>波次</span></li>
 	</ul>
 
 	{#if world.boss?.phase === 'telegraph'}
@@ -377,11 +374,9 @@
 <style>
 	.stat {
 		border-radius: 1rem;
-		background: color-mix(in srgb, var(--qx-card) 88%, transparent);
 		padding: 0.45rem 0.7rem;
 		font-size: 1rem;
 		font-weight: 600;
-		backdrop-filter: blur(12px);
 	}
 
 	.stat span {
