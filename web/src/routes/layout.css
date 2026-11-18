@@ -80,6 +80,11 @@ body {
 	font-size: 16px;
 	line-height: 1.6;
 	caret-color: var(--qx-primary);
+	scrollbar-width: none;
+}
+
+html {
+	scroll-padding-top: var(--qx-topbar-offset, 0px);
 }
 
 ::selection {
@@ -88,7 +93,40 @@ body {
 }
 
 * {
-	scrollbar-color: color-mix(in oklab, var(--qx-primary) 45%, var(--qx-line)) transparent;
+	scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+	display: none;
+	background: transparent;
+}
+
+.qx-topbar {
+	position: fixed;
+	top: 0;
+	inset-inline: 0;
+	z-index: 40;
+	margin-top: max(0.4rem, env(safe-area-inset-top, 0px));
+	margin-left: max(0.75rem, env(safe-area-inset-left, 0px));
+	margin-right: max(0.75rem, env(safe-area-inset-right, 0px));
+	pointer-events: auto;
+}
+
+@media (min-width: 768px) {
+	.qx-topbar {
+		margin-left: max(1.5rem, env(safe-area-inset-left, 0px));
+		margin-right: max(1.5rem, env(safe-area-inset-right, 0px));
+	}
+}
+
+.qx-topbar-spacer {
+	flex-shrink: 0;
+	height: var(--qx-topbar-offset, 5.75rem);
+	pointer-events: none;
 }
 
 body {

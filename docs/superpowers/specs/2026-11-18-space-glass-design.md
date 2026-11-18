@@ -83,6 +83,8 @@ Do **not** chrome-plate Three.js worlds. 上班 floors, 积木台 table, garden,
 - No dust over game canvases. No particle overlay in the accessibility tree.
 - Keyboard: Tab through top bar then board. Browser back and deep links unchanged.
 - 390 / 768 / 1280 / 1600: no leftover left gutter, no horizontal overflow.
+- Compact glass top bar is `position: fixed` to the viewport (not sticky inside a scrolling column). In-flow content and `scroll-padding-top` start below it so focus, anchors, and skip targets are not hidden.
+- Page and existing overflow panels hide scrollbar chrome (`scrollbar-width: none` plus `::-webkit-scrollbar` fallback) while wheel, trackpad, touch, and keyboard scrolling keep working. Do not use `overflow: hidden` on `html`/`body` to fake that.
 
 ## Out of scope
 

@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import { page } from '$app/state';
 	import type { Snippet } from 'svelte';
 	import { TOPBAR, isPlayView, isTopbarActive } from '../nav';
 	import SpaceDust from '../shell/SpaceDust.svelte';
+	import { topbarOffsetPx } from '../shell/topbar';
 	import Icon from './Icon.svelte';
 	import OfflineBanner from './OfflineBanner.svelte';
 	import PrivacyGate from './PrivacyGate.svelte';
@@ -12,6 +14,41 @@
 
 	const pathname = $derived(page.url.pathname);
 	const playView = $derived(isPlayView(pathname));
+
+	let headerEl: HTMLElement | undefined = $state();
+
+	function writeTopbarOffset(play: boolean, el: HTMLElement | undefined) {
+		if (!browser) return;
+		const root = document.documentElement;
+		if (play) {
+			root.style.setProperty('--qx-topbar-offset', topbarOffsetPx(true, 0));
+			return;
+		}
+		if (!el) return;
+		root.style.setProperty(
+			'--qx-topbar-offset',
+			topbarOffsetPx(false, el.getBoundingClientRect().bottom)
+		);
+	}
+
+	$effect(() => {
+		if (!browser) return;
+		const play = playView;
+		const el = headerEl;
+		writeTopbarOffset(play, el);
+		if (play || !el) return;
+		const onMeasure = () => writeTopbarOffset(false, el);
+		const ro = new ResizeObserver(onMeasure);
+		ro.observe(el);
+		window.addEventListener('resize', onMeasure);
+		window.visualViewport?.addEventListener('resize', onMeasure);
+		return () => {
+			ro.disconnect();
+			window.removeEventListener('resize', onMeasure);
+			window.visualViewport?.removeEventListener('resize', onMeasure);
+			writeTopbarOffset(true, undefined);
+		};
+	});
 </script>
 
 <div
@@ -27,15 +64,15 @@
 		<SpaceDust {playView} />
 	{/if}
 
-	<OfflineBanner />
 	<PrivacyGate />
 	<Toast />
 
 	<div class="relative z-10 flex min-h-dvh w-full min-w-0 flex-col">
 		{#if !playView}
 			<header
+				bind:this={headerEl}
 				data-qx-topbar="1"
-				class="qx-glass sticky top-0 z-30 mx-3 mt-[max(0.4rem,env(safe-area-inset-top))] flex flex-wrap items-center gap-2 rounded-[1.35rem] px-3 py-2 md:mx-6 md:px-4"
+				class="qx-glass qx-topbar flex flex-wrap items-center gap-2 rounded-[1.35rem] px-3 py-2 md:px-4"
 			>
 				<a href="/" class="flex min-h-11 min-w-11 items-center gap-2 px-1">
 					<span
@@ -63,9 +100,13 @@
 					{/each}
 				</nav>
 			</header>
+			<div class="qx-topbar-spacer" aria-hidden="true" data-qx-topbar-spacer="1"></div>
 		{/if}
 
+		<OfflineBanner />
+
 		<main
+			id="qx-main"
 			class="min-w-0 flex-1 overflow-x-clip {playView
 				? 'h-dvh overflow-hidden px-0 pb-0'
 				: 'px-4 pt-5 pb-10 md:px-8 md:pt-6 md:pb-12'}"

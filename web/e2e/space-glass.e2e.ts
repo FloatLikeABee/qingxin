@@ -272,4 +272,152 @@ test.describe('space-glass shell', () => {
 		await expect(page.locator('[data-shangban-dock]')).toBeVisible({ timeout: 20_000 });
 		await page.screenshot({ path: 'screenshots/space-glass-after-shangban-dock-390-dark.png' });
 	});
+
+	for (const view of [
+		{ width: 390, height: 844, shot: true },
+		{ width: 768, height: 1024, shot: false },
+		{ width: 1280, height: 800, shot: true }
+	] as const) {
+		test(`fixed header stays pinned and scrollbar chrome is hidden at ${view.width}`, async ({
+			page
+		}) => {
+			await page.setViewportSize({ width: view.width, height: view.height });
+			await boot(page, 'dark');
+			await page.goto('/', { waitUntil: 'networkidle' });
+			const header = page.locator('[data-qx-topbar]');
+			await expect(header).toBeVisible();
+			const position = await header.evaluate((el) => getComputedStyle(el).position);
+			expect(position).toBe('fixed');
+			const start = await header.evaluate((el) => {
+				const box = el.getBoundingClientRect();
+				return { top: box.top, bottom: box.bottom };
+			});
+			expect(start.top).toBeGreaterThanOrEqual(0);
+			expect(start.top).toBeLessThan(48);
+			const headingTop = await page.locator('h1').evaluate((el) => el.getBoundingClientRect().top);
+			expect(headingTop).toBeGreaterThanOrEqual(start.bottom - 1);
+			const pageOverflow = await page.evaluate(() => ({
+				html: getComputedStyle(document.documentElement).overflow,
+				body: getComputedStyle(document.body).overflow
+			}));
+			expect(pageOverflow.html === 'hidden' || pageOverflow.html === 'clip').toBeFalsy();
+			expect(pageOverflow.body === 'hidden' || pageOverflow.body === 'clip').toBeFalsy();
+
+			await page.mouse.move(Math.round(view.width / 2), Math.round(view.height / 2));
+			const beforeWheel = await page.evaluate(() => window.scrollY);
+			await page.mouse.wheel(0, 480);
+			await expect
+				.poll(async () => page.evaluate(() => window.scrollY))
+				.toBeGreaterThan(beforeWheel);
+
+			await page.evaluate(() => window.scrollTo(0, 720));
+			await expect.poll(async () => page.evaluate(() => window.scrollY)).toBeGreaterThan(400);
+			const moved = await header.evaluate((el) => {
+				const box = el.getBoundingClientRect();
+				return { top: box.top, bottom: box.bottom };
+			});
+			expect(Math.abs(moved.top - start.top)).toBeLessThan(2);
+			expect(await header.evaluate((el) => getComputedStyle(el).pointerEvents)).not.toBe('none');
+			await expect(header.getByRole('link', { name: '模块中心' })).toBeVisible();
+
+			const bars = await page.evaluate(() => {
+				const root = document.documentElement;
+				const cs = getComputedStyle(root);
+				const probe = document.createElement('div');
+				probe.setAttribute('data-qx-hscroll-probe', '1');
+				probe.style.cssText =
+					'overflow-x:auto;width:80px;height:24px;position:fixed;left:0;bottom:0;opacity:0';
+				probe.innerHTML = '<div style="width:400px;height:1px"></div>';
+				document.body.append(probe);
+				probe.scrollLeft = 120;
+				const result = {
+					scrollbarWidth: cs.scrollbarWidth,
+					gutter: window.innerWidth - root.clientWidth,
+					probeLeft: probe.scrollLeft,
+					probeOverflow: getComputedStyle(probe).overflowX,
+					probeBar: getComputedStyle(probe).scrollbarWidth
+				};
+				probe.remove();
+				return result;
+			});
+			expect(bars.scrollbarWidth).toBe('none');
+			expect(bars.gutter).toBe(0);
+			expect(bars.probeLeft).toBeGreaterThan(0);
+			expect(bars.probeOverflow).toBe('auto');
+			expect(bars.probeBar).toBe('none');
+			await noOverflow(page, view.width);
+			if (view.shot) {
+				await page.screenshot({
+					path: `screenshots/space-glass-scrolled-home-${view.width}-dark.png`
+				});
+			}
+
+			await page.goto('/modules', { waitUntil: 'networkidle' });
+			await expect(header).toBeVisible();
+			const moduleStart = await header.evaluate((el) => el.getBoundingClientRect().top);
+			await page.evaluate(() => window.scrollTo(0, 520));
+			await expect.poll(async () => page.evaluate(() => window.scrollY)).toBeGreaterThan(200);
+			expect(
+				Math.abs((await header.evaluate((el) => el.getBoundingClientRect().top)) - moduleStart)
+			).toBeLessThan(2);
+			await noOverflow(page, view.width);
+		});
+	}
+
+	test('keyboard focus and dialogs stay clear of the pinned header', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await boot(page, 'dark');
+		await page.goto('/', { waitUntil: 'networkidle' });
+		const footer = page.getByRole('link', { name: '打开模块中心' });
+		await footer.evaluate((el) => (el as HTMLElement).focus());
+		const headerBottom = await page
+			.locator('[data-qx-topbar]')
+			.evaluate((el) => el.getBoundingClientRect().bottom);
+		const focused = await footer.evaluate((el) => el.getBoundingClientRect());
+		expect(focused.top).toBeGreaterThanOrEqual(headerBottom - 1);
+		expect(focused.bottom).toBeGreaterThan(headerBottom);
+		expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+		await page.goto('/login', { waitUntil: 'networkidle' });
+		const email = page.getByLabel('邮箱');
+		await email.focus();
+		const emailBox = await email.evaluate((el) => el.getBoundingClientRect());
+		const loginHeaderBottom = await page
+			.locator('[data-qx-topbar]')
+			.evaluate((el) => el.getBoundingClientRect().bottom);
+		expect(emailBox.top).toBeGreaterThanOrEqual(loginHeaderBottom - 1);
+
+		await page.goto('/kit', { waitUntil: 'networkidle' });
+		await page.getByRole('button', { name: '模态弹窗' }).click();
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toBeVisible();
+		const dialogBox = await dialog.boundingBox();
+		expect(dialogBox).toBeTruthy();
+		expect(dialogBox!.width).toBeGreaterThan(200);
+		await expect(page.locator('[data-qx-topbar]')).toBeVisible();
+
+		await page.keyboard.press('Escape');
+		await page.goto('/modules/jimutai', { waitUntil: 'networkidle' });
+		await expect(page.locator('[data-qx-topbar]')).toHaveCount(0);
+		await expect(page.getByRole('link', { name: '← 返回模块' })).toBeVisible();
+		await page.goto('/modules/shangban', { waitUntil: 'networkidle' });
+		await expect(page.locator('[data-qx-topbar]')).toHaveCount(0);
+		await expect(page.getByRole('link', { name: '← 返回模块' })).toBeVisible();
+	});
+
+	test('settings still scrolls with hidden bars and a pinned header', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await boot(page, 'dark');
+		await page.goto('/settings', { waitUntil: 'networkidle' });
+		const header = page.locator('[data-qx-topbar]');
+		expect(await header.evaluate((el) => getComputedStyle(el).position)).toBe('fixed');
+		const top = await header.evaluate((el) => el.getBoundingClientRect().top);
+		await page.keyboard.press('End');
+		await expect.poll(async () => page.evaluate(() => window.scrollY)).toBeGreaterThan(40);
+		expect(await header.evaluate((el) => el.getBoundingClientRect().top)).toBeCloseTo(top, 0);
+		await expect(header.getByRole('link', { name: '我的' })).toBeVisible();
+		expect(
+			await page.evaluate(() => getComputedStyle(document.documentElement).scrollbarWidth)
+		).toBe('none');
+	});
 });

@@ -29,6 +29,24 @@ The system SHALL navigate from a compact top bar (首页, 模块中心, 我的) 
 - **WHEN** the viewport is 1280px wide
 - **THEN** no `aside` is present and the top bar includes 模块中心
 
+### Requirement: Viewport-fixed top bar
+
+The compact glass top bar SHALL be `position: fixed` to the viewport on non-play routes. It SHALL NOT travel with page scroll. In-flow content SHALL start below the bar, and the document scrollport SHALL use `scroll-padding-top` at least as large as the bar (including safe-area inset) so focused controls and fragment targets are not hidden. Play routes SHALL continue to omit the top bar.
+
+#### Scenario: Header stays pinned while the page scrolls
+
+- **WHEN** a user scrolls a long home, module center, or settings surface
+- **THEN** the top bar's viewport bounding rect stays put while `scrollTop` increases
+
+### Requirement: Hidden scrollbar chrome
+
+Qingxin pages and existing overflow panels SHALL hide classic scrollbar chrome while remaining scrollable with wheel, trackpad, touch, and keyboard. The document SHALL NOT set `overflow: hidden` on `html` or `body` merely to hide that chrome. Horizontal overflow regions SHALL still scroll.
+
+#### Scenario: Scrollbar is gone but content still scrolls
+
+- **WHEN** a page is taller than the viewport
+- **THEN** no classic scrollbar gutter is reserved, computed `scrollbar-width` is `none`, and wheel or keyboard still changes `scrollTop`
+
 ### Requirement: Module hub
 
 The system SHALL present a hub listing these modules: 情绪日记+冥想, 个人财务小助手, 老人助手, 宠物, 健康, 上班, 积木台, 秘密, 游戏. Opening 情绪日记+冥想 SHALL continue to load M1. Opening 健康 SHALL load the M7 wellness app (not the generic placeholder). Opening 上班 SHALL load the company sim (not the generic placeholder). Opening 积木台 SHALL load the construction sandbox (not the generic placeholder). `/modules/create` MAY still load the M9 studio as a legacy drafts route. Opening 游戏 SHALL load the games catalog (not a disabled 即将到来 tile). 组件 SHALL NOT appear as a hub module. 本地生活, AI效率工具箱, 学习打卡, and 求职副业 SHALL NOT appear as live hub modules; their old URLs SHALL show a retired notice or redirect.
