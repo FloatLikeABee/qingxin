@@ -49,5 +49,5 @@ export function syncDocumentTheme(
 	const meta = options.meta ?? document.querySelector('meta[name="color-scheme"]');
 	meta?.setAttribute('content', mode === 'system' ? 'light dark' : appearance);
 	const themeColor = document.querySelector('meta[name="theme-color"]');
-	themeColor?.setAttribute('content', appearance === 'dark' ? '#0B1526' : '#3B82F6');
+	themeColor?.setAttribute('content', appearance === 'dark' ? '#070B14' : '#3B82F6');
 }

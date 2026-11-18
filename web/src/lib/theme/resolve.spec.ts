@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { palette, resolveAppearance } from './resolve';
+import { palette, parseThemeMode, resolveAppearance, THEME_STORAGE_KEY } from './resolve';
 
 describe('resolveAppearance', () => {
 	it('returns light when mode is light even if the OS prefers dark', () => {
@@ -29,6 +29,16 @@ describe('resolveAppearance', () => {
 	});
 });
 
+describe('parseThemeMode', () => {
+	it('defaults to system and does not invent a stored value', () => {
+		expect(parseThemeMode(null)).toBe('system');
+		expect(parseThemeMode(undefined)).toBe('system');
+		expect(parseThemeMode('nope')).toBe('system');
+		expect(parseThemeMode('dark')).toBe('dark');
+		expect(THEME_STORAGE_KEY).toBe('qingxin.theme');
+	});
+});
+
 describe('palette', () => {
 	it('exposes the exact light tokens from spec 1.3', () => {
 		expect(palette.light).toEqual({
@@ -42,7 +52,7 @@ describe('palette', () => {
 	it('exposes the exact dark tokens from spec 1.3', () => {
 		expect(palette.dark).toEqual({
 			primary: '#60A5FA',
-			background: '#0B1526',
+			background: '#070B14',
 			text: '#F9FAFB',
 			secondary: '#9CA3AF'
 		});

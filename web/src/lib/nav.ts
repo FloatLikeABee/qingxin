@@ -1,20 +1,31 @@
-export const TABS = [
+export const TOPBAR = [
 	{ href: '/', label: '首页', icon: 'home' },
-	{ href: '/modules/shangban', label: '上班', icon: 'briefcase' },
-	{ href: '/modules', label: '模块', icon: 'grid' },
+	{ href: '/modules', label: '模块中心', icon: 'grid' },
 	{ href: '/settings', label: '我的', icon: 'user' }
 ] as const;
 
-export function isTabActive(pathname: string, href: string): boolean {
+export function isPlayView(pathname: string) {
+	return (
+		/\/play\/?$/.test(pathname) ||
+		pathname.startsWith('/modules/shangban') ||
+		pathname.startsWith('/modules/jimutai')
+	);
+}
+
+export function isTopbarActive(pathname: string, href: string): boolean {
 	if (href === '/') return pathname === '/';
-	if (href === '/modules/shangban') {
-		return pathname === href || pathname.startsWith(`${href}/`);
-	}
 	if (href === '/modules') {
-		if (pathname === '/modules' || pathname === '/modules/') return true;
-		if (pathname.startsWith('/modules/shangban')) return false;
-		if (pathname.startsWith('/modules/create')) return true;
-		return pathname.startsWith('/modules/');
+		return pathname === '/modules' || pathname.startsWith('/modules/');
+	}
+	if (href === '/settings') {
+		return (
+			pathname === href ||
+			pathname.startsWith(`${href}/`) ||
+			pathname === '/kit' ||
+			pathname.startsWith('/kit/') ||
+			pathname === '/privacy' ||
+			pathname === '/offline'
+		);
 	}
 	return pathname === href || pathname.startsWith(`${href}/`);
 }

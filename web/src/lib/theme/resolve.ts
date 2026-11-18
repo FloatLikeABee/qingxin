@@ -20,7 +20,7 @@ export const palette = {
 	},
 	dark: {
 		primary: '#60A5FA',
-		background: '#0B1526',
+		background: '#070B14',
 		text: '#F9FAFB',
 		secondary: '#9CA3AF'
 	}
