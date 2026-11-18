@@ -17,17 +17,17 @@ User-facing chrome SHALL be written in zh-CN, including navigation labels, modul
 
 ### Requirement: Responsive navigation
 
-The system SHALL show a bottom tab bar on phone-width viewports and a sidebar on desktop-width viewports.
+The system SHALL navigate from a compact top bar (首页, 模块中心, 我的) and the module center board. It SHALL NOT show a persistent left sidebar, a phone bottom tab bar, or a hamburger that restores that sidebar.
 
-#### Scenario: Phone tabs
+#### Scenario: Phone has no leftover tabs
 
 - **WHEN** the viewport is 390px wide
-- **THEN** a bottom tab bar is visible and a persistent desktop sidebar is not
+- **THEN** a top bar is visible, `nav.fixed` is absent, and a persistent desktop sidebar is not
 
-#### Scenario: Desktop sidebar
+#### Scenario: Desktop has no sidebar
 
 - **WHEN** the viewport is 1280px wide
-- **THEN** a sidebar is visible for primary navigation
+- **THEN** no `aside` is present and the top bar includes 模块中心
 
 ### Requirement: Module hub
 
@@ -117,12 +117,12 @@ When a session is present, Settings SHALL NOT offer 登录 / 注册 as the prima
 
 ### Requirement: Module apps share shell chrome
 
-`/finance`, `/pets`, `/wellness`, and `/study` SHALL render inside the shared AppShell (desktop left sidebar, phone tabs) and SHALL include a 返回模块中心 link to `/modules`. The finance home SHALL have a visible page title 财务. The wellness home SHALL have a visible page title 健康.
+`/finance`, `/pets`, `/wellness`, and `/study` SHALL render inside the shared AppShell (compact top bar, no sidebar) and SHALL include a 返回模块中心 link to `/modules`. The finance home SHALL have a visible page title 财务. The wellness home SHALL have a visible page title 健康.
 
-#### Scenario: Finance desktop sidebar and back link
+#### Scenario: Finance desktop top bar and back link
 
 - **WHEN** the viewport is 1280px and the user opens `/finance`
-- **THEN** the AppShell sidebar is visible, a 返回模块中心 link is present, and heading 财务 is visible
+- **THEN** the AppShell top bar is visible, a 返回模块中心 link is present, and heading 财务 is visible
 
 #### Scenario: Health page title and back link
 
@@ -159,19 +159,19 @@ Settings SHALL place appearance, account, and 适老 cards in a bento without re
 
 ### Requirement: Icon and text nav
 
-Primary AppShell destinations SHALL keep icon plus short zh-CN labels (首页, 上班, 模块, 我的). The sidebar SHALL include a non-pricing 打开模块中心 call-to-action. 组件 SHALL NOT appear in primary nav.
+Primary AppShell destinations SHALL keep icon plus short zh-CN labels (首页, 模块中心, 我的). 上班 SHALL be reached from the module board, not a fourth chrome tab. 组件 SHALL NOT appear in primary nav.
 
-#### Scenario: Four primary destinations
+#### Scenario: Three primary destinations
 
 - **WHEN** the viewport is 390px
-- **THEN** the bottom tab bar shows 首页, 上班, 模块, 我的 and does not show 组件 or 内容
+- **THEN** the top bar shows 首页, 模块中心, 我的 and does not show 组件 or 内容
 
 #### Scenario: Kit from settings
 
 - **WHEN** a user opens `/settings`
-- **THEN** a 设计系统 row linking to `/kit` is present and 组件 is still absent from the tab bar
+- **THEN** a 设计系统 row linking to `/kit` is present and 组件 is still absent from the top bar
 
-#### Scenario: Play hides phone tabs
+#### Scenario: Play hides chrome
 
 - **WHEN** a user opens a `/play` route or `/modules/shangban`
-- **THEN** the bottom tab bar is not shown so the game can use the full viewport
+- **THEN** the top bar and space-dust canvas are not shown so the game can use the full viewport
