@@ -4,11 +4,15 @@
 	import Card from '#lib/components/Card.svelte';
 	import Input from '#lib/components/Input.svelte';
 	import { ApiError, getApi } from '#lib/api/client';
+	import { readPublicApiUrl } from '#lib/api/env';
+	import { loginFormDefaults, loginHelpText } from '#lib/auth/loginCopy';
 	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { pushToast } from '#lib/toast';
 
-	let email = $state('demo@qingxin.app');
-	let password = $state('qingxin');
+	const http = Boolean(readPublicApiUrl());
+	const defaults = loginFormDefaults(http);
+	let email = $state(defaults.email);
+	let password = $state(defaults.password);
 	let pending = $state(false);
 	let error = $state('');
 
@@ -32,9 +36,9 @@
 	<title>轻心 · 登录</title>
 </svelte:head>
 
-<section class="mx-auto max-w-md pt-6">
+<section class="mx-auto max-w-md pt-6" data-qx-login-mode={http ? 'http' : 'mock'}>
 	<h1 class="text-3xl font-semibold">登录</h1>
-	<p class="mt-2 text-base text-[var(--qx-muted)]">演示账号 demo@qingxin.app / qingxin</p>
+	<p class="mt-2 text-base text-[var(--qx-muted)]">{loginHelpText(http)}</p>
 	<Card class="mt-6">
 		<form class="space-y-4" onsubmit={submit}>
 			<Input label="邮箱" type="email" autocomplete="username" bind:value={email} />
@@ -42,7 +46,8 @@
 			{#if error}
 				<p class="text-base text-[var(--qx-danger)]">{error}</p>
 			{/if}
-			<Button type="submit" class="w-full" disabled={pending}>{pending ? '登录中…' : '登录'}</Button>
+			<Button type="submit" class="w-full" disabled={pending}>{pending ? '登录中…' : '登录'}</Button
+			>
 		</form>
 	</Card>
 	<p class="mt-4 text-base">

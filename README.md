@@ -44,6 +44,8 @@ Default AI provider is local Ollama (`http://127.0.0.1:11434/v1`). DashScope, Zh
 
 The SvelteKit app talks to Axum only when `PUBLIC_API_URL` is set at **build** time (Vite inlines `PUBLIC_*`). Unset or blank keeps the in-memory mock (`MockQingxinApi`) used by unit tests and screenshot E2E.
 
+The mock login demo on `/login` exists **only** in that in-memory client. Axum does not seed users. `cargo run` against a fresh or existing SQLite file never creates a demo account. With `PUBLIC_API_URL` set, register at `/register` (password at least 8 characters), then log in with that account. An existing `qingxin.db` keeps whatever rows were already registered; restarting the API does not restore mock credentials. Do not delete a preserved database to “fix” login unless you intend to wipe local accounts.
+
 ```bash
 # terminal 1: API as above
 # terminal 2:

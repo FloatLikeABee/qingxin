@@ -8,6 +8,18 @@ async function acceptPrivacy(page: Page) {
 	});
 }
 
+test('http login does not advertise the in-memory mock demo', async ({ page }) => {
+	await acceptPrivacy(page);
+	await page.goto('/login', { waitUntil: 'networkidle' });
+	await expect(page.locator('[data-qx-login-mode="http"]')).toBeVisible();
+	await expect(page.getByText(/演示账号/)).toHaveCount(0);
+	await expect(page.getByText('demo@qingxin.app')).toHaveCount(0);
+	await expect(page.getByLabel('邮箱')).toHaveValue('');
+	await expect(page.getByLabel('密码', { exact: true })).toHaveValue('');
+	await expect(page.getByText('请使用已注册账号登录。没有账号就先创建。')).toBeVisible();
+	await expect(page.getByRole('link', { name: '创建账号' })).toBeVisible();
+});
+
 async function registerFresh(page: Page) {
 	const stamp = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 	const email = `e2e-${stamp}@qingxin.app`;

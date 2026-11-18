@@ -86,6 +86,7 @@ import {
 	type ToolRunInput,
 	type ToolStreamEvent
 } from './types';
+import { MOCK_DEMO_EMAIL, MOCK_DEMO_PASSWORD } from './mockCredentials';
 import { QingxinModuleMemory } from './mock-modules';
 import type { ElderReminderInput } from '../elder/payload';
 import type {
@@ -99,8 +100,6 @@ import type { CycleLog, PlanLog, ReminderLog, ReportLog } from '../wellness/type
 export { ApiError } from './types';
 export type { QingxinApi, Session } from './types';
 
-const DEMO_EMAIL = 'demo@qingxin.app';
-const DEMO_PASSWORD = 'qingxin';
 const SESSION_KEY = 'qingxin.session';
 const LOGS_KEY = 'qingxin.moodLogs';
 const SESSIONS_KEY = 'qingxin.meditationSessions';
@@ -353,13 +352,13 @@ export class MockQingxinApi implements QingxinApi {
 		if (!email.trim() || !password.trim()) {
 			throw new ApiError('invalid_credentials', '请输入邮箱和密码');
 		}
-		if (email !== DEMO_EMAIL || password !== DEMO_PASSWORD) {
+		if (email !== MOCK_DEMO_EMAIL || password !== MOCK_DEMO_PASSWORD) {
 			throw new ApiError('invalid_credentials', '账号或密码不正确');
 		}
 		this.#session = {
 			userId: 'user-demo',
 			displayName: '轻心同学',
-			email: DEMO_EMAIL,
+			email: MOCK_DEMO_EMAIL,
 			token: 'mock-token-demo'
 		};
 		writeStoredSession(this.#session);

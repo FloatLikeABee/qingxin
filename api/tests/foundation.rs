@@ -147,6 +147,89 @@ async fn register_login_and_me() {
 }
 
 #[tokio::test]
+async fn advertised_mock_demo_is_not_a_backend_account() {
+    // Must match web MockQingxinApi / login mock-mode copy. Axum does not seed it.
+    const MOCK_DEMO_EMAIL: &str = "demo@qingxin.app";
+    const MOCK_DEMO_PASSWORD: &str = "qingxin";
+
+    let (router, state) = world().await;
+    let users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(users, 0, "fresh API must not seed users");
+
+    let demo_rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE email = ?")
+        .bind(MOCK_DEMO_EMAIL)
+        .fetch_one(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(demo_rows, 0);
+
+    let (status, too_short) = send(
+        &router,
+        Method::POST,
+        "/v1/auth/register",
+        None,
+        Some(json!({
+            "email": MOCK_DEMO_EMAIL,
+            "password": MOCK_DEMO_PASSWORD,
+            "display_name": "轻心同学",
+            "consent": { "policy_version": "2026-10-13" }
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{too_short}");
+    assert_eq!(too_short["error"]["code"], "invalid_request");
+    assert!(
+        MOCK_DEMO_PASSWORD.len() < 8,
+        "mock demo password must stay below Axum's register minimum"
+    );
+
+    let (status, missing) = send(
+        &router,
+        Method::POST,
+        "/v1/auth/login",
+        None,
+        Some(json!({"email": MOCK_DEMO_EMAIL, "password": MOCK_DEMO_PASSWORD})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(missing["error"]["code"], "invalid_credentials");
+    assert_eq!(missing["error"]["message"], "invalid credentials");
+
+    let _created = register_user(&router, MOCK_DEMO_EMAIL).await;
+    let after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE email = ?")
+        .bind(MOCK_DEMO_EMAIL)
+        .fetch_one(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(after, 1);
+
+    let (status, still_bad) = send(
+        &router,
+        Method::POST,
+        "/v1/auth/login",
+        None,
+        Some(json!({"email": MOCK_DEMO_EMAIL, "password": MOCK_DEMO_PASSWORD})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(still_bad["error"]["code"], "invalid_credentials");
+
+    let (status, ok) = send(
+        &router,
+        Method::POST,
+        "/v1/auth/login",
+        None,
+        Some(json!({"email": MOCK_DEMO_EMAIL, "password": "correct-horse"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{ok}");
+    assert!(ok["access_token"].as_str().unwrap().len() > 10);
+}
+
+#[tokio::test]
 async fn refresh_rotates_and_reuse_revokes_family() {
     let (router, _) = world().await;
     let created = register_user(&router, "refresh@qingxin.app").await;
