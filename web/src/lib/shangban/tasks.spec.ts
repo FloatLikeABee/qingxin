@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { stationById } from './floors';
+import { fillJobProgress, startPerform } from './jobs';
 import { ROLES, type FloorId, type RoleId } from './roles';
 import {
+	JOB_STATION,
 	acceptTask,
 	chooseDecision,
 	choosePart,
@@ -30,12 +33,15 @@ function host(role: RoleId = 'courier'): WorkState {
 		4: dept(),
 		5: dept()
 	} as WorkState['company']['departments'];
+	const station = stationById(JOB_STATION[role])!;
 	return {
 		tick: 4,
 		notice: '',
 		player: {
 			roleId: role,
 			floor: ROLES.find((item) => item.id === role)!.floor,
+			x: station.x,
+			z: station.z,
 			pay: 20,
 			reputation: 10,
 			carrying: null
@@ -44,8 +50,17 @@ function host(role: RoleId = 'courier'): WorkState {
 		tasks: [],
 		packages: [],
 		nextId: 1,
-		rng: () => 0.1
+		rng: () => 0.1,
+		dayEvents: []
 	};
+}
+
+function arm(world: WorkState) {
+	const task = world.tasks[0];
+	if (!task) throw new Error('task');
+	if (task.status === 'offered') acceptTask(world, task.id);
+	startPerform(world);
+	fillJobProgress(world);
 }
 
 describe('上班 tasks', () => {
@@ -68,6 +83,7 @@ describe('上班 tasks', () => {
 		const box = task.payload.boxes[0];
 		if (!box) throw new Error('box');
 		world.packages = [{ ...box }];
+		arm(world);
 		expect(pickPackage(world, box.id)).toBe(true);
 		expect(world.player.carrying).toBe(box.id);
 		const wrong: 'A' | 'B' | 'C' = box.dest === 'A' ? 'B' : 'A';
@@ -76,6 +92,7 @@ describe('上班 tasks', () => {
 		failed.packages = [{ ...box, held: false }];
 		failed.player.carrying = box.id;
 		failed.packages[0]!.held = true;
+		arm(failed);
 		expect(placePackage(failed, wrong)).toBe(false);
 		expect(failed.tasks[0]?.status).toBe('failed');
 		expect(failed.company.departments[1]?.workload).toBeGreaterThan(40);
@@ -84,6 +101,9 @@ describe('上班 tasks', () => {
 		ok.tasks = [structuredClone(task)];
 		ok.tasks[0]!.status = 'active';
 		ok.packages = [{ ...box, held: false }];
+		ok.player.carrying = box.id;
+		ok.packages[0]!.held = true;
+		arm(ok);
 		ok.player.carrying = box.id;
 		ok.packages[0]!.held = true;
 		expect(placePackage(ok, box.dest)).toBe(true);
@@ -99,10 +119,13 @@ describe('上班 tasks', () => {
 		task.payload.hiddenMax = 90;
 		task.payload.patience = 1;
 		world.tasks = [task];
-		acceptTask(world, task.id);
+		arm(world);
 		expect(offerPrice(world, 'high')).toBe(false);
 		expect(task.status).toBe('failed');
 		task.status = 'active';
+		task.stage = 'submit';
+		task.progress = 1;
+		task.payAwarded = false;
 		task.payload.patience = 3;
 		task.payload.hiddenMax = 140;
 		expect(offerPrice(world, 'high')).toBe(true);
@@ -114,13 +137,17 @@ describe('上班 tasks', () => {
 		const task = generateTask('tech', () => 0, 0, 3);
 		if (task.payload.kind !== 'repair') throw new Error('repair');
 		world.tasks = [task];
-		acceptTask(world, task.id);
+		arm(world);
 		expect(inspectFault(world)).toBe(true);
 		expect(task.payload.clue).toBeTruthy();
 		const wrong = task.payload.options.find((part) => part !== task.payload.correctPart)!;
 		expect(choosePart(world, wrong)).toBe(false);
 		expect(task.status).toBe('failed');
 		task.status = 'active';
+		task.stage = 'submit';
+		task.progress = 1;
+		task.payAwarded = false;
+		expect(inspectFault(world)).toBe(true);
 		expect(choosePart(world, task.payload.correctPart)).toBe(true);
 		expect(task.status).toBe('done');
 	});
@@ -132,28 +159,28 @@ describe('上班 tasks', () => {
 		ticket.payload.severity = 'high';
 		ticket.payload.fault = 'bug';
 		high.tasks = [ticket];
-		acceptTask(high, ticket.id);
+		arm(high);
 		expect(chooseShip(high, 'ship')).toBe(false);
 		const tested = host('engineer');
 		const safe = generateTask('engineer', () => 0, 0, 5);
 		if (safe.payload.kind !== 'ship') throw new Error('ship');
 		safe.payload.severity = 'high';
 		tested.tasks = [safe];
-		acceptTask(tested, safe.id);
+		arm(tested);
 		expect(chooseShip(tested, 'test')).toBe(true);
 		const rewrite = host('engineer');
 		const design = generateTask('engineer', () => 0, 0, 6);
 		if (design.payload.kind !== 'ship') throw new Error('ship');
 		design.payload.fault = 'design';
 		rewrite.tasks = [design];
-		acceptTask(rewrite, design.id);
+		arm(rewrite);
 		expect(chooseShip(rewrite, 'rewrite')).toBe(true);
 		const bugRewrite = host('engineer');
 		const bug = generateTask('engineer', () => 0, 0, 7);
-		if (bug.payload.kind !== 'ship') throw new Error('ship');
+		if (bug.payload.kind !== 'ship') throw new Error('bug');
 		bug.payload.fault = 'bug';
 		bugRewrite.tasks = [bug];
-		acceptTask(bugRewrite, bug.id);
+		arm(bugRewrite);
 		expect(chooseShip(bugRewrite, 'rewrite')).toBe(false);
 	});
 
@@ -175,7 +202,7 @@ describe('上班 tasks', () => {
 		bad.payload.hasReceipt = true;
 		bad.payload.flagged = false;
 		world.tasks = [bad];
-		acceptTask(world, bad.id);
+		arm(world);
 		expect(judgeClaim(world, 'approve')).toBe(false);
 		expect(world.company.cash).toBeLessThan(200);
 		const good = host('finance');
@@ -186,7 +213,7 @@ describe('上班 tasks', () => {
 		ok.payload.hasReceipt = true;
 		ok.payload.flagged = false;
 		good.tasks = [ok];
-		acceptTask(good, ok.id);
+		arm(good);
 		expect(judgeClaim(good, 'approve')).toBe(true);
 		const wrong = host('finance');
 		const valid = generateTask('finance', () => 0, 0, 19);
@@ -196,7 +223,7 @@ describe('上班 tasks', () => {
 		valid.payload.hasReceipt = true;
 		valid.payload.flagged = false;
 		wrong.tasks = [valid];
-		acceptTask(wrong, valid.id);
+		arm(wrong);
 		expect(judgeClaim(wrong, 'reject')).toBe(false);
 		expect(wrong.player.reputation).toBeLessThan(10);
 	});
@@ -205,7 +232,7 @@ describe('上班 tasks', () => {
 		const world = host('manager');
 		const task = generateTask('manager', () => 0, 0, 10);
 		world.tasks = [task];
-		acceptTask(world, task.id);
+		arm(world);
 		const fromStaff = world.company.departments[3]!.staff;
 		expect(moveResource(world, 3, 1, 'staff')).toBe(true);
 		expect(world.company.departments[3]!.staff).toBe(fromStaff - 1);
@@ -216,7 +243,7 @@ describe('上班 tasks', () => {
 		world.company.departments[2]!.staff = 1;
 		const mishap = host('manager');
 		mishap.tasks = [generateTask('manager', () => 0, 0, 11)];
-		acceptTask(mishap, mishap.tasks[0]!.id);
+		arm(mishap);
 		mishap.company.departments[2]!.staff = 1;
 		expect(moveResource(mishap, 2, 1, 'staff')).toBe(false);
 		expect(mishap.company.departments[2]!.staff).toBe(1);
@@ -230,8 +257,8 @@ describe('上班 tasks', () => {
 		const taskB = generateTask('ceo', () => 0, 0, 13);
 		a.tasks = [taskA];
 		b.tasks = [taskB];
-		acceptTask(a, taskA.id);
-		acceptTask(b, taskB.id);
+		arm(a);
+		arm(b);
 		if (taskA.payload.kind !== 'decide' || taskB.payload.kind !== 'decide')
 			throw new Error('decide');
 		const first = taskA.payload.options[0]!;

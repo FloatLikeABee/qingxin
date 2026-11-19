@@ -1,4 +1,5 @@
 import { elevatorOf, isWalkable, nearStation, pathfind, stationById, stationsOn } from './floors';
+import { activeJob, startPerform } from './jobs';
 import type { World } from './sim';
 import { pickPackage, placePackage, type BayId } from './tasks';
 
@@ -14,7 +15,7 @@ export function tryMove(
 	speed = 0.18,
 	fromPath = false
 ): boolean {
-	if (world.paused || world.hidden) return false;
+	if (world.paused || world.hidden || world.dayClosed) return false;
 	if (world.player.elevatorTo != null) return false;
 	if (world.player.breakUntil > world.tick) return false;
 	if (dx === 0 && dz === 0) return false;
@@ -31,8 +32,10 @@ export function tryMove(
 }
 
 export function interact(world: World): boolean {
-	if (world.paused || world.player.elevatorTo != null) return false;
+	if (world.paused || world.player.elevatorTo != null || world.dayClosed) return false;
 	if (world.player.breakUntil > world.tick) return false;
+	const job = activeJob(world);
+	if (job?.stage === 'prepare') startPerform(world);
 	const floor = world.player.floor;
 	if (world.player.carrying) {
 		const bays = stationsOn(floor).filter((station) => station.kind === 'bay');

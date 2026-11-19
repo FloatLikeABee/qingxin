@@ -9,8 +9,22 @@ type ShangbanHook = {
 		player: { x: number; z: number; floor: number; roleId: string; pay: number };
 		notice: string;
 		company: { cash: number; morale: number };
-		tasks: Array<{ status: string; kind: string; roleId: string }>;
+		day: number;
+		dayClosed: boolean;
+		logs: Array<{ day: number; payEarned: number }>;
+		tasks: Array<{
+			status: string;
+			kind: string;
+			roleId: string;
+			stage?: string;
+			progress?: number;
+			ticksSpent?: number;
+			requiredStation?: string;
+		}>;
 	};
+	tick: (n: number) => void;
+	advanceJob: (n: number) => void;
+	closeNow: () => void;
 };
 
 async function guestBoot(page: Page, theme: 'light' | 'dark' = 'light') {
@@ -49,6 +63,47 @@ async function clickVisible(page: Page, name: string | RegExp) {
 async function acceptOffer(page: Page) {
 	await expect(page.getByRole('button', { name: '接这单' })).toBeVisible({ timeout: 20_000 });
 	await clickVisible(page, '接这单');
+}
+
+async function tickSim(page: Page, n: number) {
+	await page.evaluate((count) => {
+		const hook = (window as Window & { __qingxinShangban?: ShangbanHook }).__qingxinShangban;
+		hook?.tick(count);
+	}, n);
+}
+
+async function startJob(page: Page) {
+	await page.evaluate(() => {
+		const hook = (window as Window & { __qingxinShangban?: ShangbanHook }).__qingxinShangban;
+		const world = hook?.getState();
+		if (!world) return;
+		const task = world.tasks.find((item) => item.status === 'active');
+		const map: Record<string, { floor: number; x: number; z: number }> = {
+			inbound: { floor: 1, x: 3, z: 2 },
+			negotiate: { floor: 2, x: 6, z: 3 },
+			repair: { floor: 3, x: 5, z: 3 },
+			test: { floor: 3, x: 8, z: 3 },
+			payroll: { floor: 4, x: 5, z: 3 },
+			board: { floor: 5, x: 5, z: 3 },
+			office: { floor: 5, x: 8, z: 6 }
+		};
+		const dest = map[task?.requiredStation ?? ''] ?? map.inbound;
+		if (!dest) return;
+		world.player.floor = dest.floor;
+		world.player.x = dest.x;
+		world.player.z = dest.z;
+	});
+	const start = page.getByRole('button', { name: '开始干活' });
+	if (await start.isVisible().catch(() => false)) {
+		await start.click();
+	}
+	await page.evaluate(() => {
+		const hook = (window as Window & { __qingxinShangban?: ShangbanHook }).__qingxinShangban;
+		hook?.advanceJob(220);
+	});
+	await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-progress', /100|9\d/, {
+		timeout: 10_000
+	});
 }
 
 async function switchRole(page: Page, name: RegExp) {
@@ -91,6 +146,7 @@ async function waitPayUp(page: Page, was: number) {
 async function completeSort(page: Page) {
 	const pay = Number((await page.locator('[data-shangban="1"]').getAttribute('data-pay')) ?? '0');
 	await acceptOffer(page);
+	await startJob(page);
 	const root = page.locator('[data-shangban="1"]');
 	try {
 		await expect(root).toHaveAttribute('data-dest', /[ABC]/, { timeout: 12_000 });
@@ -198,6 +254,7 @@ test.describe('上班 Stage 1', () => {
 				(await page.locator('[data-shangban="1"]').getAttribute('data-pay')) ?? '0'
 			);
 			await acceptOffer(page);
+			await startJob(page);
 			await expect(page.getByRole('button', { name: '高价' })).toBeVisible();
 			await expect(page.getByRole('button', { name: '公道' })).toBeVisible();
 			await expect(page.getByRole('button', { name: '让价' })).toBeVisible();
@@ -208,6 +265,7 @@ test.describe('上班 Stage 1', () => {
 			await switchRole(page, /维修技师/);
 			await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-role', 'tech');
 			await acceptOffer(page);
+			await startJob(page);
 			await clickVisible(page, '检查');
 			await expect(page.locator('.notice')).toHaveText(/电源|插座|排线|花屏|散热|风道|主板|自检/, {
 				timeout: 8_000
@@ -230,6 +288,7 @@ test.describe('上班 Stage 1', () => {
 			await expect(page.getByRole('button', { name: '重试' })).toBeVisible({ timeout: 8_000 });
 			await clickVisible(page, '重试');
 			await acceptOffer(page);
+			await startJob(page);
 			await clickVisible(page, '检查');
 			await expect(page.locator('.notice')).toHaveText(/电源|插座|排线|花屏|散热|风道|主板|自检/, {
 				timeout: 8_000
@@ -245,6 +304,7 @@ test.describe('上班 Stage 1', () => {
 			await switchRole(page, /产品工程师/);
 			await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-role', 'engineer');
 			await acceptOffer(page);
+			await startJob(page);
 			await expect(page.getByRole('button', { name: '写测试' })).toBeVisible();
 			await expect(page.getByRole('button', { name: '直接上线' })).toBeVisible();
 			await expect(page.getByRole('button', { name: '重写' })).toBeVisible();
@@ -257,6 +317,7 @@ test.describe('上班 Stage 1', () => {
 			await switchRole(page, /财务专员/);
 			await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-role', 'finance');
 			await acceptOffer(page);
+			await startJob(page);
 			const finPay = Number(
 				(await page.locator('[data-shangban="1"]').getAttribute('data-pay')) ?? '0'
 			);
@@ -272,6 +333,7 @@ test.describe('上班 Stage 1', () => {
 			await clickVisible(page, /5F 经营管理/);
 			await waitFloor(page, 5);
 			await acceptOffer(page);
+			await startJob(page);
 			await expect(page.getByRole('button', { name: '调 1 人' })).toBeVisible();
 			await expect(page.getByRole('button', { name: '调预算' })).toBeVisible();
 			const mgrPay = Number(
@@ -283,6 +345,7 @@ test.describe('上班 Stage 1', () => {
 			await switchRole(page, /总经理/);
 			await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-role', 'ceo');
 			await acceptOffer(page);
+			await startJob(page);
 			await expect(page.getByRole('button', { name: '批加班预算' })).toBeVisible();
 			await expect(page.getByRole('button', { name: '冻结招聘' })).toBeVisible();
 			await expect(page.getByRole('button', { name: '公开致歉客户' })).toBeVisible();
@@ -352,6 +415,107 @@ test.describe('上班 Stage 1', () => {
 		expect(inboundBox.height).toBeGreaterThanOrEqual(44);
 		const overflow = await page.evaluate(() => document.documentElement.scrollWidth);
 		expect(overflow).toBeLessThanOrEqual(391);
+	});
+
+	test('1280 puts the office left and the glass rail right', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await guestBoot(page);
+		await openPlay(page);
+		const canvasBox = await page.locator('[data-play="shangban"]').boundingBox();
+		const dockBox = await page.locator('[data-shangban-dock]').boundingBox();
+		if (!canvasBox || !dockBox) throw new Error('boxes');
+		expect(canvasBox.width).toBeGreaterThan(dockBox.width);
+		expect(canvasBox.width / 1280).toBeGreaterThan(0.55);
+		expect(dockBox.x).toBeGreaterThanOrEqual(canvasBox.x + canvasBox.width - 8);
+		await acceptOffer(page);
+		await startJob(page);
+		await expect(page.locator('[data-shangban-progress]')).toBeVisible();
+		await page.screenshot({ path: 'screenshots/shangban-workday-after-1280.png' });
+	});
+
+	test('768, 1440 and landscape keep scene targets reachable', async ({ page }) => {
+		await guestBoot(page);
+		for (const view of [
+			{ width: 768, height: 1024, name: '768' },
+			{ width: 1440, height: 900, name: '1440' },
+			{ width: 844, height: 390, name: 'landscape' }
+		] as const) {
+			await page.setViewportSize({ width: view.width, height: view.height });
+			await page.goto('/modules/shangban', { waitUntil: 'networkidle' });
+			await expect(page.locator('[data-shangban="1"]')).toBeVisible();
+			await expect(page.locator('canvas[aria-label="轻心大厦"]')).toHaveAttribute(
+				'data-ready',
+				'1',
+				{ timeout: 20_000 }
+			);
+			const canvasBox = await page.locator('[data-play="shangban"]').boundingBox();
+			expect(canvasBox?.width ?? 0).toBeGreaterThan(200);
+			const inbound = page.getByRole('button', { name: '到货口' });
+			if (await inbound.isVisible().catch(() => false)) {
+				const box = await inbound.boundingBox();
+				expect((box?.height ?? 0) >= 40 || view.name === 'landscape').toBeTruthy();
+			} else {
+				await clickVisible(page, '打开操作');
+				await expect(inbound).toBeVisible();
+			}
+			await page.screenshot({ path: `screenshots/shangban-workday-${view.name}.png` });
+		}
+	});
+
+	test('pauses job progress, closes the day once, carries unfinished work, and keeps logs', async ({
+		page
+	}) => {
+		test.setTimeout(90_000);
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await guestBoot(page);
+		await openPlay(page);
+		await acceptOffer(page);
+		await startJob(page);
+		await clickVisible(page, '暂停');
+		const spent = await page.evaluate(() => {
+			const hook = (window as Window & { __qingxinShangban?: ShangbanHook }).__qingxinShangban;
+			return hook?.getState().tasks.find((task) => task.status === 'active')?.ticksSpent ?? 0;
+		});
+		expect(spent).toBeGreaterThan(10);
+		await page.evaluate(() => {
+			const hook = (window as Window & { __qingxinShangban?: ShangbanHook }).__qingxinShangban;
+			hook?.advanceJob(40);
+		});
+		const pausedSpent = await page.evaluate(() => {
+			const hook = (window as Window & { __qingxinShangban?: ShangbanHook }).__qingxinShangban;
+			return hook?.getState().tasks.find((task) => task.status === 'active')?.ticksSpent ?? 0;
+		});
+		expect(pausedSpent).toBe(spent);
+		await page.locator('.overlay').getByRole('button', { name: '继续' }).click();
+		const closed = await page.evaluate(() => {
+			const hook = (window as Window & { __qingxinShangban?: ShangbanHook }).__qingxinShangban;
+			try {
+				hook?.closeNow();
+				const state = hook?.getState();
+				return {
+					dayClosed: Boolean(state?.dayClosed),
+					logs: state?.logs.length ?? 0,
+					notice: state?.notice ?? ''
+				};
+			} catch (error) {
+				return { dayClosed: false, logs: 0, notice: String(error) };
+			}
+		});
+		expect(closed.dayClosed, closed.notice).toBe(true);
+		await expect(page.locator('[data-shangban-close]')).toBeVisible({ timeout: 15_000 });
+		await expect.poll(async () => (await getState(page))?.logs.length ?? 0).toBe(1);
+		const dayOne = await page.locator('[data-shangban="1"]').getAttribute('data-day');
+		await clickVisible(page, '下一天');
+		await expect(page.locator('[data-shangban="1"]')).toHaveAttribute(
+			'data-day',
+			String(Number(dayOne) + 1)
+		);
+		await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-status', 'active');
+		await page.reload({ waitUntil: 'networkidle' });
+		await expect(page.locator('[data-shangban="1"]')).toBeVisible({ timeout: 20_000 });
+		await clickVisible(page, '日志');
+		await expect(page.locator('[data-shangban-log]')).toContainText(/第1天/);
+		await page.screenshot({ path: 'screenshots/shangban-workday-log-1280.png' });
 	});
 
 	for (const view of [

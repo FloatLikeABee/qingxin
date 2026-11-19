@@ -15,6 +15,43 @@ export type ClaimCategory = '餐补' | '加班' | '交通';
 export type ResourceKind = 'staff' | 'budget';
 export type TaskStatus =
 	'offered' | 'active' | 'done' | 'failed' | 'declined' | 'expired' | 'cancelled';
+export type JobStage = 'offered' | 'prepare' | 'perform' | 'submit';
+
+export interface JobCheckpoint {
+	id: string;
+	label: string;
+	done: boolean;
+}
+
+export const JOB_DURATION: Record<RoleId, number> = {
+	courier: 48,
+	sales: 90,
+	tech: 80,
+	engineer: 180,
+	finance: 72,
+	manager: 88,
+	ceo: 140
+};
+
+export const JOB_STATION: Record<RoleId, string> = {
+	courier: 'inbound',
+	sales: 'negotiate',
+	tech: 'repair',
+	engineer: 'test',
+	finance: 'payroll',
+	manager: 'board',
+	ceo: 'office'
+};
+
+export function checkpointsFor(kind: TaskKind): JobCheckpoint[] {
+	if (kind === 'sort') return [{ id: 'pick', label: '提起包裹', done: false }];
+	if (kind === 'negotiate') return [{ id: 'quote', label: '报价', done: false }];
+	if (kind === 'repair') return [{ id: 'inspect', label: '检查', done: false }];
+	if (kind === 'ship') return [{ id: 'plan', label: '选方案', done: false }];
+	if (kind === 'audit') return [{ id: 'review', label: '审单', done: false }];
+	if (kind === 'allocate') return [{ id: 'route', label: '选楼层', done: false }];
+	return [{ id: 'read', label: '看议题', done: false }];
+}
 
 export interface SortBox {
 	id: string;
@@ -60,7 +97,13 @@ export type TaskPayload =
 			correctPart: PartId;
 			options: PartId[];
 	  }
-	| { kind: 'ship'; ticket: string; severity: 'low' | 'high'; fault: 'bug' | 'design' }
+	| {
+			kind: 'ship';
+			ticket: string;
+			severity: 'low' | 'high';
+			fault: 'bug' | 'design';
+			chosen?: ShipAction;
+	  }
 	| (AuditClaim & { kind: 'audit' })
 	| { kind: 'allocate' }
 	| { kind: 'decide'; topic: string; options: DecisionOption[] };
@@ -76,6 +119,14 @@ export interface Task {
 	deadline: number;
 	payload: TaskPayload;
 	resultNote?: string;
+	stage: JobStage;
+	progress: number;
+	durationTicks: number;
+	ticksSpent: number;
+	payAwarded: boolean;
+	payGranted: number;
+	requiredStation: string;
+	checkpoints: JobCheckpoint[];
 }
 
 export interface Dept {
@@ -90,9 +141,12 @@ export interface WorkState {
 	player: {
 		roleId: RoleId;
 		floor: FloorId;
+		x: number;
+		z: number;
 		pay: number;
 		reputation: number;
 		carrying: string | null;
+		breakUntil?: number;
 	};
 	company: {
 		cash: number;
@@ -104,6 +158,7 @@ export interface WorkState {
 	packages: SortBox[];
 	nextId: number;
 	rng: () => number;
+	dayEvents?: string[];
 }
 
 const PRODUCTS = ['年度服务', '试用席位', '培训包'];
@@ -124,6 +179,49 @@ function clamp(n: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, n));
 }
 
+export function jobProgressReady(task: Task): boolean {
+	return task.progress >= 1 - 1e-6;
+}
+
+export function checkpointsDone(task: Task): boolean {
+	return task.checkpoints.every((item) => item.done);
+}
+
+export function canSubmit(task: Task): boolean {
+	return (
+		task.status === 'active' &&
+		(task.stage === 'perform' || task.stage === 'submit') &&
+		jobProgressReady(task) &&
+		checkpointsDone(task) &&
+		!task.payAwarded
+	);
+}
+
+export function markCheckpoint(task: Task, id: string) {
+	const row = task.checkpoints.find((item) => item.id === id);
+	if (row) row.done = true;
+	if (jobProgressReady(task) && checkpointsDone(task) && task.stage === 'perform') {
+		task.stage = 'submit';
+	}
+}
+
+function withJob<T extends Omit<Task, keyof ReturnType<typeof jobFields>>>(task: T): Task {
+	return { ...task, ...jobFields(task.roleId, task.kind) };
+}
+
+function jobFields(roleId: RoleId, kind: TaskKind) {
+	return {
+		stage: 'offered' as JobStage,
+		progress: 0,
+		durationTicks: JOB_DURATION[roleId],
+		ticksSpent: 0,
+		payAwarded: false,
+		payGranted: 0,
+		requiredStation: JOB_STATION[roleId],
+		checkpoints: checkpointsFor(kind)
+	};
+}
+
 function reward(
 	state: WorkState,
 	task: Task,
@@ -135,9 +233,17 @@ function reward(
 	note: string,
 	extra?: { cash?: number; morale?: number; reputation?: number }
 ) {
+	if (ok && task.payAwarded) {
+		state.notice = '这单已经交过了。';
+		return;
+	}
 	task.status = ok ? 'done' : 'failed';
+	task.stage = 'submit';
+	task.progress = 1;
 	task.resultNote = note;
 	if (ok) {
+		task.payAwarded = true;
+		task.payGranted = pay;
 		state.player.pay += pay;
 		state.player.reputation = clamp(state.player.reputation + rep, 0, 100);
 		state.company.departments[floor].workload = clamp(
@@ -158,6 +264,11 @@ function reward(
 	if (extra?.reputation)
 		state.company.reputation = clamp(state.company.reputation + extra.reputation, 0, 100);
 	state.notice = note;
+	if (state.dayEvents) {
+		if (state.dayEvents[state.dayEvents.length - 1] !== note) {
+			state.dayEvents = [...state.dayEvents, note].slice(-24);
+		}
+	}
 }
 
 export function shouldApproveClaim(claim: AuditClaim): boolean {
@@ -168,6 +279,15 @@ export function shouldApproveClaim(claim: AuditClaim): boolean {
 }
 
 export function generateTask(roleId: RoleId, rng: () => number, tick: number, id: number): Task {
+	return withJob(draftTask(roleId, rng, tick, id));
+}
+
+function draftTask(
+	roleId: RoleId,
+	rng: () => number,
+	tick: number,
+	id: number
+): Omit<Task, keyof ReturnType<typeof jobFields>> {
 	const role = roleById(roleId);
 	if (!role) throw new Error('unknown role');
 	const deadline = tick + 180;
@@ -320,10 +440,16 @@ export function acceptTask(state: WorkState, taskId: number): boolean {
 		return false;
 	}
 	task.status = 'active';
+	task.stage = 'prepare';
+	task.progress = 0;
+	task.ticksSpent = 0;
+	task.payAwarded = false;
+	task.payGranted = 0;
+	task.checkpoints = checkpointsFor(task.kind);
 	if (task.payload.kind === 'sort') {
 		state.packages = task.payload.boxes.map((box) => ({ ...box, held: false }));
 	}
-	state.notice = `接了：${task.title}`;
+	state.notice = `接了：${task.title}。先到工位开始。`;
 	return true;
 }
 
@@ -340,12 +466,20 @@ export function retryTask(state: WorkState, taskId: number): boolean {
 	if (!task || task.status !== 'failed') return false;
 	const fresh = generateTask(task.roleId, state.rng, state.tick, task.id);
 	task.status = 'offered';
+	task.stage = 'offered';
 	task.title = fresh.title;
 	task.detail = fresh.detail;
 	task.payload = fresh.payload;
 	task.offeredAt = state.tick;
 	task.deadline = state.tick + 180;
 	task.resultNote = undefined;
+	task.progress = 0;
+	task.ticksSpent = 0;
+	task.durationTicks = fresh.durationTicks;
+	task.payAwarded = false;
+	task.payGranted = 0;
+	task.checkpoints = checkpointsFor(task.kind);
+	task.requiredStation = fresh.requiredStation;
 	state.player.carrying = null;
 	state.notice = '同一类活再来一单。';
 	return true;
@@ -362,6 +496,7 @@ export function pickPackage(state: WorkState, packageId: string): boolean {
 	if (!box || box.held) return false;
 	box.held = true;
 	state.player.carrying = box.id;
+	markCheckpoint(task, 'pick');
 	state.notice = `提起去${box.dest}口的包裹。`;
 	return true;
 }
@@ -376,14 +511,24 @@ export function placePackage(state: WorkState, bay: BayId): boolean {
 	}
 	const box = state.packages.find((item) => item.id === id);
 	if (!box) return false;
-	state.player.carrying = null;
-	state.packages = state.packages.filter((item) => item.id !== id);
 	if (box.dest !== bay) {
+		state.player.carrying = null;
+		state.packages = state.packages.filter((item) => item.id !== id);
 		reward(state, task, false, 0, -2, 1, 8, `放到${bay}口了，签的是${box.dest}口。`);
 		return false;
 	}
+	if (!jobProgressReady(task)) {
+		state.notice = '进度还没满，先把这单做完再交。';
+		return false;
+	}
+	state.player.carrying = null;
+	state.packages = state.packages.filter((item) => item.id !== id);
 	task.payload.placed += 1;
 	if (task.payload.placed >= task.payload.needed) {
+		if (!checkpointsDone(task)) {
+			state.notice = '还没提起该交的包裹。';
+			return false;
+		}
 		reward(state, task, true, 12, 3, 1, -10, `分拣完成，${box.dest}口清了一件。`);
 		return true;
 	}
@@ -396,7 +541,12 @@ export function offerPrice(state: WorkState, band: PriceBand): boolean {
 	if (!task || task.payload.kind !== 'negotiate') return false;
 	const price = band === 'high' ? 120 : band === 'fair' ? 100 : 80;
 	task.payload.lastOffer = band;
+	markCheckpoint(task, 'quote');
 	if (price <= task.payload.hiddenMax) {
+		if (!jobProgressReady(task)) {
+			state.notice = `${task.payload.product}报价记下了。进度满了再提交成交。`;
+			return false;
+		}
 		reward(
 			state,
 			task,
@@ -429,6 +579,7 @@ export function inspectFault(state: WorkState): boolean {
 		主板: '主板自检失败。'
 	};
 	task.payload.clue = clues[task.payload.correctPart];
+	markCheckpoint(task, 'inspect');
 	state.notice = task.payload.clue;
 	return true;
 }
@@ -436,8 +587,16 @@ export function inspectFault(state: WorkState): boolean {
 export function choosePart(state: WorkState, part: string): boolean {
 	const task = activeTask(state);
 	if (!task || task.payload.kind !== 'repair') return false;
+	if (!task.checkpoints.find((item) => item.id === 'inspect')?.done) {
+		state.notice = '先检查再换零件。';
+		return false;
+	}
 	if (part !== task.payload.correctPart) {
 		reward(state, task, false, 0, -2, 3, 9, `${part}对不上，机器还是坏的。`);
+		return false;
+	}
+	if (!jobProgressReady(task)) {
+		state.notice = '零件对了，进度满了再提交。';
 		return false;
 	}
 	reward(state, task, true, 14, 3, 3, -11, `换上${part}，故障清了。`);
@@ -447,30 +606,41 @@ export function choosePart(state: WorkState, part: string): boolean {
 export function chooseShip(state: WorkState, action: ShipAction): boolean {
 	const task = activeTask(state);
 	if (!task || task.payload.kind !== 'ship') return false;
+	if (action === 'ship' && task.payload.severity !== 'low') {
+		reward(state, task, false, 0, -4, 3, 12, '高严重度直接上线，回滚了。');
+		return false;
+	}
+	if (action === 'rewrite' && task.payload.fault !== 'design') {
+		reward(state, task, false, 0, -2, 3, 7, '这是缺陷，不该整段重写。');
+		return false;
+	}
+	task.payload.chosen = action;
+	markCheckpoint(task, 'plan');
+	if (!jobProgressReady(task)) {
+		state.notice = '方案记下了。进度满了再提交发版。';
+		return false;
+	}
 	if (action === 'test') {
 		reward(state, task, true, 10, 2, 3, -5, '测试覆盖住了，发得慢但稳。');
 		return true;
 	}
 	if (action === 'ship') {
-		if (task.payload.severity === 'low') {
-			reward(state, task, true, 18, 1, 3, -10, '低风险，直接上了。');
-			return true;
-		}
-		reward(state, task, false, 0, -4, 3, 12, '高严重度直接上线，回滚了。');
-		return false;
-	}
-	if (task.payload.fault === 'design') {
-		reward(state, task, true, 16, 3, 3, -8, '设计问题，重写才对。');
+		reward(state, task, true, 18, 1, 3, -10, '低风险，直接上了。');
 		return true;
 	}
-	reward(state, task, false, 0, -2, 3, 7, '这是缺陷，不该整段重写。');
-	return false;
+	reward(state, task, true, 16, 3, 3, -8, '设计问题，重写才对。');
+	return true;
 }
 
 export function judgeClaim(state: WorkState, decision: 'approve' | 'reject'): boolean {
 	const task = activeTask(state);
 	if (!task || task.payload.kind !== 'audit') return false;
 	const claim = task.payload;
+	markCheckpoint(task, 'review');
+	if (!jobProgressReady(task)) {
+		state.notice = '还在审，进度满了再下结论。';
+		return false;
+	}
 	const should = shouldApproveClaim(claim);
 	const approved = decision === 'approve';
 	if (approved === should) {
@@ -495,6 +665,11 @@ export function moveResource(
 	if (!task || task.payload.kind !== 'allocate') return false;
 	if (from === to) {
 		state.notice = '同一层不用调。';
+		return false;
+	}
+	markCheckpoint(task, 'route');
+	if (!jobProgressReady(task)) {
+		state.notice = '楼层记下了。进度满了再调。';
 		return false;
 	}
 	const source = state.company.departments[from];
@@ -531,6 +706,11 @@ export function chooseDecision(state: WorkState, optionId: string): boolean {
 	if (!task || task.payload.kind !== 'decide') return false;
 	const option = task.payload.options.find((item) => item.id === optionId);
 	if (!option) return false;
+	markCheckpoint(task, 'read');
+	if (!jobProgressReady(task)) {
+		state.notice = '议题看过了。进度满了再拍板。';
+		return false;
+	}
 	const extra = {
 		cash: option.effects.cash,
 		morale: option.effects.morale,

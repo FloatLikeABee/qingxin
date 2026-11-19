@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { elevatorOf, standFor, stationById } from './floors';
 import { followPath, inElevatorZone, interact, setDestination, tryMove } from './input';
+import { fillJobProgress } from './jobs';
 import { createWorld } from './sim';
 import { acceptTask } from './tasks';
 
@@ -25,6 +26,7 @@ describe('上班 input', () => {
 		world.player.z = inbound.z;
 		expect(interact(world)).toBe(true);
 		expect(world.player.carrying).toBeTruthy();
+		fillJobProgress(world);
 		const box = world.packages.find((item) => item.id === world.player.carrying);
 		if (!box) throw new Error('box');
 		const bay = stationById(`bay-${box.dest.toLowerCase()}`)!;
@@ -43,6 +45,7 @@ describe('上班 input', () => {
 		world.player.x = inbound.x;
 		world.player.z = inbound.z;
 		expect(interact(world)).toBe(true);
+		fillJobProgress(world);
 		const box = world.packages.find((item) => item.id === world.player.carrying);
 		if (!box) throw new Error('box');
 		const bay = stationById(`bay-${box.dest.toLowerCase()}`)!;

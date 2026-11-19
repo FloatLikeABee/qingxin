@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cameraPose, playFrustum } from './camera';
 import { COLS, FLOOR_HEIGHT, FLOORS, ROWS, TILE, worldX, worldZ, type Station } from './floors';
 import { ROLES, type Collar } from './roles';
 import type { World } from './sim';
@@ -253,6 +254,8 @@ export function mountShangbanScene(canvas: HTMLCanvasElement): ShangbanScene | n
 			box(prop, coral, 0.55, 0.85, 0.15, 0.12, 0.7, 0.12);
 		} else if (station.kind === 'break') {
 			box(prop, teal, 0, 0.28, 0, 0.7, 0.28, 0.7);
+			box(prop, cream, 0.18, 0.48, 0.1, 0.12, 0.16, 0.12, false);
+			box(prop, coral, 0.18, 0.58, 0.1, 0.08, 0.08, 0.08, false);
 		} else {
 			box(prop, wood, 0, 0.48, 0, 1.3, 0.14, 0.8);
 			box(prop, cream, 0, 0.95, 0, 0.15, 0.7, 0.15);
@@ -299,16 +302,29 @@ export function mountShangbanScene(canvas: HTMLCanvasElement): ShangbanScene | n
 			box(group, wallMat, width / 2 - 0.08, 1.3, 0, 0.16, 2.6, depth, false);
 			if (def.id === 1) {
 				box(group, coral, worldX(5), 0.2, worldZ(2), 3.2, 0.08, 0.45, false);
+				box(group, coral, worldX(4), 0.22, worldZ(5), 0.4, 0.28, 0.32, false);
+				box(group, gold, worldX(5), 0.22, worldZ(5), 0.4, 0.22, 0.32, false);
 			}
 			if (def.id === 2) {
 				const plant = new THREE.Mesh(unitCyl, teal);
 				plant.position.set(worldX(9), 0.55, worldZ(7));
 				plant.scale.set(0.28, 1.1, 0.28);
 				group.add(plant);
+				box(group, wood, worldX(9), 0.45, worldZ(5), 1.1, 0.12, 0.7, false);
+				box(group, cream, worldX(9), 0.85, worldZ(5), 0.12, 0.55, 0.4, false);
+			}
+			if (def.id === 3) {
+				box(group, navy, worldX(4), 0.7, worldZ(6), 0.7, 1.2, 0.5, false);
+				box(group, teal, worldX(4), 0.7, worldZ(6.35), 0.55, 0.9, 0.04, false);
+			}
+			if (def.id === 4) {
+				box(group, wood, worldX(9), 0.45, worldZ(6), 1.2, 0.12, 0.8, false);
+				box(group, cream, worldX(9), 0.72, worldZ(6), 0.35, 0.08, 0.45, false);
 			}
 			if (def.id === 5) {
 				const windowPane = box(group, city, 0, 1.5, -depth / 2 + 0.14, 4.2, 1.6, 0.06, false);
 				windowPane.material = glass;
+				box(group, wood, worldX(3), 0.45, worldZ(5), 1.4, 0.12, 0.8, false);
 			}
 			for (const station of def.stations) {
 				furnish(group, station, def.id === 1 ? coral : def.id === 3 ? gold : blue);
@@ -380,14 +396,9 @@ export function mountShangbanScene(canvas: HTMLCanvasElement): ShangbanScene | n
 	const pointer = new THREE.Vector2();
 
 	function placeCamera() {
-		const radius = overview ? 28 : 16.5;
-		const height = overview ? 22 : 11;
-		camera.position.set(
-			Math.cos(yaw) * radius,
-			focusY + height,
-			Math.sin(yaw) * radius + (overview ? 4 : 0)
-		);
-		camera.lookAt(0, focusY + (overview ? FLOOR_HEIGHT * 2 : 0.4), 0.4);
+		const pose = cameraPose(overview, focusY, yaw);
+		camera.position.set(pose.x, pose.y, pose.z);
+		camera.lookAt(pose.lookX, pose.lookY, pose.lookZ);
 		camera.updateProjectionMatrix();
 	}
 
@@ -396,7 +407,7 @@ export function mountShangbanScene(canvas: HTMLCanvasElement): ShangbanScene | n
 		const w = Math.max(1, parent.clientWidth);
 		const h = Math.max(1, parent.clientHeight);
 		const aspect = w / h;
-		const frustum = overview ? (h < 700 ? 14 : 15.5) : h < 700 ? 8.1 : 8.6;
+		const frustum = playFrustum(overview, h);
 		camera.left = -frustum * aspect;
 		camera.right = frustum * aspect;
 		camera.top = frustum;
@@ -463,10 +474,12 @@ export function mountShangbanScene(canvas: HTMLCanvasElement): ShangbanScene | n
 			const show = overview || npc.floor === world.player.floor;
 			group.visible = show;
 			if (!show) continue;
-			group.position.set(worldX(npc.x), floorY(npc.floor), worldZ(npc.z));
+			const sit = npc.activity === 'coffee' ? 0.12 : 0;
+			group.position.set(worldX(npc.x), floorY(npc.floor) - sit, worldZ(npc.z));
 			group.userData.phase = npc.phase;
+			group.userData.activity = npc.activity;
 			group.userData.bob = npc.id;
-			group.userData.baseY = floorY(npc.floor);
+			group.userData.baseY = floorY(npc.floor) - sit;
 		}
 
 		const seenPkg = new Set<string>();
@@ -524,10 +537,28 @@ export function mountShangbanScene(canvas: HTMLCanvasElement): ShangbanScene | n
 			if (legR) legR.rotation.x = -swing * 0.35;
 			for (const group of npcMap.values()) {
 				const base = Number(group.userData.baseY) || 0;
+				const activity = group.userData.activity as string;
+				const armL = group.getObjectByName('armL');
+				const armR = group.getObjectByName('armR');
 				if (group.userData.phase === 'walk') {
 					group.position.y = base + Math.abs(Math.sin(now * 0.014 + group.userData.bob)) * 0.05;
 				} else {
 					group.position.y = base;
+				}
+				if (armL && armR) {
+					if (activity === 'type') {
+						armL.rotation.x = Math.sin(now * 0.02 + group.userData.bob) * 0.45;
+						armR.rotation.x = Math.sin(now * 0.02 + group.userData.bob + 1) * 0.45;
+					} else if (activity === 'repair') {
+						armR.rotation.z = -0.6 + Math.sin(now * 0.01) * 0.15;
+					} else if (activity === 'meet' || activity === 'chat') {
+						armL.rotation.z = 0.35;
+					} else {
+						armL.rotation.x = 0;
+						armR.rotation.x = 0;
+						armL.rotation.z = 0;
+						armR.rotation.z = 0;
+					}
 				}
 			}
 		}

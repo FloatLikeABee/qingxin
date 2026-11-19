@@ -49,7 +49,7 @@ describe('上班 world', () => {
 		expect(world.npcs.some((npc) => npc.phase === 'work' || npc.phase === 'break')).toBe(true);
 	});
 
-	it('role switch cancels work, drops packages, and does not teleport', () => {
+	it('role switch with dropActive cancels work, drops packages, and does not teleport', () => {
 		const world = createWorld({ seed: 4 });
 		const offer = world.tasks[0];
 		if (!offer) throw new Error('offer');
@@ -57,7 +57,7 @@ describe('上班 world', () => {
 		world.player.carrying = 'pkg-1';
 		world.player.x = 4;
 		world.player.z = 3;
-		setRole(world, 'sales');
+		setRole(world, 'sales', { dropActive: true });
 		expect(world.player.roleId).toBe('sales');
 		expect(world.player.x).toBe(4);
 		expect(world.player.z).toBe(3);
