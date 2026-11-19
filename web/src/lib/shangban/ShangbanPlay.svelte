@@ -642,10 +642,13 @@
 						<article class="log-card">
 							<h3>第{entry.day}天 · {entry.closedClock} · ¥{entry.payEarned}</h3>
 							<ul>
-								{#each entry.tasks as row (row.title + row.status)}
+								{#each entry.tasks as row, i (`${entry.day}-task-${i}`)}
 									<li>{row.title} · {row.status} · {row.ticksSpent}拍 · ¥{row.pay}</li>
 								{/each}
-								{#each entry.unfinished as row (row.title)}
+								{#each entry.events as note, i (`${entry.day}-event-${i}`)}
+									<li>{note}</li>
+								{/each}
+								{#each entry.unfinished as row, i (`${entry.day}-open-${i}`)}
 									<li>未完成 {row.title} · {row.stage} {Math.round(row.progress * 100)}%</li>
 								{/each}
 							</ul>

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { LOG_CAP, appendLog, snapshotDay, type DayLog } from './logs';
 import { fillJobProgress, startPerform } from './jobs';
 import { acceptTask, pickPackage, placePackage } from './tasks';
-import { closeDay, createWorld } from './sim';
+import { closeDay, createWorld, tickWorld } from './sim';
+import { DAY_TICKS } from './day';
 import { stationById } from './floors';
 
 function emptyLog(day: number): DayLog {
@@ -46,6 +47,18 @@ describe('上班 daily logs', () => {
 		const log = snapshotDay(world);
 		expect(log.unfinished[0]?.title).toBe(offer.title);
 		expect(log.unfinished[0]?.stage).toBe('prepare');
+	});
+
+	it('a natural 720-tick day repeats title+status in the log, so UI cannot key by those fields', () => {
+		const world = createWorld({ seed: 3, spawnEvery: 6 });
+		for (let i = 0; i < DAY_TICKS + 2; i++) tickWorld(world);
+		expect(world.dayClosed).toBe(true);
+		expect(world.day).toBe(1);
+		expect(world.logs).toHaveLength(1);
+		expect(world.logs[0]?.closedClock).toBe('18:00');
+		const labels = (world.logs[0]?.tasks ?? []).map((row) => `${row.title}\0${row.status}`);
+		expect(labels.length).toBeGreaterThan(3);
+		expect(new Set(labels).size).toBeLessThan(labels.length);
 	});
 
 	it(`drops logs older than ${LOG_CAP} days`, () => {
