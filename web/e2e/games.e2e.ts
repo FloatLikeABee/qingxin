@@ -115,7 +115,7 @@ test('annual report opens from catalog into play chrome', async ({ page }) => {
 	await expect(page.getByRole('link', { name: '打开年报' })).toBeVisible();
 	await page.getByRole('link', { name: '打开年报' }).click();
 	await expect(page).toHaveURL(/\/modules\/games\/annual-report\/play/);
-	await expect(page.getByText(/不是真实财报，也不连接 Excel/)).toBeVisible();
+	await expect(page.locator('[data-hud="mark"]')).toHaveText(/不是真实财报，也不连接 Excel/);
 	await expect(page.getByRole('tab', { name: '假设' })).toBeVisible();
 	await expect(page.getByLabel('公式栏')).toBeVisible();
 });

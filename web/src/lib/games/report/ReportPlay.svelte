@@ -23,6 +23,7 @@
 	let editing = $state(false);
 	let confirmReset = $state(false);
 	let wrapEl = $state<HTMLDivElement | null>(null);
+	let headEl = $state<HTMLDivElement | null>(null);
 	let formulaEl = $state<HTMLInputElement | null>(null);
 
 	const sheet = $derived(getSheet(book, book.active) ?? book.sheets[0]!);
@@ -33,6 +34,7 @@
 	const cash = $derived(numeric(book, '现金流量表', `C${TIE_ADDR.cash}`));
 	const assets = $derived(numeric(book, '资产负债表', `C${TIE_ADDR.assets}`));
 	const growth = $derived(numeric(book, '假设', 'C6'));
+	const gridWidth = $derived(`calc(2.1rem + 9.5rem + ${Math.max(sheet.cols - 1, 1)} * 5.4rem)`);
 	let dragging = $state(false);
 
 	function save() {
@@ -86,11 +88,23 @@
 		draft = getSheet(book, name)?.cells.A1?.raw ?? '';
 		editing = false;
 		save();
+		queueMicrotask(() => {
+			if (wrapEl) wrapEl.scrollLeft = 0;
+			if (headEl) headEl.scrollLeft = 0;
+		});
 	}
 
 	function onInsertRow() {
 		insertRow(book);
 		save();
+	}
+
+	function syncHeadFromBody() {
+		if (headEl && wrapEl) headEl.scrollLeft = wrapEl.scrollLeft;
+	}
+
+	function syncBodyFromHead() {
+		if (headEl && wrapEl) wrapEl.scrollLeft = headEl.scrollLeft;
 	}
 
 	function onUndo() {
@@ -297,77 +311,96 @@
 		{/each}
 	</div>
 
-	<div
-		bind:this={wrapEl}
-		class="grid-wrap"
-		data-play="report"
-		data-sheet={book.active}
-		data-addr={activeAddr}
-		data-raw={activeRaw}
-		data-ni={String(Math.round(ni * 100) / 100)}
-		data-tie={String(Math.round(tie * 1000) / 1000)}
-		data-cash={String(Math.round(cash * 100) / 100)}
-		data-assets={String(Math.round(assets * 100) / 100)}
-		data-growth={String(growth)}
-		data-kind={cellKind(book, book.active, activeAddr)}
-		tabindex="0"
-		role="grid"
-		aria-label={`${COMPANY}工作簿`}
-		aria-activedescendant={`cell-${activeAddr}`}
-		onkeydown={onGridKey}
-	>
-		<table class="grid">
-			<thead>
-				<tr>
-					<th class="gutter"></th>
+	<div class="grid-shell">
+		<div bind:this={headEl} class="grid-head" aria-hidden="true" onscroll={syncBodyFromHead}>
+			<table class="grid" style:width={gridWidth}>
+				<colgroup>
+					<col class="gutter-col" />
 					{#each Array.from({ length: sheet.cols }, (_, c) => c) as c (c)}
-						<th>{indexToCol(c)}</th>
+						<col class={c === 0 ? 'label-col' : 'data-col'} />
 					{/each}
-				</tr>
-			</thead>
-			<tbody>
-				{#each Array.from({ length: sheet.rows }, (_, r) => r) as r (r)}
+				</colgroup>
+				<thead>
 					<tr>
-						<th class="gutter">{r + 1}</th>
-						{#each Array.from({ length: sheet.cols }, (_, c) => c) as c (`${r}:${c}`)}
-							{@const addr = a1(r, c)}
-							{@const shown = displayCell(book, book.active, addr)}
-							{@const kind = cellKind(book, book.active, addr)}
-							{@const cell = sheet.cells[addr]}
-							<td
-								id={`cell-${addr}`}
-								role="gridcell"
-								aria-selected={isActive(r, c)}
-								data-cell={addr}
-								data-kind={kind}
-								class:active={isActive(r, c)}
-								class:input={kind === 'input'}
-								class:formula={kind === 'formula'}
-								class:error={kind === 'error'}
-								class:bold={cell?.bold}
-								class:neg={shown.startsWith('-')}
-								style:background={cell?.fill ?? ''}
-								onpointerdown={(event) => {
-									if (event.button !== 0) return;
-									dragging = true;
-									select(r, c, event.shiftKey);
-								}}
-								onpointerenter={() => {
-									if (dragging) select(r, c, true);
-								}}
-								ondblclick={() => {
-									editing = true;
-									draft = activeRaw;
-									formulaEl?.focus();
-								}}
-							>
-								{shown}
-							</td>
+						<th class="gutter"></th>
+						{#each Array.from({ length: sheet.cols }, (_, c) => c) as c (c)}
+							<th>{indexToCol(c)}</th>
 						{/each}
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+			</table>
+		</div>
+		<div
+			bind:this={wrapEl}
+			class="grid-wrap"
+			data-play="report"
+			data-sheet={book.active}
+			data-addr={activeAddr}
+			data-raw={activeRaw}
+			data-ni={String(Math.round(ni * 100) / 100)}
+			data-tie={String(Math.round(tie * 1000) / 1000)}
+			data-cash={String(Math.round(cash * 100) / 100)}
+			data-assets={String(Math.round(assets * 100) / 100)}
+			data-growth={String(growth)}
+			data-kind={cellKind(book, book.active, activeAddr)}
+			tabindex="0"
+			role="grid"
+			aria-label={`${COMPANY}工作簿`}
+			aria-activedescendant={`cell-${activeAddr}`}
+			onkeydown={onGridKey}
+			onscroll={syncHeadFromBody}
+		>
+			<table class="grid" style:width={gridWidth}>
+				<colgroup>
+					<col class="gutter-col" />
+					{#each Array.from({ length: sheet.cols }, (_, c) => c) as c (`body-${c}`)}
+						<col class={c === 0 ? 'label-col' : 'data-col'} />
+					{/each}
+				</colgroup>
+				<tbody>
+					{#each Array.from({ length: sheet.rows }, (_, r) => r) as r (r)}
+						<tr>
+							<th class="gutter">{r + 1}</th>
+							{#each Array.from({ length: sheet.cols }, (_, c) => c) as c (`${r}:${c}`)}
+								{@const addr = a1(r, c)}
+								{@const shown = displayCell(book, book.active, addr)}
+								{@const kind = cellKind(book, book.active, addr)}
+								{@const cell = sheet.cells[addr]}
+								<td
+									id={`cell-${addr}`}
+									role="gridcell"
+									aria-selected={isActive(r, c)}
+									data-cell={addr}
+									data-kind={kind}
+									class:active={isActive(r, c)}
+									class:input={kind === 'input'}
+									class:formula={kind === 'formula'}
+									class:error={kind === 'error'}
+									class:bold={cell?.bold}
+									class:neg={shown.startsWith('-')}
+									style:background={cell?.fill ?? ''}
+									onpointerdown={(event) => {
+										if (event.button !== 0) return;
+										dragging = true;
+										select(r, c, event.shiftKey);
+									}}
+									onpointerenter={() => {
+										if (dragging) select(r, c, true);
+									}}
+									ondblclick={() => {
+										editing = true;
+										draft = activeRaw;
+										formulaEl?.focus();
+									}}
+								>
+									{shown}
+								</td>
+							{/each}
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	</div>
 
 	<p class="status" aria-live="polite">{book.notice}</p>
@@ -522,25 +555,68 @@
 		color: var(--qx-primary);
 	}
 
-	.grid-wrap {
+	.grid-shell {
 		flex: 1;
 		min-height: 0;
 		min-width: 0;
 		margin: 0 0.65rem;
+		display: flex;
+		flex-direction: column;
+		border-radius: 0 0.9rem 0.9rem 0.9rem;
+		background: color-mix(in srgb, #fffaf1 72%, var(--qx-card));
+		box-shadow: 0 16px 40px -28px rgb(15 23 42 / 0.55);
+	}
+
+	.grid-head {
+		flex-shrink: 0;
+		overflow-x: auto;
+		overflow-y: hidden;
+		scrollbar-width: none;
+	}
+
+	.grid-head::-webkit-scrollbar {
+		height: 0;
+		display: none;
+	}
+
+	.grid-wrap {
+		flex: 1;
+		min-height: 0;
+		min-width: 0;
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
 		touch-action: pan-x pan-y;
-		border-radius: 0 0.9rem 0.9rem 0.9rem;
-		background: color-mix(in srgb, #fffaf1 72%, var(--qx-card));
 		outline: none;
-		box-shadow: 0 16px 40px -28px rgb(15 23 42 / 0.55);
 	}
 
 	.grid {
 		border-collapse: separate;
 		border-spacing: 0;
-		min-width: 56rem;
+		table-layout: fixed;
 		font-variant-numeric: tabular-nums;
+	}
+
+	.gutter-col,
+	.gutter {
+		width: 2.1rem;
+		min-width: 2.1rem;
+		max-width: 2.1rem;
+	}
+
+	.label-col,
+	.grid th:nth-child(2),
+	.grid td:nth-child(2) {
+		width: 9.5rem;
+		min-width: 9.5rem;
+		max-width: 9.5rem;
+	}
+
+	.data-col,
+	.grid th:nth-child(n + 3),
+	.grid td:nth-child(n + 3) {
+		width: 5.4rem;
+		min-width: 5.4rem;
+		max-width: 5.4rem;
 	}
 
 	.grid th,
@@ -549,7 +625,6 @@
 		border-right: 1px solid color-mix(in srgb, var(--qx-line) 55%, transparent);
 		padding: 0.28rem 0.45rem;
 		white-space: nowrap;
-		max-width: 11rem;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		font-size: 0.82rem;
@@ -565,19 +640,21 @@
 	}
 
 	.grid thead th {
-		position: sticky;
-		top: 0;
-		z-index: 2;
 		background: color-mix(in srgb, var(--qx-primary) 12%, #f7efe2);
 		font-size: 0.72rem;
+	}
+
+	.grid-head th:nth-child(2) {
+		position: sticky;
+		left: 2.1rem;
+		z-index: 3;
+		background: color-mix(in srgb, var(--qx-primary) 12%, #f7efe2);
 	}
 
 	.gutter {
 		position: sticky;
 		left: 0;
 		z-index: 3;
-		width: 2.1rem;
-		min-width: 2.1rem;
 		background: color-mix(in srgb, var(--qx-primary) 10%, #f3e7d4);
 		text-align: center;
 		color: var(--qx-muted);
@@ -594,11 +671,9 @@
 		z-index: 1;
 		background: color-mix(in srgb, #fff6ea 88%, var(--qx-card));
 		font-weight: 650;
-		min-width: 9.5rem;
 	}
 
 	.grid td {
-		min-width: 5.2rem;
 		background: color-mix(in srgb, white 55%, transparent);
 	}
 
@@ -727,8 +802,8 @@
 			font-size: 0.85rem;
 		}
 
-		.grid {
-			min-width: 48rem;
+		.grid-shell {
+			min-width: 0;
 		}
 
 		.need {

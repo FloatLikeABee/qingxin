@@ -54,7 +54,7 @@ test.describe('年报', () => {
 		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await openPlay(page);
-		await expect(page.getByText(/不是真实财报，也不连接 Excel/)).toBeVisible();
+		await expect(page.locator('[data-hud="mark"]')).toHaveText(/不是真实财报，也不连接 Excel/);
 		await expect(page.getByRole('tab', { name: '假设' })).toBeVisible();
 		await expect(page.getByRole('tab', { name: '利润表' })).toBeVisible();
 		await expect(page.getByRole('tab', { name: '资产负债表' })).toBeVisible();
@@ -136,9 +136,15 @@ test.describe('年报', () => {
 		await expect
 			.poll(async () => Number(await grid2.getAttribute('data-growth')))
 			.toBeCloseTo(0.18);
-		await page.locator('[data-play="report"]').evaluate((el) => {
-			el.scrollLeft = 180;
-			el.scrollTop = 80;
+		await page.getByRole('tab', { name: '利润表' }).click();
+		await page.evaluate(() => {
+			const body = document.querySelector('[data-play="report"]');
+			const head = document.querySelector('.grid-head');
+			if (body instanceof HTMLElement) {
+				body.scrollLeft = 240;
+				body.scrollTop = 0;
+			}
+			if (head instanceof HTMLElement) head.scrollLeft = 240;
 		});
 		await expect
 			.poll(
@@ -146,6 +152,8 @@ test.describe('年报', () => {
 					(await page.locator('[data-play="report"]').evaluate((el) => el.scrollLeft)) > 20
 			)
 			.toBe(true);
+		await expect(page.locator('.grid-head').getByText('A', { exact: true })).toBeVisible();
+		await expect(page.getByText('营业收入').first()).toBeVisible();
 		await page.screenshot({ path: 'screenshots/annual-report-mobile-390.png' });
 		await page.getByRole('link', { name: '← 返回目录' }).click();
 		await expect(page).toHaveURL(/\/modules\/games$/);
