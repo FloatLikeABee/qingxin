@@ -45,7 +45,9 @@ test.describe('潮汐呼吸', () => {
 		await expect(sea).toHaveAttribute('data-constellations', '4');
 		await expect(sea).toHaveAttribute('data-hauls', '6');
 		await page.screenshot({ path: 'screenshots/tide-breath-play-1280-dark.png' });
+		await page.getByRole('button', { name: '收起操作' }).click();
 		await page.screenshot({ path: 'screenshots/tide-breath-sky-1280-dark.png' });
+		await page.getByRole('button', { name: '展开操作' }).click();
 		const swell0 = Number(await sea.getAttribute('data-swell'));
 		await page.keyboard.down('Space');
 		await expect

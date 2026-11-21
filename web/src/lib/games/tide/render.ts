@@ -3,6 +3,7 @@ import type { CoralPatch, Creature, HaulKind, TideWorld } from './sim';
 import {
 	CONSTELLATIONS,
 	TIDE_CAMERA,
+	TIDE_MOON,
 	constellationLinePositions,
 	fillSkyStarPositions,
 	skyStarCount
@@ -117,7 +118,7 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 	renderer.setClearColor(0x070b14, 1);
 
 	const scene = new THREE.Scene();
-	scene.fog = new THREE.FogExp2(0x0b1220, 0.022);
+	scene.fog = new THREE.FogExp2(0x0b1220, 0.01);
 	const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 120);
 	camera.position.set(...TIDE_CAMERA.position);
 	camera.lookAt(...TIDE_CAMERA.lookAt);
@@ -143,7 +144,7 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 	const hemi = new THREE.HemisphereLight(0x8ec9ff, 0x0b3a4a, 0.55);
 	scene.add(hemi);
 	const moon = new THREE.DirectionalLight(0xdbe7ff, 1.35);
-	moon.position.set(...TIDE_CAMERA.moon);
+	moon.position.set(...TIDE_MOON);
 	moon.castShadow = true;
 	moon.shadow.mapSize.set(1024, 1024);
 	moon.shadow.camera.near = 1;
@@ -176,7 +177,7 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 		keepMat(mat(0xf8fafc, { emissive: 0xf8fafc, emissiveIntensity: 0.85, roughness: 0.35 }))
 	);
 	moonBall.position.copy(moon.position);
-	moonBall.scale.setScalar(0.55);
+	moonBall.scale.setScalar(1.15);
 	scene.add(moonBall);
 	const moonGlow = new THREE.Mesh(
 		sphere,
@@ -191,7 +192,7 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 		)
 	);
 	moonGlow.position.copy(moon.position);
-	moonGlow.scale.setScalar(1.35);
+	moonGlow.scale.setScalar(2.4);
 	scene.add(moonGlow);
 
 	const starGeo = keepGeo(new THREE.BufferGeometry());
@@ -203,13 +204,13 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 		starGeo,
 		keepMat(
 			new THREE.PointsMaterial({
-				color: 0xe8f4ff,
-				size: 0.14,
+				color: 0xf8fbff,
+				size: 2.4,
 				transparent: true,
-				opacity: 0.92,
+				opacity: 1,
 				depthWrite: false,
 				fog: false,
-				sizeAttenuation: true
+				sizeAttenuation: false
 			})
 		)
 	);
@@ -228,9 +229,9 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 			geo,
 			keepMat(
 				new THREE.LineBasicMaterial({
-					color: 0xc4b5fd,
+					color: 0xe9d5ff,
 					transparent: true,
-					opacity: 0.82,
+					opacity: 0.95,
 					depthWrite: false,
 					fog: false
 				})
@@ -239,6 +240,30 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 		lines.name = `constellation-${constellation.name}`;
 		lines.frustumCulled = false;
 		constellationRoot.add(lines);
+		const dotGeo = keepGeo(new THREE.BufferGeometry());
+		const dots = new Float32Array(constellation.points.length * 3);
+		constellation.points.forEach((point, i) => {
+			dots[i * 3] = point[0];
+			dots[i * 3 + 1] = point[1];
+			dots[i * 3 + 2] = point[2];
+		});
+		dotGeo.setAttribute('position', new THREE.BufferAttribute(dots, 3));
+		constellationRoot.add(
+			new THREE.Points(
+				dotGeo,
+				keepMat(
+					new THREE.PointsMaterial({
+						color: 0xf5f3ff,
+						size: 5,
+						transparent: true,
+						opacity: 1,
+						depthWrite: false,
+						fog: false,
+						sizeAttenuation: false
+					})
+				)
+			)
+		);
 	}
 	scene.add(constellationRoot);
 
@@ -661,7 +686,7 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 		stars.visible = true;
 		const starCount = skyStarCount(lowDetail);
 		starGeo.setDrawRange(0, starCount);
-		(stars.material as TidePointsMat).size = lowDetail ? 0.18 : 0.14;
+		(stars.material as TidePointsMat).size = lowDetail ? 3.2 : 2.4;
 		constellationRoot.visible = true;
 		seabed.visible = true;
 	}
