@@ -6,15 +6,19 @@ Holds an extensible frontend games registry and a Qingxin-skinned shop-catalog f
 ## Requirements
 
 ### Requirement: Extensible games registry
-The system SHALL expose a typed in-memory games registry that can list multiple games. Each entry SHALL include an id, zh-CN title, short description, category, tags, cover motif, play CTA label, and status `playable` or `coming`. Three games SHALL be playable: 便利店经理, 窗前庭园, 晴空出击. Remaining placeholders SHALL stay visible as 即将到来.
+The system SHALL expose a typed in-memory games registry that can list multiple games. Each entry SHALL include an id, zh-CN title, short description, category, tags, cover motif, play CTA label, and status `playable` or `coming`. Seven games SHALL be playable: 便利店经理, 窗前庭园, 晴空出击, 潮汐呼吸, 云上散步, 记忆货架, 上班.
 
-#### Scenario: Registry lists three playable games
+#### Scenario: Registry lists playable games
 - **WHEN** the catalog is loaded
-- **THEN** entries `convenient-store`, `window-garden`, and `sky-sortie` have status `playable`
+- **THEN** entries `convenient-store`, `window-garden`, `sky-sortie`, `tide-breath`, `cloud-walk`, `memory-shelf`, and `shangban` have status `playable`
 
-#### Scenario: Placeholders remain visible
+#### Scenario: 上班 is a catalog game
 - **WHEN** the catalog is loaded
-- **THEN** 潮汐呼吸, 云上散步, and 记忆货架 remain `coming`
+- **THEN** `shangban` has title 上班, category 经营, and play CTA 开始上班
+
+#### Scenario: Placeholders remain gone
+- **WHEN** the catalog is loaded
+- **THEN** no registry entry has status `coming`
 
 #### Scenario: Old florist URL
 - **WHEN** a user opens `/modules/games/corner-florist`
@@ -79,3 +83,7 @@ Selecting a game card SHALL open a presentation route with cover, about copy, an
 #### Scenario: Coming soon cannot play
 - **WHEN** a user opens a `coming` game's detail
 - **THEN** a 即将到来 control is present and no play canvas is mounted
+
+#### Scenario: 上班 detail
+- **WHEN** a user opens `/modules/games/shangban`
+- **THEN** heading 上班 is visible and 开始上班 links to `/modules/games/shangban/play`

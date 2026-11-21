@@ -18,6 +18,11 @@ function memory(initial?: Record<string, string>) {
 }
 
 describe('上班 save', () => {
+	it('keeps qingxin.shangban schema 2 after catalog relocation', () => {
+		expect(SHANGBAN_SAVE_KEY).toBe('qingxin.shangban');
+		expect(SHANGBAN_SCHEMA).toBe(2);
+	});
+
 	it('round-trips role, floor, pay, and the active task', () => {
 		const storage = memory();
 		const world = createWorld({ seed: 11 });

@@ -2,7 +2,7 @@ export const GAME_CATEGORIES = ['全部', '经营', '休闲', '益智', '节奏'
 
 export type GameCategory = Exclude<(typeof GAME_CATEGORIES)[number], '全部'>;
 export type GameStatus = 'playable' | 'coming';
-export type CoverMotif = 'store' | 'garden' | 'jet' | 'wave' | 'cloud' | 'shelf';
+export type CoverMotif = 'store' | 'garden' | 'jet' | 'wave' | 'cloud' | 'shelf' | 'office';
 
 export const GAME_ALIASES: Record<string, string> = {
 	'corner-florist': 'window-garden',
@@ -142,6 +142,24 @@ export const GAMES: GameInfo[] = [
 			ground: '#F1E6D0',
 			accent: '#EAB308',
 			motif: 'shelf'
+		}
+	},
+	{
+		id: 'shangban',
+		title: '上班',
+		englishTitle: 'Workday',
+		summary: '走进五层大厦，自己选岗位，做分拣、谈判、维修和经营决定。',
+		about:
+			'你走进轻心大厦。自己选岗位，走路、坐电梯、在工位上把当天的活做完。班次还在本机继续，进度记在原来的存档里。玩法和以前一样，只是从游戏目录进。',
+		category: '经营',
+		tags: ['工位', '大厦', '班次'],
+		status: 'playable',
+		playCta: '开始上班',
+		cover: {
+			sky: '#9EC9FF',
+			ground: '#E2E8F0',
+			accent: '#3B82F6',
+			motif: 'office'
 		}
 	}
 ];

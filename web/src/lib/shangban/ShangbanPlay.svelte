@@ -424,7 +424,7 @@
 	data-block={block}
 >
 	<header class="top qx-glass">
-		<a href="/modules" class="{LINK_CLASS} shrink-0">← 返回模块</a>
+		<a href="/modules/games" class="{LINK_CLASS} shrink-0">← 返回目录</a>
 		<h1 class="sr-only">上班</h1>
 		<ul class="stats" aria-label="公司和自己">
 			<li><b>D{world.day} {clockLabel(world.tick)}</b><span>{phaseLabel(phase)}</span></li>

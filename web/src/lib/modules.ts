@@ -8,13 +8,6 @@ export interface ModuleInfo {
 
 export const MODULES: ModuleInfo[] = [
 	{
-		slug: 'shangban',
-		name: '上班',
-		summary: '走进五层大厦，自己选岗位，做分拣、谈判、维修和经营决定。',
-		accent: '#3B82F6',
-		icon: 'briefcase'
-	},
-	{
 		slug: 'secrets',
 		name: '秘密',
 		summary: '把不想公开的话写成一封信，信箱会回一封信，而不是聊天。',
@@ -66,7 +59,7 @@ export const MODULES: ModuleInfo[] = [
 	{
 		slug: 'games',
 		name: '游戏',
-		summary: '逛目录，进小店。先从便利店经理开始。',
+		summary: '逛目录。上班、便利店经理都可以从这里进。',
 		accent: '#EAB308',
 		icon: 'game'
 	}

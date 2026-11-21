@@ -21,6 +21,14 @@ describe('games catalog filter', () => {
 		expect(ops.length).toBeGreaterThan(0);
 		expect(ops.every((game) => game.category === '经营')).toBe(true);
 		expect(ops.some((game) => game.id === 'convenient-store')).toBe(true);
+		expect(ops.some((game) => game.id === 'shangban')).toBe(true);
+	});
+
+	it('finds 上班 by Chinese title and workday tags', () => {
+		const byTitle = filterGames(GAMES, { search: '上班' });
+		expect(byTitle.some((game) => game.id === 'shangban')).toBe(true);
+		const byTag = filterGames(GAMES, { search: '工位' });
+		expect(byTag.some((game) => game.id === 'shangban')).toBe(true);
 	});
 
 	it('filters by category 飞行', () => {
