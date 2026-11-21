@@ -164,6 +164,39 @@ describe('上班 save', () => {
 		expect(closed.logs).toHaveLength(1);
 	});
 
+	it('round-trips a stored ship plan so reload still submits when the bar fills', () => {
+		const storage = memory();
+		const world = createWorld({ seed: 33 });
+		setRole(world, 'engineer', { dropActive: true });
+		const offer = world.tasks.find((task) => task.status === 'offered');
+		if (!offer) throw new Error('offer');
+		acceptTask(world, offer.id);
+		offer.stage = 'perform';
+		if (offer.payload.kind !== 'ship') throw new Error('ship');
+		offer.payload.severity = 'high';
+		offer.payload.chosen = 'test';
+		offer.pendingAction = { type: 'ship', action: 'test' };
+		offer.checkpoints = offer.checkpoints.map((item) => ({ ...item, done: true }));
+		writeShangbanSave(world, storage);
+		const loaded = readShangbanSave(storage);
+		const task = loaded.tasks.find((item) => item.status === 'active');
+		expect(task?.pendingAction).toEqual({ type: 'ship', action: 'test' });
+		expect(task?.payload.kind === 'ship' && task.payload.chosen).toBe('test');
+	});
+
+	it('clears a leftover overnight break on a resumed day-2 save', () => {
+		const storage = memory();
+		const world = createWorld({ seed: 9 });
+		world.day = 2;
+		world.tick = 0;
+		world.player.breakUntil = 730;
+		writeShangbanSave(world, storage);
+		const loaded = readShangbanSave(storage);
+		expect(loaded.recovered).toBe(false);
+		expect(loaded.player.breakUntil).toBeLessThanOrEqual(loaded.tick);
+		expect(storage.getItem('qingxin.theme') ?? null).toBeNull();
+	});
+
 	it('recovers unknown schema and missing keys as a fresh courier world', () => {
 		const missing = readShangbanSave(memory());
 		expect(missing.player.roleId).toBe('courier');

@@ -127,7 +127,7 @@ async function waitPathClear(page: Page) {
 test('natural 1x day closes once from the animation loop and carries unfinished work', async ({
 	page
 }) => {
-	test.setTimeout(240_000);
+	test.setTimeout(360_000);
 	const pageErrors: string[] = [];
 	page.on('pageerror', (error) => {
 		pageErrors.push(error.message);
@@ -166,7 +166,7 @@ test('natural 1x day closes once from the animation loop and carries unfinished 
 	await clickVisible(page, '接这单');
 	await clickExact(page, '到货口');
 	await waitPathClear(page);
-	const begin = page.getByRole('button', { name: '开始干活' });
+	const begin = page.getByRole('button', { name: /开始干活|去工位开始|回到工位/ });
 	if (await begin.isVisible().catch(() => false)) {
 		await begin.click();
 	}
@@ -223,11 +223,11 @@ test('natural 1x day closes once from the animation loop and carries unfinished 
 	await waitPathClear(page);
 	if (
 		await page
-			.getByRole('button', { name: '开始干活' })
+			.getByRole('button', { name: /开始干活|去工位开始|回到工位/ })
 			.isVisible()
 			.catch(() => false)
 	) {
-		await clickVisible(page, '开始干活');
+		await clickVisible(page, /开始干活|去工位开始|回到工位/);
 	}
 	await clickVisible(page, '写测试');
 	await expect
@@ -340,11 +340,11 @@ test('natural 1x day closes once from the animation loop and carries unfinished 
 	await waitPathClear(page);
 	if (
 		await page
-			.getByRole('button', { name: '开始干活' })
+			.getByRole('button', { name: /开始干活|去工位开始|回到工位/ })
 			.isVisible()
 			.catch(() => false)
 	) {
-		await clickVisible(page, '开始干活');
+		await clickVisible(page, /开始干活|去工位开始|回到工位/);
 	}
 	await expect
 		.poll(
@@ -354,6 +354,24 @@ test('natural 1x day closes once from the animation loop and carries unfinished 
 		)
 		.toBeGreaterThan(stillPaused);
 	await page.screenshot({ path: 'screenshots/shangban-natural-nextday-carry-1280.png' });
+
+	const submit = page.getByRole('button', { name: '提交' });
+	if (await submit.isVisible().catch(() => false)) {
+		await submit.click();
+	}
+	await page.bringToFront();
+	await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-closed', '1', {
+		timeout: 160_000
+	});
+	await expect(page.locator('[data-shangban-close]')).toContainText(/第2天收工/);
+	const dayTwo = await snapshot(page);
+	expect(dayTwo?.day).toBe(2);
+	expect(dayTwo?.logs).toHaveLength(2);
+	await page.screenshot({ path: 'screenshots/shangban-natural-day2-close-1280.png' });
+	await clickVisible(page, '下一天');
+	await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-day', '3');
+	await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-closed', '0');
+	await page.screenshot({ path: 'screenshots/shangban-natural-day3-open-1280.png' });
 	console.log('[natural-day] durations', {
 		courierTicks: 48,
 		engineerTicks: 180,
@@ -362,6 +380,7 @@ test('natural 1x day closes once from the animation loop and carries unfinished 
 		engineerRealSec: 18,
 		dayRealSec: 72,
 		wallMs: Date.now() - wallStart,
-		carriedTicks: next?.ticksSpent
+		carriedTicks: next?.ticksSpent,
+		logs: dayTwo?.logs.length
 	});
 });

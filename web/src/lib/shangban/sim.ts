@@ -5,12 +5,20 @@ import {
 	TICK_MS as TICK_LENGTH,
 	type SimSpeed
 } from './day';
-import { elevatorOf, FLOORS, nearStation, stationsOn, standFor } from './floors';
+import {
+	elevatorOf,
+	FLOORS,
+	nearStation,
+	pathfind,
+	stationsOn,
+	standFor,
+	stationById
+} from './floors';
 import { dropActiveJob, tickJob } from './jobs';
 import { appendLog, snapshotDay, type DayLog } from './logs';
 import { tickStaff, type NpcActivity } from './npc';
 import { ROLES, type Collar, type FloorId, type RoleId } from './roles';
-import { generateTask, liveQueue, type SortBox, type WorkState } from './tasks';
+import { generateTask, JOB_STATION, liveQueue, type SortBox, type WorkState } from './tasks';
 
 export const TICK_MS = TICK_LENGTH;
 export const DAY_TICKS = DAY_LENGTH;
@@ -79,6 +87,7 @@ export interface World {
 	lastSpawnAt: number;
 	spawnEvery: number;
 	mishapAt: number;
+	pendingStart: boolean;
 	rng: () => number;
 }
 
@@ -113,8 +122,12 @@ export function clockHour(tick: number): number {
 function trimHistory(world: World) {
 	if (world.tasks.length <= MAX_TASK_HISTORY) return;
 	const live = world.tasks.filter((task) => task.status === 'offered' || task.status === 'active');
-	const rest = world.tasks.filter((task) => task.status !== 'offered' && task.status !== 'active');
-	world.tasks = [...live, ...rest.slice(-(MAX_TASK_HISTORY - live.length))];
+	const failed = world.tasks.filter((task) => task.status === 'failed').slice(-4);
+	const rest = world.tasks.filter(
+		(task) => task.status !== 'offered' && task.status !== 'active' && task.status !== 'failed'
+	);
+	const room = Math.max(0, MAX_TASK_HISTORY - live.length - failed.length);
+	world.tasks = [...live, ...failed, ...rest.slice(-room)];
 }
 
 export function createWorld(options: WorldOptions = {}): World {
@@ -162,6 +175,7 @@ export function createWorld(options: WorldOptions = {}): World {
 		lastSpawnAt: -999,
 		spawnEvery: options.spawnEvery ?? DEFAULT_SPAWN_EVERY,
 		mishapAt: -999,
+		pendingStart: false,
 		rng
 	};
 	world.npcs = seedNpcs(world);
@@ -260,6 +274,7 @@ export function callElevator(world: World, floor: FloorId): boolean {
 	}
 	world.player.elevatorTo = floor;
 	world.player.elevatorWait = ELEVATOR_TICKS;
+	world.player.path = [];
 	world.notice = `去${floor}楼。`;
 	return true;
 }
@@ -275,7 +290,19 @@ function tickElevator(world: World) {
 	world.player.z = shaft.z;
 	world.player.elevatorTo = null;
 	world.player.elevatorWait = 0;
+	world.player.path = [];
 	world.notice = `到${dest}楼。`;
+	if (world.pendingStart) {
+		const station = stationById(JOB_STATION[world.player.roleId]);
+		if (station && station.floor === dest) {
+			const stand = standFor(station);
+			world.player.path = pathfind(
+				dest,
+				{ x: Math.round(world.player.x), z: Math.round(world.player.z) },
+				stand
+			);
+		}
+	}
 }
 
 function tickNpcs(world: World) {
@@ -311,6 +338,7 @@ export function closeDay(world: World): boolean {
 		if (task.status === 'offered') task.status = 'expired';
 	}
 	world.logs = appendLog(world.logs, snapshotDay(world));
+	world.player.breakUntil = 0;
 	world.notice = `第${world.day}天收工。看今日日志，再点下一天。`;
 	return true;
 }
@@ -324,6 +352,10 @@ export function beginNextDay(world: World): boolean {
 	world.dayPayStart = world.player.pay;
 	world.dayEvents = [];
 	world.lastSpawnAt = -999;
+	world.player.breakUntil = 0;
+	world.player.elevatorTo = null;
+	world.player.elevatorWait = 0;
+	world.pendingStart = false;
 	world.notice = `第${world.day}天。未完成的活还在。`;
 	spawnOffers(world);
 	return true;
@@ -346,6 +378,10 @@ export function tickWorld(world: World) {
 		world.packages = world.packages.slice(-MAX_PACKAGES);
 	}
 	if (world.tick >= DAY_TICKS) closeDay(world);
+}
+
+export function frameElapsedMs(last: number, now: number): number {
+	return Math.min(MAX_STEP_MS, Math.max(0, now - last));
 }
 
 export function stepWorld(world: World, elapsedMs: number) {

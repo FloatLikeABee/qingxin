@@ -4,8 +4,16 @@
 	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { dayPhase, phaseLabel, remainingJobSeconds, type SimSpeed } from './day';
 	import { FLOORS, standFor, stationById, stationsOn, type Station } from './floors';
-	import { followPath, inElevatorZone, interact, setDestination, tryMove } from './input';
-	import { remainingTicks, startPerform, tickJob } from './jobs';
+	import {
+		followPath,
+		inElevatorZone,
+		interact,
+		requestStartWork,
+		resolvePendingStart,
+		setDestination,
+		tryMove
+	} from './input';
+	import { remainingTicks, tickJob, workBlock } from './jobs';
 	import { readShangbanSave, writeShangbanSave } from './persist';
 	import { ROLES, roleById, type FloorId, type RoleId } from './roles';
 	import type { ShangbanScene } from './render';
@@ -15,6 +23,7 @@
 		clockLabel,
 		closeDay,
 		createWorld,
+		frameElapsedMs,
 		restartWorld,
 		setPaused,
 		setRole,
@@ -36,7 +45,8 @@
 		moveResource,
 		offerPrice,
 		PARTS,
-		retryTask
+		retryTask,
+		submitActive
 	} from './tasks';
 
 	let world = $state<World>(createWorld());
@@ -79,6 +89,7 @@
 	const progressPct = $derived(Math.round((active?.progress ?? 0) * 100));
 	const requiredLabel = $derived(stationById(active?.requiredStation ?? '')?.label ?? '工位');
 	const viewedLog = $derived(world.logs[world.logs.length - 1] ?? null);
+	const block = $derived(workBlock(world));
 
 	function save() {
 		writeShangbanSave(world);
@@ -94,6 +105,7 @@
 		canvas.dataset.pay = String(world.player.pay);
 		canvas.dataset.status = active?.status ?? offered?.status ?? '';
 		canvas.dataset.dest = sortDest;
+		canvas.dataset.block = workBlock(world);
 		if (stageEl) {
 			stageEl.dataset.floor = canvas.dataset.floor;
 			stageEl.dataset.role = canvas.dataset.role;
@@ -106,7 +118,7 @@
 	}
 
 	function beginWork() {
-		startPerform(world);
+		requestStartWork(world);
 		save();
 	}
 
@@ -141,10 +153,7 @@
 	function takeOffer() {
 		if (!offered) return;
 		acceptTask(world, offered.id);
-		const home = role
-			? stationsOn(role.floor).find((item) => item.roleIds?.includes(role.id))
-			: null;
-		if (home && home.floor === world.player.floor) goStation(home);
+		requestStartWork(world);
 		save();
 	}
 
@@ -296,8 +305,8 @@
 			}
 
 			const loop = (now: number) => {
-				const dt = Math.min(0.05, (now - last) / 1000);
-				cadenceMs = now - last || cadenceMs;
+				const elapsed = frameElapsedMs(last, now);
+				cadenceMs = elapsed || cadenceMs;
 				last = now;
 				if (!document.hidden) {
 					world.hidden = false;
@@ -309,12 +318,13 @@
 					if (keys.has('ArrowDown') || keys.has('s') || keys.has('S')) mz += 1;
 					if (mx || mz) tryMove(world, mx, mz, 0.2);
 					else followPath(world);
+					resolvePendingStart(world);
 					if (pendingWork && world.player.path.length === 0) {
 						interact(world);
 						pendingWork = false;
 						save();
 					}
-					stepWorld(world, dt * 1000);
+					stepWorld(world, elapsed);
 				} else {
 					world.hidden = true;
 				}
@@ -411,6 +421,7 @@
 	data-path={world.player.path.length}
 	data-carry={world.player.carrying ?? ''}
 	data-cadence={cadenceMs.toFixed(1)}
+	data-block={block}
 >
 	<header class="top qx-glass">
 		<a href="/modules" class="{LINK_CLASS} shrink-0">← 返回模块</a>
@@ -482,18 +493,33 @@
 					<Button variant="secondary" onclick={() => (declineTask(world, offered.id), save())}
 						>推掉</Button
 					>
+					{#if failed}
+						<Button
+							variant="secondary"
+							class="min-h-12"
+							onclick={() => (retryTask(world, failed.id), save())}>重试</Button
+						>
+					{/if}
 					<span class="hint">{offered.title}。{offered.detail}</span>
 				</div>
+			{:else if failed && !active}
+				<Button variant="secondary" onclick={() => (retryTask(world, failed.id), save())}
+					>重试</Button
+				>
 			{/if}
 
 			{#if active}
 				<div class="job" data-shangban-job>
 					<p class="hint">
-						{active.stage === 'prepare'
-							? `先到${requiredLabel}开始。`
-							: active.stage === 'submit'
-								? '可以提交了。'
-								: `在${requiredLabel}做，走开会暂停进度。`}
+						{block === 'prepare'
+							? `先到${requiredLabel}。点「去工位开始」，到了会自动开工。`
+							: block === 'away'
+								? `离开${requiredLabel}了，进度暂停。点「回到工位」。`
+								: block === 'break'
+									? '休息中，进度暂停。'
+									: block === 'submit'
+										? '可以提交了。'
+										: `在${requiredLabel}做，走开会暂停进度。`}
 					</p>
 					<label class="progress-label" for="shangban-progress">进度 {progressPct}%</label>
 					<progress
@@ -508,8 +534,13 @@
 							.map((item) => item.label)
 							.join(' · ') || '检查点齐了'}
 					</p>
-					{#if active.stage === 'prepare'}
-						<Button class="min-h-12" onclick={beginWork}>开始干活</Button>
+					{#if active.stage === 'prepare' || block === 'away' || block === 'prepare'}
+						<Button class="min-h-12" onclick={beginWork}>
+							{block === 'ok' ? '开始干活' : block === 'away' ? '回到工位' : '去工位开始'}
+						</Button>
+					{/if}
+					{#if active.stage === 'submit'}
+						<Button class="min-h-12" onclick={() => (submitActive(world), save())}>提交</Button>
 					{/if}
 				</div>
 			{/if}
@@ -610,12 +641,6 @@
 						>
 					{/each}
 				</div>
-			{/if}
-
-			{#if failed && !active}
-				<Button variant="secondary" onclick={() => (retryTask(world, failed.id), save())}
-					>重试</Button
-				>
 			{/if}
 
 			<div class="row">

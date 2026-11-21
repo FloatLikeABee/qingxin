@@ -1,4 +1,12 @@
-import { elevatorOf, isWalkable, nearStation, pathfind, stationById, stationsOn } from './floors';
+import {
+	elevatorOf,
+	isWalkable,
+	nearStation,
+	pathfind,
+	standFor,
+	stationById,
+	stationsOn
+} from './floors';
 import { activeJob, startPerform } from './jobs';
 import type { World } from './sim';
 import { pickPackage, placePackage, type BayId } from './tasks';
@@ -29,6 +37,58 @@ export function tryMove(
 	world.player.z = nz;
 	world.player.facing = Math.atan2(dx, dz);
 	return true;
+}
+
+export function requestStartWork(world: World): boolean {
+	if (world.paused || world.dayClosed) return false;
+	if ((world.player.breakUntil ?? 0) > world.tick) {
+		world.notice = `休息中，还要 ${world.player.breakUntil - world.tick} 拍。`;
+		return false;
+	}
+	if (startPerform(world)) {
+		world.pendingStart = false;
+		return true;
+	}
+	const job = activeJob(world);
+	if (!job) return false;
+	const station = stationById(job.requiredStation);
+	if (!station) return false;
+	world.pendingStart = true;
+	if (world.player.floor !== station.floor) {
+		world.notice = `先坐电梯去${station.floor}楼，再到${station.label}。到了会自动开始。`;
+		return true;
+	}
+	const stand = standFor(station);
+	setDestination(world, stand.x, stand.z);
+	world.notice = `正在去${station.label}。到了会自动开始。`;
+	return true;
+}
+
+export function resolvePendingStart(world: World): void {
+	if (!world.pendingStart || world.paused || world.dayClosed) return;
+	if (world.player.elevatorTo != null) return;
+	if (world.player.path.length > 0) return;
+	if (startPerform(world)) {
+		world.pendingStart = false;
+		return;
+	}
+	const job = activeJob(world);
+	if (!job) {
+		world.pendingStart = false;
+		return;
+	}
+	const station = stationById(job.requiredStation);
+	if (!station) {
+		world.pendingStart = false;
+		return;
+	}
+	if (world.player.floor !== station.floor) return;
+	const stand = standFor(station);
+	setDestination(world, stand.x, stand.z);
+	if (world.player.path.length === 0) {
+		startPerform(world);
+		world.pendingStart = false;
+	}
 }
 
 export function interact(world: World): boolean {

@@ -2,10 +2,13 @@ import { nearStation, stationById } from './floors';
 import type { RoleId } from './roles';
 import {
 	JOB_STATION,
+	JOB_STATIONS,
 	canSubmit,
 	checkpointsFor,
+	flushPending,
 	jobProgressReady,
 	markCheckpoint,
+	submitActive,
 	type JobStage,
 	type Task,
 	type WorkState
@@ -24,19 +27,28 @@ export function activeJob(state: WorkState): Task | undefined {
 }
 
 export function atWorkstation(state: JobState, roleId: RoleId = state.player.roleId): boolean {
-	const station = stationById(JOB_STATION[roleId]);
-	if (!station) return false;
-	if (state.player.floor !== station.floor) return false;
-	if (roleId === 'courier') {
-		if (state.player.carrying) return true;
-		const inbound = stationById('inbound');
-		const bays = ['bay-a', 'bay-b', 'bay-c'].map((id) => stationById(id));
-		const spots = [inbound, ...bays].filter(Boolean);
-		return spots.some(
-			(spot) => spot && nearStation(state.player.floor, state.player.x, state.player.z, spot, 1.8)
-		);
-	}
-	return nearStation(state.player.floor, state.player.x, state.player.z, station, 1.8);
+	if (roleId === 'courier' && state.player.carrying) return true;
+	const ids = JOB_STATIONS[roleId] ?? [JOB_STATION[roleId]];
+	return ids.some((id) => {
+		const station = stationById(id);
+		if (!station) return false;
+		return nearStation(state.player.floor, state.player.x, state.player.z, station, 1.8);
+	});
+}
+
+export function workBlock(
+	state: JobState
+): 'none' | 'prepare' | 'away' | 'break' | 'paused' | 'hidden' | 'closed' | 'submit' | 'ok' {
+	if (state.dayClosed) return 'closed';
+	if (state.paused) return 'paused';
+	if (state.hidden) return 'hidden';
+	if ((state.player.breakUntil ?? 0) > state.tick) return 'break';
+	const task = activeJob(state);
+	if (!task) return 'none';
+	if (task.stage === 'submit') return 'submit';
+	if (task.stage === 'prepare') return atWorkstation(state, task.roleId) ? 'ok' : 'prepare';
+	if (!atWorkstation(state, task.roleId)) return 'away';
+	return 'ok';
 }
 
 export function startPerform(state: JobState): boolean {
@@ -62,16 +74,36 @@ export function startPerform(state: JobState): boolean {
 export function tickJob(state: JobState) {
 	if (state.paused || state.hidden || state.dayClosed) return;
 	const task = activeJob(state);
-	if (!task || task.stage !== 'perform') return;
+	if (!task) return;
 	if ((state.player.breakUntil ?? 0) > state.tick) return;
 	if (!atWorkstation(state, task.roleId)) return;
+	if (task.stage === 'prepare') startPerform(state);
+	if (task.stage === 'submit') {
+		if (task.pendingAction) {
+			flushPending(state);
+		} else if (
+			(task.payload.kind === 'negotiate' && task.payload.lastOffer) ||
+			(task.payload.kind === 'ship' && task.payload.chosen)
+		) {
+			submitActive(state);
+		}
+		return;
+	}
+	if (task.stage !== 'perform') return;
 	task.ticksSpent += 1;
 	task.progress = Math.min(1, task.ticksSpent / Math.max(1, task.durationTicks));
 	if (task.kind === 'audit') markCheckpoint(task, 'review');
 	if (task.kind === 'decide') markCheckpoint(task, 'read');
 	if (jobProgressReady(task) && task.checkpoints.every((item) => item.done)) {
 		task.stage = 'submit';
-		if (!state.notice.includes('可以交')) {
+		if (task.pendingAction) {
+			flushPending(state);
+		} else if (
+			(task.payload.kind === 'negotiate' && task.payload.lastOffer) ||
+			(task.payload.kind === 'ship' && task.payload.chosen)
+		) {
+			submitActive(state);
+		} else if (!state.notice.includes('可以交')) {
 			state.notice = `${task.title}可以交了。`;
 		}
 	}
@@ -98,6 +130,7 @@ export function resetJobFields(task: Task) {
 	task.payAwarded = false;
 	task.payGranted = 0;
 	task.checkpoints = checkpointsFor(task.kind);
+	task.pendingAction = undefined;
 }
 
 export function jobCanSubmit(task: Task): boolean {

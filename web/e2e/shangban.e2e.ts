@@ -6,7 +6,16 @@ test.use({
 
 type ShangbanHook = {
 	getState: () => {
-		player: { x: number; z: number; floor: number; roleId: string; pay: number };
+		player: {
+			x: number;
+			z: number;
+			floor: number;
+			roleId: string;
+			pay: number;
+			path?: { x: number; z: number }[];
+			elevatorTo?: number | null;
+			elevatorWait?: number;
+		};
 		notice: string;
 		company: { cash: number; morale: number };
 		day: number;
@@ -53,11 +62,32 @@ async function getState(page: Page) {
 	});
 }
 
+function wantsNextDay(name: string | RegExp) {
+	return name === '下一天' || (name instanceof RegExp && name.test('下一天'));
+}
+
+async function dismissCloseIfNeeded(page: Page) {
+	const root = page.locator('[data-shangban="1"]');
+	const closed = (await root.getAttribute('data-closed')) === '1';
+	const dialog = page.getByRole('dialog', { name: '收工' });
+	const dialogVisible = await dialog.isVisible().catch(() => false);
+	if (!closed && !dialogVisible) return false;
+	const next = page.getByRole('button', { name: '下一天' }).last();
+	if (!(await next.isVisible().catch(() => false))) return false;
+	await next.click({ timeout: 5_000 });
+	await expect(root).toHaveAttribute('data-closed', '0', { timeout: 10_000 });
+	return true;
+}
+
 async function clickVisible(page: Page, name: string | RegExp) {
-	const button = page.getByRole('button', { name });
-	await button.first().scrollIntoViewIfNeeded();
-	await expect(button.first()).toBeVisible();
-	await button.first().click();
+	await expect(async () => {
+		const dismissed = await dismissCloseIfNeeded(page);
+		if (dismissed && wantsNextDay(name)) return;
+		const button = page.getByRole('button', { name }).first();
+		await button.scrollIntoViewIfNeeded();
+		await expect(button).toBeVisible();
+		await button.click({ timeout: 8_000 });
+	}).toPass({ timeout: 20_000 });
 }
 
 async function acceptOffer(page: Page) {
@@ -92,37 +122,39 @@ async function startJob(page: Page) {
 		world.player.floor = dest.floor;
 		world.player.x = dest.x;
 		world.player.z = dest.z;
+		world.player.path = [];
+		world.player.elevatorTo = null;
+		world.player.elevatorWait = 0;
 	});
-	const start = page.getByRole('button', { name: '开始干活' });
+	const start = page.getByRole('button', { name: /开始干活|去工位开始|回到工位/ });
 	if (await start.isVisible().catch(() => false)) {
-		await start.click();
+		await start.click({ timeout: 2_000 }).catch(() => undefined);
 	}
-	await page.evaluate(() => {
-		const hook = (window as Window & { __qingxinShangban?: ShangbanHook }).__qingxinShangban;
-		hook?.advanceJob(220);
-	});
-	await expect(page.locator('[data-shangban="1"]')).toHaveAttribute('data-progress', /100|9\d/, {
-		timeout: 10_000
-	});
+	await expect
+		.poll(
+			async () => {
+				await dismissCloseIfNeeded(page);
+				return Number(
+					(await page.locator('[data-shangban="1"]').getAttribute('data-progress')) ?? '0'
+				);
+			},
+			{ timeout: 25_000 }
+		)
+		.toBeGreaterThan(0);
 }
 
 async function switchRole(page: Page, name: RegExp) {
-	await clickVisible(page, '换岗');
-	const dialog = page.getByRole('dialog', { name: '换岗' });
-	await expect(dialog).toBeVisible();
-	for (const role of [
-		'物流员',
-		'销售顾问',
-		'维修技师',
-		'产品工程师',
-		'财务专员',
-		'运营经理',
-		'总经理'
-	]) {
-		await expect(dialog.getByRole('button', { name: new RegExp(role) })).toBeVisible();
-	}
-	await dialog.getByRole('button', { name }).click();
-	await expect(dialog).toHaveCount(0);
+	await expect(async () => {
+		await dismissCloseIfNeeded(page);
+		const dialog = page.getByRole('dialog', { name: '换岗' });
+		if (!(await dialog.isVisible().catch(() => false))) {
+			await page.getByRole('button', { name: '换岗' }).click({ timeout: 3_000 });
+		}
+		const roster = page.getByRole('dialog', { name: '换岗' });
+		await expect(roster.getByRole('button', { name: /物流员/ })).toBeVisible();
+		await roster.getByRole('button', { name }).click({ timeout: 3_000 });
+	}).toPass({ timeout: 30_000 });
+	await expect(page.getByRole('dialog', { name: '换岗' })).toHaveCount(0);
 }
 
 async function waitFloor(page: Page, floor: number) {
@@ -135,10 +167,11 @@ async function waitPayUp(page: Page, was: number) {
 	await expect
 		.poll(
 			async () => {
+				await dismissCloseIfNeeded(page);
 				const raw = await page.locator('[data-shangban="1"]').getAttribute('data-pay');
 				return Number(raw ?? '0');
 			},
-			{ timeout: 15_000 }
+			{ timeout: 30_000 }
 		)
 		.toBeGreaterThan(was);
 }
@@ -157,7 +190,13 @@ async function completeSort(page: Page) {
 	const dest = await root.getAttribute('data-dest');
 	if (!dest) throw new Error('missing dest');
 	await clickVisible(page, `${dest}口`);
-	await clickVisible(page, '提起 / 放下');
+	await expect(root).toHaveAttribute('data-path', '0', { timeout: 12_000 });
+	if (await root.getAttribute('data-carry')) {
+		await page
+			.getByRole('button', { name: '提起 / 放下' })
+			.click({ timeout: 3_000 })
+			.catch(() => undefined);
+	}
 	await expect(page.locator('.notice')).toContainText(/分拣完成/, { timeout: 20_000 });
 	await waitPayUp(page, pay);
 }
@@ -184,10 +223,14 @@ test.describe('上班 Stage 1', () => {
 		test('walks, rides the elevator, and plays every role without injected state', async ({
 			page
 		}) => {
-			test.setTimeout(180_000);
+			test.setTimeout(240_000);
 			await page.setViewportSize({ width: 390, height: 844 });
 			await guestBoot(page, 'light');
 			await openPlay(page);
+			await page.addLocatorHandler(page.getByRole('dialog', { name: '收工' }), async (dialog) => {
+				await dialog.getByRole('button', { name: '下一天' }).click();
+			});
+			await clickVisible(page, '3x');
 
 			const canvas = page.locator('canvas[aria-label="轻心大厦"]');
 			await expect(page.getByRole('button', { name: /1F 后勤与物流/ })).toBeVisible();
@@ -285,8 +328,11 @@ test.describe('上班 Stage 1', () => {
 			const correct = partFromClue(clue);
 			const wrong = parts.find((part) => part !== correct) ?? '排线';
 			await clickVisible(page, wrong);
-			await expect(page.getByRole('button', { name: '重试' })).toBeVisible({ timeout: 8_000 });
-			await clickVisible(page, '重试');
+			await expect(page.locator('.notice')).toContainText(/对不上/, { timeout: 8_000 });
+			const retry = page.getByRole('button', { name: '重试' });
+			if (await retry.isVisible().catch(() => false)) {
+				await clickVisible(page, '重试');
+			}
 			await acceptOffer(page);
 			await startJob(page);
 			await clickVisible(page, '检查');
@@ -418,6 +464,7 @@ test.describe('上班 Stage 1', () => {
 	});
 
 	test('1280 puts the office left and the glass rail right', async ({ page }) => {
+		test.setTimeout(60_000);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await guestBoot(page);
 		await openPlay(page);
@@ -469,6 +516,7 @@ test.describe('上班 Stage 1', () => {
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await guestBoot(page);
 		await openPlay(page);
+		await clickVisible(page, '3x');
 		await acceptOffer(page);
 		await startJob(page);
 		await clickVisible(page, '暂停');

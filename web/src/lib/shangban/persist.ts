@@ -3,12 +3,13 @@ import type { DayLog } from './logs';
 import type { NpcActivity } from './npc';
 import type { Collar, FloorId, RoleId } from './roles';
 import { roleById } from './roles';
-import { createWorld, type Npc, type Player, type World } from './sim';
+import { BREAK_TICKS, createWorld, type Npc, type Player, type World } from './sim';
 import {
 	JOB_DURATION,
 	JOB_STATION,
 	checkpointsFor,
 	type JobStage,
+	type PendingAction,
 	type SortBox,
 	type Task,
 	type TaskStatus
@@ -139,6 +140,8 @@ export function readShangbanSave(
 				elevatorWait: 0,
 				path: []
 			};
+			const rawBreak = clamp(playerRec.breakUntil, 0, 1_000_000, 0);
+			player.breakUntil = rawBreak > world.tick + BREAK_TICKS ? 0 : rawBreak;
 			world.player = player;
 		}
 		const company = asRecord(rec.company);
@@ -183,6 +186,7 @@ export function readShangbanSave(
 		world.spawnEvery = clamp(rec.spawnEvery, 1, 120, 24);
 		world.paused = world.dayClosed;
 		world.hidden = false;
+		world.pendingStart = false;
 		return world;
 	} catch {
 		return recoveredWorld();
@@ -224,8 +228,48 @@ function parseTask(value: unknown): Task | null {
 			? rec.checkpoints
 					.map((item) => parseCheckpoint(item))
 					.filter((item): item is Task['checkpoints'][number] => Boolean(item))
-			: checkpointsFor(kind)
+			: checkpointsFor(kind),
+		pendingAction: parsePending(rec.pendingAction)
 	};
+}
+
+function parsePending(value: unknown): PendingAction | undefined {
+	const rec = asRecord(value);
+	if (!rec || typeof rec.type !== 'string') return undefined;
+	if (rec.type === 'quote' && (rec.band === 'high' || rec.band === 'fair' || rec.band === 'low')) {
+		return { type: 'quote', band: rec.band };
+	}
+	if (rec.type === 'part' && typeof rec.part === 'string') {
+		return { type: 'part', part: rec.part };
+	}
+	if (
+		rec.type === 'ship' &&
+		(rec.action === 'test' || rec.action === 'ship' || rec.action === 'rewrite')
+	) {
+		return { type: 'ship', action: rec.action };
+	}
+	if (rec.type === 'audit' && (rec.decision === 'approve' || rec.decision === 'reject')) {
+		return { type: 'audit', decision: rec.decision };
+	}
+	if (rec.type === 'allocate') {
+		const from = clamp(rec.from, 1, 5, 0);
+		const to = clamp(rec.to, 1, 5, 0);
+		if (from >= 1 && to >= 1 && (rec.resource === 'staff' || rec.resource === 'budget')) {
+			return {
+				type: 'allocate',
+				from: from as FloorId,
+				to: to as FloorId,
+				resource: rec.resource
+			};
+		}
+	}
+	if (rec.type === 'decide' && typeof rec.optionId === 'string') {
+		return { type: 'decide', optionId: rec.optionId };
+	}
+	if (rec.type === 'place' && (rec.bay === 'A' || rec.bay === 'B' || rec.bay === 'C')) {
+		return { type: 'place', bay: rec.bay };
+	}
+	return undefined;
 }
 
 function parseStage(value: unknown, status: TaskStatus): JobStage {

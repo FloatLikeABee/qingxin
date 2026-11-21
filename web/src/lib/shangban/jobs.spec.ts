@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { stationById } from './floors';
+import { followPath, requestStartWork, resolvePendingStart } from './input';
 import { atWorkstation, fillJobProgress, startPerform } from './jobs';
 import { ROLES, type RoleId } from './roles';
 import {
@@ -112,7 +113,6 @@ describe('上班 staged jobs', () => {
 		expect(world.player.pay).toBe(0);
 		expect(placePackage(world, box.dest)).toBe(false);
 		fillJobProgress(world);
-		expect(placePackage(world, box.dest)).toBe(true);
 		expect(task.status).toBe('done');
 		const pay = world.player.pay;
 		expect(placePackage(world, box.dest)).toBe(false);
@@ -127,7 +127,7 @@ describe('上班 staged jobs', () => {
 		expect(offerPrice(world, 'fair')).toBe(false);
 		expect(task.status).toBe('active');
 		fillJobProgress(world);
-		expect(offerPrice(world, 'fair')).toBe(true);
+		expect(task.status).toBe('done');
 		expect(task.payAwarded).toBe(true);
 		const pay = world.player.pay;
 		expect(offerPrice(world, 'fair')).toBe(false);
@@ -159,7 +159,7 @@ describe('上班 staged jobs', () => {
 		safe.payload.severity = 'high';
 		expect(chooseShip(ok, 'test')).toBe(false);
 		fillJobProgress(ok);
-		expect(chooseShip(ok, 'test')).toBe(true);
+		expect(safe.status).toBe('done');
 	});
 
 	it('finance/manager/ceo wait for progress then submit', () => {
@@ -172,20 +172,20 @@ describe('上班 staged jobs', () => {
 		audit.payload.flagged = false;
 		expect(judgeClaim(finance, 'approve')).toBe(false);
 		fillJobProgress(finance);
-		expect(judgeClaim(finance, 'approve')).toBe(true);
+		expect(audit.status).toBe('done');
 
 		const manager = createWorld({ seed: 35 });
-		take(manager, 'manager');
+		const alloc = take(manager, 'manager');
 		expect(moveResource(manager, 3, 1, 'staff')).toBe(false);
 		fillJobProgress(manager);
-		expect(moveResource(manager, 3, 1, 'staff')).toBe(true);
+		expect(alloc.status).toBe('done');
 
 		const ceo = createWorld({ seed: 36 });
 		const decide = take(ceo, 'ceo');
 		if (decide.payload.kind !== 'decide') throw new Error('decide');
 		expect(chooseDecision(ceo, decide.payload.options[0]!.id)).toBe(false);
 		fillJobProgress(ceo);
-		expect(chooseDecision(ceo, decide.payload.options[0]!.id)).toBe(true);
+		expect(decide.status).toBe('done');
 	});
 
 	it('role switch refuses silent drop and dropActive cancels without pay', () => {
@@ -202,6 +202,37 @@ describe('上班 staged jobs', () => {
 		expect(world.player.pay).toBe(pay);
 	});
 
+	it('fits two courier jobs inside one 720-tick day at 1x', () => {
+		const world = createWorld({ seed: 1, spawnEvery: 1 });
+		const first = take(world, 'courier');
+		const box = world.packages[0]!;
+		pickPackage(world, box.id);
+		placePackage(world, box.dest);
+		fillJobProgress(world);
+		if (first.status !== 'done') placePackage(world, box.dest);
+		expect(first.status).toBe('done');
+		const pay = world.player.pay;
+		for (let i = 0; i < 8 && !world.tasks.some((task) => task.status === 'offered'); i++) {
+			tickWorld(world);
+		}
+		const second = world.tasks.find(
+			(task) => task.status === 'offered' && task.roleId === 'courier'
+		);
+		expect(second).toBeTruthy();
+		if (!second) throw new Error('second');
+		acceptTask(world, second.id);
+		expect(startPerform(world)).toBe(true);
+		const box2 = world.packages.find((item) => !item.held) ?? world.packages[0]!;
+		pickPackage(world, box2.id);
+		placePackage(world, box2.dest);
+		fillJobProgress(world);
+		if (second.status !== 'done') placePackage(world, box2.dest);
+		expect(second.status).toBe('done');
+		expect(world.player.pay).toBeGreaterThan(pay);
+		expect(world.tick).toBeLessThan(720);
+		expect(world.dayClosed).toBe(false);
+	});
+
 	it('unfinished work carries to the next day', () => {
 		const world = createWorld({ seed: 38 });
 		const task = take(world, 'courier');
@@ -212,5 +243,78 @@ describe('上班 staged jobs', () => {
 		expect(task.status).toBe('active');
 		expect(task.ticksSpent).toBe(spent);
 		expect(atWorkstation(world)).toBe(true);
+	});
+
+	it('keeps a stored sales quote and pays when the bar fills without a second click', () => {
+		const world = createWorld({ seed: 30 });
+		const task = take(world, 'sales');
+		if (task.payload.kind !== 'negotiate') throw new Error('neg');
+		task.payload.hiddenMax = 140;
+		expect(offerPrice(world, 'fair')).toBe(false);
+		expect(task.status).toBe('active');
+		fillJobProgress(world);
+		expect(task.status).toBe('done');
+		expect(task.payAwarded).toBe(true);
+		expect(world.player.pay).toBeGreaterThan(0);
+	});
+
+	it('keeps a stored ship plan and pays when the bar fills without a second click', () => {
+		const world = createWorld({ seed: 33 });
+		const task = take(world, 'engineer');
+		if (task.payload.kind !== 'ship') throw new Error('ship');
+		task.payload.severity = 'high';
+		expect(chooseShip(world, 'test')).toBe(false);
+		expect(task.status).toBe('active');
+		fillJobProgress(world);
+		expect(task.status).toBe('done');
+		expect(world.player.pay).toBeGreaterThan(0);
+	});
+
+	it('submits a stored ship plan after a save that dropped pendingAction', () => {
+		const world = createWorld({ seed: 33 });
+		const task = take(world, 'engineer');
+		if (task.payload.kind !== 'ship') throw new Error('ship');
+		task.payload.severity = 'high';
+		expect(chooseShip(world, 'test')).toBe(false);
+		expect(task.payload.chosen).toBe('test');
+		task.pendingAction = undefined;
+		fillJobProgress(world);
+		expect(task.status).toBe('done');
+		expect(world.player.pay).toBeGreaterThan(0);
+	});
+
+	it('counts the claims desk as a finance workstation so review progress moves', () => {
+		const world = createWorld({ seed: 34 });
+		const task = take(world, 'finance');
+		const claims = stationById('claims')!;
+		world.player.floor = 4;
+		world.player.x = claims.x + 1;
+		world.player.z = claims.z;
+		const spent = task.ticksSpent;
+		tickWorld(world);
+		expect(atWorkstation(world, 'finance')).toBe(true);
+		expect(task.ticksSpent).toBeGreaterThan(spent);
+	});
+
+	it('queues start from the elevator and gains progress after walking to the stand', () => {
+		const world = createWorld({ seed: 21 });
+		const offer = world.tasks[0]!;
+		acceptTask(world, offer.id);
+		const elevator = stationById('elev-1')!;
+		world.player.floor = 1;
+		world.player.x = elevator.x + 1;
+		world.player.z = elevator.z;
+		expect(startPerform(world)).toBe(false);
+		expect(offer.stage).toBe('prepare');
+		expect(requestStartWork(world)).toBe(true);
+		for (let i = 0; i < 400; i++) {
+			followPath(world);
+			resolvePendingStart(world);
+			tickWorld(world);
+			if (offer.stage === 'perform' && offer.ticksSpent > 0) break;
+		}
+		expect(offer.stage).toBe('perform');
+		expect(offer.ticksSpent).toBeGreaterThan(0);
+		expect(offer.progress).toBeGreaterThan(0);
 	});
 });

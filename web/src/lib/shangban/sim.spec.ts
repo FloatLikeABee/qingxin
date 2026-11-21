@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { elevatorOf } from './floors';
+import { stationById } from './floors';
+import { startPerform } from './jobs';
 import {
 	MAX_NPCS,
+	MAX_STEP_MS,
 	MAX_STEPS_PER_FRAME,
 	NPC_COUNT,
+	DAY_TICKS,
+	beginNextDay,
+	frameElapsedMs,
 	callElevator,
+	closeDay,
 	createWorld,
 	setPaused,
 	setRole,
@@ -13,7 +20,7 @@ import {
 	stepWorld,
 	tickWorld
 } from './sim';
-import { acceptTask, declineTask } from './tasks';
+import { acceptTask, choosePart, declineTask, inspectFault } from './tasks';
 
 describe('上班 world', () => {
 	it('starts on floor 1 as 物流员 with five departments and a first offer', () => {
@@ -25,6 +32,13 @@ describe('上班 world', () => {
 		expect(world.tasks[0]?.kind).toBe('sort');
 		expect(world.npcs).toHaveLength(NPC_COUNT);
 		expect(world.npcs.length).toBeLessThanOrEqual(MAX_NPCS);
+	});
+
+	it('credits real frame gaps up to MAX_STEP_MS so 1x is not slower than the clock', () => {
+		expect(frameElapsedMs(1000, 1083)).toBe(83);
+		expect(frameElapsedMs(1000, 1016)).toBe(16);
+		expect(frameElapsedMs(1000, 4000)).toBe(MAX_STEP_MS);
+		expect(frameElapsedMs(2000, 1990)).toBe(0);
 	});
 
 	it('caps elapsed ticks and ignores time while paused or hidden', () => {
@@ -73,6 +87,20 @@ describe('上班 world', () => {
 		).toHaveLength(0);
 	});
 
+	it('clears a leftover walk path when the elevator is called', () => {
+		const world = createWorld({ seed: 5 });
+		const elevator = elevatorOf(1);
+		world.player.x = elevator.x;
+		world.player.z = elevator.z;
+		world.player.path = [{ x: 10, z: 8 }];
+		expect(callElevator(world, 5)).toBe(true);
+		expect(world.player.path).toHaveLength(0);
+		const wait = world.player.elevatorWait;
+		for (let i = 0; i < wait; i++) tickWorld(world);
+		expect(world.player.floor).toBe(5);
+		expect(world.player.path).toHaveLength(0);
+	});
+
 	it('rides the elevator only from the shaft and arrives after the wait', () => {
 		const world = createWorld({ seed: 5 });
 		world.player.x = 8;
@@ -86,6 +114,28 @@ describe('上班 world', () => {
 		for (let i = 0; i < wait; i++) tickWorld(world);
 		expect(world.player.floor).toBe(5);
 		expect(world.player.elevatorTo).toBeNull();
+	});
+
+	it('keeps a just-failed job after the history fills so 重试 stays available', () => {
+		const world = createWorld({ seed: 31, spawnEvery: 1 });
+		setRole(world, 'tech', { dropActive: true });
+		const repair = stationById('repair')!;
+		world.player.floor = 3;
+		world.player.x = repair.x;
+		world.player.z = repair.z;
+		const offer = world.tasks.find((task) => task.status === 'offered' && task.roleId === 'tech');
+		if (!offer) throw new Error('offer');
+		acceptTask(world, offer.id);
+		expect(startPerform(world)).toBe(true);
+		if (offer.payload.kind !== 'repair') throw new Error('repair');
+		expect(inspectFault(world)).toBe(true);
+		const wrong = offer.payload.options.find((part) => part !== offer.payload.correctPart);
+		expect(choosePart(world, wrong ?? '排线')).toBe(false);
+		expect(offer.status).toBe('failed');
+		for (let i = 0; i < 80; i++) tickWorld(world);
+		expect(world.tasks.some((task) => task.status === 'failed' && task.roleId === 'tech')).toBe(
+			true
+		);
 	});
 
 	it('bounds the live queue and still spawns after a decline', () => {
@@ -112,5 +162,27 @@ describe('上班 world', () => {
 		const until = world.player.breakUntil;
 		tickWorld(world);
 		expect(world.player.breakUntil).toBe(until);
+	});
+
+	it('does not carry an overnight break that freezes the next morning', () => {
+		const world = createWorld({ seed: 41 });
+		world.tick = 700;
+		startBreak(world);
+		expect(world.player.breakUntil).toBeGreaterThan(DAY_TICKS);
+		closeDay(world);
+		expect(beginNextDay(world)).toBe(true);
+		expect(world.player.breakUntil).toBeLessThanOrEqual(world.tick);
+		const inbound = stationById('inbound')!;
+		world.player.x = inbound.x;
+		world.player.z = inbound.z;
+		const offer = world.tasks.find(
+			(task) => task.status === 'offered' && task.roleId === 'courier'
+		);
+		if (!offer) throw new Error('offer');
+		acceptTask(world, offer.id);
+		expect(startPerform(world)).toBe(true);
+		const spent = offer.ticksSpent;
+		tickWorld(world);
+		expect(offer.ticksSpent).toBeGreaterThan(spent);
 	});
 });

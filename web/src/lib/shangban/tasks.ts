@@ -23,6 +23,15 @@ export interface JobCheckpoint {
 	done: boolean;
 }
 
+export type PendingAction =
+	| { type: 'quote'; band: PriceBand }
+	| { type: 'part'; part: string }
+	| { type: 'ship'; action: ShipAction }
+	| { type: 'audit'; decision: 'approve' | 'reject' }
+	| { type: 'allocate'; from: FloorId; to: FloorId; resource: ResourceKind }
+	| { type: 'decide'; optionId: string }
+	| { type: 'place'; bay: BayId };
+
 export const JOB_DURATION: Record<RoleId, number> = {
 	courier: 48,
 	sales: 90,
@@ -41,6 +50,16 @@ export const JOB_STATION: Record<RoleId, string> = {
 	finance: 'payroll',
 	manager: 'board',
 	ceo: 'office'
+};
+
+export const JOB_STATIONS: Record<RoleId, string[]> = {
+	courier: ['inbound', 'bay-a', 'bay-b', 'bay-c'],
+	sales: ['negotiate', 'complaint'],
+	tech: ['repair'],
+	engineer: ['test'],
+	finance: ['payroll', 'claims'],
+	manager: ['board', 'budget'],
+	ceo: ['office']
 };
 
 export function checkpointsFor(kind: TaskKind): JobCheckpoint[] {
@@ -127,6 +146,7 @@ export interface Task {
 	payGranted: number;
 	requiredStation: string;
 	checkpoints: JobCheckpoint[];
+	pendingAction?: PendingAction;
 }
 
 export interface Dept {
@@ -203,6 +223,46 @@ export function markCheckpoint(task: Task, id: string) {
 	if (jobProgressReady(task) && checkpointsDone(task) && task.stage === 'perform') {
 		task.stage = 'submit';
 	}
+}
+
+export function flushPending(state: WorkState): boolean {
+	const task = activeTask(state);
+	if (!task || task.payAwarded) return false;
+	if (!jobProgressReady(task) || !checkpointsDone(task)) return false;
+	const pending = task.pendingAction;
+	if (!pending) return false;
+	task.pendingAction = undefined;
+	if (pending.type === 'quote') return offerPrice(state, pending.band);
+	if (pending.type === 'part') return choosePart(state, pending.part);
+	if (pending.type === 'ship') return chooseShip(state, pending.action);
+	if (pending.type === 'audit') return judgeClaim(state, pending.decision);
+	if (pending.type === 'allocate') {
+		return moveResource(state, pending.from, pending.to, pending.resource);
+	}
+	if (pending.type === 'decide') return chooseDecision(state, pending.optionId);
+	if (pending.type === 'place') return placePackage(state, pending.bay);
+	return false;
+}
+
+export function submitActive(state: WorkState): boolean {
+	const task = activeTask(state);
+	if (!task) {
+		state.notice = '没有可交的单。';
+		return false;
+	}
+	if (task.pendingAction) return flushPending(state);
+	if (!jobProgressReady(task)) {
+		state.notice = '进度还没满。';
+		return false;
+	}
+	if (task.payload.kind === 'negotiate' && task.payload.lastOffer) {
+		return offerPrice(state, task.payload.lastOffer);
+	}
+	if (task.payload.kind === 'ship' && task.payload.chosen) {
+		return chooseShip(state, task.payload.chosen);
+	}
+	state.notice = '检查点还没做完。';
+	return false;
 }
 
 function withJob<T extends Omit<Task, keyof ReturnType<typeof jobFields>>>(task: T): Task {
@@ -446,6 +506,7 @@ export function acceptTask(state: WorkState, taskId: number): boolean {
 	task.payAwarded = false;
 	task.payGranted = 0;
 	task.checkpoints = checkpointsFor(task.kind);
+	task.pendingAction = undefined;
 	if (task.payload.kind === 'sort') {
 		state.packages = task.payload.boxes.map((box) => ({ ...box, held: false }));
 	}
@@ -518,7 +579,8 @@ export function placePackage(state: WorkState, bay: BayId): boolean {
 		return false;
 	}
 	if (!jobProgressReady(task)) {
-		state.notice = '进度还没满，先把这单做完再交。';
+		task.pendingAction = { type: 'place', bay };
+		state.notice = '进度还没满，满了会放入。';
 		return false;
 	}
 	state.player.carrying = null;
@@ -544,7 +606,8 @@ export function offerPrice(state: WorkState, band: PriceBand): boolean {
 	markCheckpoint(task, 'quote');
 	if (price <= task.payload.hiddenMax) {
 		if (!jobProgressReady(task)) {
-			state.notice = `${task.payload.product}报价记下了。进度满了再提交成交。`;
+			task.pendingAction = { type: 'quote', band };
+			state.notice = `${task.payload.product}报价记下了。进度满了会提交成交。`;
 			return false;
 		}
 		reward(
@@ -596,7 +659,8 @@ export function choosePart(state: WorkState, part: string): boolean {
 		return false;
 	}
 	if (!jobProgressReady(task)) {
-		state.notice = '零件对了，进度满了再提交。';
+		task.pendingAction = { type: 'part', part };
+		state.notice = '零件对了。进度满了会提交。';
 		return false;
 	}
 	reward(state, task, true, 14, 3, 3, -11, `换上${part}，故障清了。`);
@@ -617,7 +681,8 @@ export function chooseShip(state: WorkState, action: ShipAction): boolean {
 	task.payload.chosen = action;
 	markCheckpoint(task, 'plan');
 	if (!jobProgressReady(task)) {
-		state.notice = '方案记下了。进度满了再提交发版。';
+		task.pendingAction = { type: 'ship', action };
+		state.notice = '方案记下了。进度满了会提交发版。';
 		return false;
 	}
 	if (action === 'test') {
@@ -638,7 +703,8 @@ export function judgeClaim(state: WorkState, decision: 'approve' | 'reject'): bo
 	const claim = task.payload;
 	markCheckpoint(task, 'review');
 	if (!jobProgressReady(task)) {
-		state.notice = '还在审，进度满了再下结论。';
+		task.pendingAction = { type: 'audit', decision };
+		state.notice = '结论记下了。进度满了会下结论。';
 		return false;
 	}
 	const should = shouldApproveClaim(claim);
@@ -669,7 +735,8 @@ export function moveResource(
 	}
 	markCheckpoint(task, 'route');
 	if (!jobProgressReady(task)) {
-		state.notice = '楼层记下了。进度满了再调。';
+		task.pendingAction = { type: 'allocate', from, to, resource };
+		state.notice = '楼层记下了。进度满了会调。';
 		return false;
 	}
 	const source = state.company.departments[from];
@@ -708,7 +775,8 @@ export function chooseDecision(state: WorkState, optionId: string): boolean {
 	if (!option) return false;
 	markCheckpoint(task, 'read');
 	if (!jobProgressReady(task)) {
-		state.notice = '议题看过了。进度满了再拍板。';
+		task.pendingAction = { type: 'decide', optionId };
+		state.notice = '议题看过了。进度满了会拍板。';
 		return false;
 	}
 	const extra = {
