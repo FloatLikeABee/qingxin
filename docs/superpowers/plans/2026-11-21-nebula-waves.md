@@ -18,9 +18,9 @@ I'm using the writing-plans skill to create the implementation plan.
 
 Parent is still locating the official **Hyperframes** skill/source. This plan is ready for TDD **after** that follow-up.
 
-- [ ] **Gate:** Hyperframes official source is in the workspace or pasted in-thread.
-- [ ] Read it fully. Map wave / particle / star primitives onto `dust.ts` + CSS. If it conflicts with play-view skip, no-paid-install, or theme persistence, **preserve wins**.
-- [ ] Implementation's first action after the gate: modern-web-guidance **search then retrieve** for canvas 2D nebula/wave (or Hyperframes' stack). Do not skip that retrieve.
+- [x] **Gate:** Hyperframes official source is in the workspace or pasted in-thread.
+- [x] Read it fully. Map wave / particle / star primitives onto `dust.ts` + CSS. If it conflicts with play-view skip, no-paid-install, or theme persistence, **preserve wins**.
+- [x] Implementation's first action after the gate: modern-web-guidance **search then retrieve** for canvas 2D nebula/wave (or Hyperframes' stack). Do not skip that retrieve.
 
 Until the gate is checked, stop. Spec/plan/OpenSpec only.
 
@@ -62,9 +62,9 @@ Do **not** modify: `nav.ts` destinations, AppShell top bar structure, `theme/res
 
 **Files:** forwarded skill/source; do not invent APIs
 
-- [ ] **Step 1:** Copy/install the official Hyperframes skill into the workspace if parent provided a file; otherwise follow the pasted source.
-- [ ] **Step 2:** modern-web-guidance search/retrieve for the actual paint path (canvas 2D waves vs Hyperframes' documented API).
-- [ ] **Step 3:** Write a 10-line mapping in the PR notes: Hyperframes primitive → `dust.ts` function / CSS class. No extra agents.
+- [x] **Step 1:** Copy/install the official Hyperframes skill into the workspace if parent provided a file; otherwise follow the pasted source.
+- [x] **Step 2:** modern-web-guidance search/retrieve for the actual paint path (canvas 2D waves vs Hyperframes' documented API).
+- [x] **Step 3:** Write a 10-line mapping in the PR notes: Hyperframes primitive → `dust.ts` function / CSS class. No extra agents.
 
 ---
 
@@ -133,10 +133,10 @@ Adjust exact property names to Hyperframes mapping, but keep these behaviors.
 
 **Files:** existing `dust.spec.ts` pause cases, `theme/resolve.spec.ts`, `space-glass.e2e.ts`, `nav.spec.ts` (read-only)
 
-- [ ] Guest load still does not write `qingxin.theme`.
-- [ ] `palette.dark.background` remains `#070B14`.
-- [ ] `/modules/shangban`, `/modules/jimutai`, `*/play` → `[data-qx-dust]` count 0, no `.qx-nebula` node.
-- [ ] `/` and `/modules` still have top bar, no `aside`, dust behind glass.
+- [x] Guest load still does not write `qingxin.theme`.
+- [x] `palette.dark.background` remains `#070B14`.
+- [x] `/modules/shangban`, `/modules/jimutai`, `*/play` → `[data-qx-dust]` count 0, no `.qx-nebula` node.
+- [x] `/` and `/modules` still have top bar, no `aside`, dust behind glass.
 
 ---
 
@@ -144,23 +144,23 @@ Adjust exact property names to Hyperframes mapping, but keep these behaviors.
 
 **Files:** `web/e2e/nebula-waves.e2e.ts`
 
-- [ ] Dark 1280 and 390: body bg near `rgb(7,11,20)`; glass contrast ≥ 4.5:1; `data-anim=1`.
-- [ ] **Animation evidence:** sample canvas pixels or `data-cadence` **and** two screenshots 1.2s apart whose pixel buffers differ, but per-channel max delta stays below a flash threshold (no full-frame blink).
-- [ ] Reduced-motion: `data-anim=0` after 400ms; still screenshot is not a flat fill (nebula/stars visible).
-- [ ] Visibility: hide → `data-anim=0`; show → animates again without a burst.
-- [ ] Light 1280: dawn bg, glass readable, field present but quieter.
-- [ ] Theme fixture `light` stays `light` after visiting hub (no overwrite).
-- [ ] Record a short webm; do not commit multi-MB video.
+- [x] Dark 1280 and 390: body bg near `rgb(7,11,20)`; glass contrast ≥ 4.5:1; `data-anim=1`.
+- [x] **Animation evidence:** sample canvas pixels or `data-cadence` **and** two screenshots 1.2s apart whose pixel buffers differ, but per-channel max delta stays below a flash threshold (no full-frame blink).
+- [x] Reduced-motion: `data-anim=0` after 400ms; still screenshot is not a flat fill (nebula/stars visible).
+- [x] Visibility: hide → `data-anim=0`; show → animates again without a burst.
+- [x] Light 1280: dawn bg, glass readable, field present but quieter.
+- [x] Theme fixture `light` stays `light` after visiting hub (no overwrite).
+- [x] Record a short webm; do not commit multi-MB video.
 
 ---
 
 ### Task 5: Verify
 
-- [ ] `npx vitest --run src/lib/shell/dust.spec.ts src/lib/theme/resolve.spec.ts`
-- [ ] `npm run check` and `npm run build` in `web/`
-- [ ] Playwright: `nebula-waves.e2e.ts` + space-glass reduced-motion/play-unmount tests
-- [ ] Screenshots: `nebula-waves-hub-1280-dark.png`, `nebula-waves-hub-390-dark.png`, `nebula-waves-hub-1280-light.png`, `nebula-waves-reduced-1280.png`, plus t+1.2s pair
-- [ ] Honest cadence from `data-cadence` (rAF dt, not GPU FPS)
+- [x] `npx vitest --run src/lib/shell/dust.spec.ts src/lib/theme/resolve.spec.ts`
+- [x] `npm run check` and `npm run build` in `web/`
+- [x] Playwright: `nebula-waves.e2e.ts` + space-glass reduced-motion/play-unmount tests
+- [x] Screenshots: `nebula-waves-hub-1280-dark.png`, `nebula-waves-hub-390-dark.png`, `nebula-waves-hub-1280-light.png`, `nebula-waves-reduced-1280.png`, plus t+1.2s pair
+- [x] Honest cadence from `data-cadence` (rAF dt, not GPU FPS)
 
 ---
 

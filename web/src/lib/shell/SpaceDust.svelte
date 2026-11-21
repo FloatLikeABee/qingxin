@@ -5,7 +5,9 @@
 		DUST_FRAME_MS,
 		shouldAnimateDust,
 		stepDust,
-		type DustField
+		waveY,
+		type DustField,
+		type DustWave
 	} from './dust';
 
 	let { playView = false }: { playView?: boolean } = $props();
@@ -39,6 +41,25 @@
 			canvas.style.height = `${h}px`;
 			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 			field = createDustField(11, w, h);
+			canvas.dataset.waves = String(field.waves.length);
+			canvas.dataset.stars = String(field.starsFar.length + field.starsNear.length);
+		};
+
+		const ribbon = (wave: DustWave, width: number, height: number) => {
+			const steps = 32;
+			ctx.beginPath();
+			for (let i = 0; i <= steps; i++) {
+				const x = (i / steps) * width;
+				const y = waveY(wave, x, height) - wave.thickness / 2;
+				if (i === 0) ctx.moveTo(x, y);
+				else ctx.lineTo(x, y);
+			}
+			for (let i = steps; i >= 0; i--) {
+				const x = (i / steps) * width;
+				const y = waveY(wave, x, height) + wave.thickness / 2;
+				ctx.lineTo(x, y);
+			}
+			ctx.closePath();
 		};
 
 		const paint = () => {
@@ -47,19 +68,55 @@
 			const h = field.height;
 			ctx.clearRect(0, 0, w, h);
 			const dark = document.documentElement.classList.contains('dark');
-			for (const cloud of field.clouds) {
-				const glow = ctx.createRadialGradient(cloud.x, cloud.y, 0, cloud.x, cloud.y, cloud.r);
-				glow.addColorStop(
-					0,
-					dark ? `rgba(148, 185, 232, ${cloud.a})` : `rgba(96, 140, 196, ${cloud.a * 0.7})`
-				);
-				glow.addColorStop(1, 'rgba(148, 185, 232, 0)');
+			for (const light of field.lights) {
+				const glow = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, light.r);
+				const alpha = dark ? light.a : light.a * 0.45;
+				const rgb =
+					light.tint === 'violet' && dark
+						? '167, 139, 250'
+						: dark
+							? '96, 165, 250'
+							: '96, 140, 196';
+				glow.addColorStop(0, `rgba(${rgb}, ${alpha})`);
+				glow.addColorStop(1, `rgba(${rgb}, 0)`);
 				ctx.fillStyle = glow;
 				ctx.beginPath();
-				ctx.arc(cloud.x, cloud.y, cloud.r, 0, Math.PI * 2);
+				ctx.arc(light.x, light.y, light.r, 0, Math.PI * 2);
 				ctx.fill();
 			}
-			ctx.fillStyle = dark ? 'rgba(226, 236, 252, 0.82)' : 'rgba(70, 98, 140, 0.5)';
+			for (const wave of field.waves) {
+				const violet = wave.tint === 'violet';
+				if (violet && !dark) continue;
+				ribbon(wave, w, h);
+				const grad = ctx.createLinearGradient(0, 0, w, 0);
+				const a = dark ? wave.alpha : wave.alpha * 0.55;
+				if (violet) {
+					grad.addColorStop(0, `rgba(124, 107, 255, 0)`);
+					grad.addColorStop(0.45, `rgba(167, 139, 250, ${a})`);
+					grad.addColorStop(1, `rgba(96, 165, 250, 0)`);
+				} else {
+					grad.addColorStop(0, `rgba(59, 130, 246, 0)`);
+					grad.addColorStop(0.4, `rgba(96, 165, 250, ${a})`);
+					grad.addColorStop(1, `rgba(147, 197, 253, 0)`);
+				}
+				ctx.fillStyle = grad;
+				ctx.fill();
+			}
+			ctx.fillStyle = dark ? 'rgba(226, 232, 252, 0.9)' : 'rgba(80, 110, 150, 0.42)';
+			for (const star of field.starsFar) {
+				ctx.globalAlpha = dark ? star.a : star.a * 0.45;
+				ctx.beginPath();
+				ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+				ctx.fill();
+			}
+			ctx.fillStyle = dark ? 'rgba(237, 242, 255, 0.95)' : 'rgba(70, 98, 140, 0.5)';
+			for (const star of field.starsNear) {
+				ctx.globalAlpha = dark ? star.a : star.a * 0.5;
+				ctx.beginPath();
+				ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+				ctx.fill();
+			}
+			ctx.fillStyle = dark ? 'rgba(219, 234, 254, 0.88)' : 'rgba(70, 98, 140, 0.48)';
 			for (const mote of field.motes) {
 				ctx.globalAlpha = mote.a;
 				ctx.beginPath();

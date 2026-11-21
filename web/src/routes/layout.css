@@ -140,13 +140,28 @@ body {
 	z-index: 0;
 	background:
 		radial-gradient(
-			ellipse 80% 55% at 18% 12%,
-			color-mix(in oklab, #7aa2d6 18%, transparent),
+			ellipse 90% 48% at 14% 18%,
+			color-mix(in oklab, #60a5fa 14%, transparent),
+			transparent 72%
+		),
+		radial-gradient(
+			ellipse 70% 42% at 86% 78%,
+			color-mix(in oklab, #7aa2d6 10%, transparent),
+			transparent 74%
+		),
+		var(--qx-bg);
+}
+
+.dark .qx-nebula {
+	background:
+		radial-gradient(
+			ellipse 95% 50% at 12% 20%,
+			color-mix(in oklab, #60a5fa 18%, transparent),
 			transparent 70%
 		),
 		radial-gradient(
-			ellipse 70% 50% at 88% 80%,
-			color-mix(in oklab, #4b6d93 16%, transparent),
+			ellipse 80% 46% at 88% 74%,
+			color-mix(in oklab, #7c6bff 14%, transparent),
 			transparent 72%
 		),
 		var(--qx-bg);
@@ -156,57 +171,66 @@ body {
 .qx-nebula-b,
 .qx-nebula-c {
 	position: absolute;
-	border-radius: 9999px;
-	filter: blur(64px);
-	opacity: 0.45;
+	left: -18%;
+	width: 136%;
+	border-radius: 50%;
+	filter: blur(48px);
 	pointer-events: none;
+	opacity: 0.4;
 }
 
 .qx-nebula-a {
-	top: -12%;
-	left: 8%;
-	width: 42vw;
-	height: 42vw;
-	background: color-mix(in oklab, #93c5fd 38%, transparent);
-	animation: qx-disperse 28s linear infinite;
+	top: 12%;
+	height: 32%;
+	background: color-mix(in oklab, #60a5fa 32%, transparent);
+	transform: rotate(-8deg);
 }
 
 .qx-nebula-b {
-	right: -10%;
-	bottom: 8%;
-	width: 38vw;
-	height: 38vw;
-	background: color-mix(in oklab, #64748b 34%, transparent);
-	animation: qx-disperse 36s linear infinite reverse;
+	top: 40%;
+	height: 30%;
+	background: color-mix(in oklab, #93c5fd 18%, transparent);
+	transform: rotate(6deg);
 }
 
 .qx-nebula-c {
-	left: 32%;
-	top: 38%;
-	width: 28vw;
-	height: 28vw;
-	background: color-mix(in oklab, #60a5fa 24%, transparent);
-	animation: qx-disperse 42s linear infinite;
+	top: 62%;
+	height: 28%;
+	background: color-mix(in oklab, #93c5fd 24%, transparent);
+	transform: rotate(-4deg);
 }
 
 .dark .qx-nebula-a,
 .dark .qx-nebula-b,
 .dark .qx-nebula-c {
-	opacity: 0.52;
+	opacity: 0.5;
 }
 
-@keyframes qx-disperse {
+.dark .qx-nebula-b {
+	background: color-mix(in oklab, #a78bfa 26%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.qx-nebula-a {
+		animation: qx-wave-drift 32s ease-in-out infinite;
+	}
+	.qx-nebula-b {
+		animation: qx-wave-drift 40s ease-in-out infinite reverse;
+	}
+	.qx-nebula-c {
+		animation: qx-wave-drift 48s ease-in-out infinite;
+	}
+}
+
+@keyframes qx-wave-drift {
 	0% {
-		transform: translate(0, 0) scale(1);
-		opacity: 0.42;
+		translate: -3% 0;
 	}
 	50% {
-		transform: translate(6%, -8%) scale(1.18);
-		opacity: 0.22;
+		translate: 4% 1.5%;
 	}
 	100% {
-		transform: translate(0, 0) scale(1);
-		opacity: 0.42;
+		translate: -3% 0;
 	}
 }
 

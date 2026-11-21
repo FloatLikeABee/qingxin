@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isTopbarActive, TOPBAR } from './nav';
+import { isPlayView, isTopbarActive, TOPBAR } from './nav';
 
 describe('primary nav', () => {
 	it('keeps three board top-bar destinations and leaves kit off chrome', () => {
@@ -8,6 +8,14 @@ describe('primary nav', () => {
 		expect(TOPBAR.map((tab) => tab.href)).toEqual(['/', '/modules', '/settings']);
 		expect(TOPBAR.some((tab) => tab.label === '组件' || tab.href === '/kit')).toBe(false);
 		expect(TOPBAR.some((tab) => tab.label === '内容' || tab.label === '上班')).toBe(false);
+	});
+
+	it('treats 上班, 积木台, and catalog play as play views without shell atmosphere', () => {
+		expect(isPlayView('/modules/shangban')).toBe(true);
+		expect(isPlayView('/modules/jimutai')).toBe(true);
+		expect(isPlayView('/modules/games/window-garden/play')).toBe(true);
+		expect(isPlayView('/modules')).toBe(false);
+		expect(isPlayView('/')).toBe(false);
 	});
 
 	it('marks module routes on 模块中心 and leaves 上班 off the top bar', () => {

@@ -341,6 +341,7 @@
 					__qingxinShangban?: {
 						getState: () => World;
 						tick: (n: number) => void;
+						closeNow: () => void;
 						advanceJob: (n: number) => void;
 					};
 				}

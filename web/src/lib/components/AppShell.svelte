@@ -56,7 +56,7 @@
 	data-qx-shell="board"
 >
 	{#if !playView}
-		<div class="qx-nebula pointer-events-none" aria-hidden="true">
+		<div class="qx-nebula pointer-events-none" data-qx-nebula="1" aria-hidden="true">
 			<span class="qx-nebula-a"></span>
 			<span class="qx-nebula-b"></span>
 			<span class="qx-nebula-c"></span>
