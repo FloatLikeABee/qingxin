@@ -1,5 +1,13 @@
 import * as THREE from 'three';
-import type { CoralPatch, Creature, TideWorld } from './sim';
+import type { CoralPatch, Creature, HaulKind, TideWorld } from './sim';
+import {
+	CONSTELLATIONS,
+	TIDE_CAMERA,
+	TIDE_MOON,
+	constellationLinePositions,
+	fillSkyStarPositions,
+	skyStarCount
+} from './sky';
 
 export interface TideScene {
 	sync(world: TideWorld, opts?: { reducedMotion?: boolean }): void;
@@ -63,16 +71,15 @@ const SKY_FRAG = /* glsl */ `
 varying vec3 vDir;
 void main() {
 	float h = normalize(vDir).y * 0.5 + 0.5;
-	vec3 top = vec3(0.03, 0.05, 0.12);
-	vec3 mid = vec3(0.05, 0.1, 0.22);
-	vec3 hor = vec3(0.12, 0.18, 0.32);
-	vec3 col = mix(hor, mix(mid, top, smoothstep(0.45, 0.95, h)), smoothstep(0.15, 0.7, h));
+	vec3 top = vec3(0.008, 0.012, 0.035);
+	vec3 mid = vec3(0.03, 0.05, 0.12);
+	vec3 hor = vec3(0.07, 0.11, 0.22);
+	vec3 col = mix(hor, mix(mid, top, smoothstep(0.45, 0.95, h)), smoothstep(0.12, 0.68, h));
 	gl_FragColor = vec4(col, 1.0);
 }
 `;
 
 type TideGroup = InstanceType<typeof THREE.Group>;
-type TideMesh = InstanceType<typeof THREE.Mesh>;
 type TideGeo = InstanceType<typeof THREE.BufferGeometry>;
 type TideObj = InstanceType<typeof THREE.Object3D>;
 type TideRenderer = InstanceType<typeof THREE.WebGLRenderer>;
@@ -111,10 +118,10 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 	renderer.setClearColor(0x070b14, 1);
 
 	const scene = new THREE.Scene();
-	scene.fog = new THREE.FogExp2(0x0b1220, 0.032);
+	scene.fog = new THREE.FogExp2(0x0b1220, 0.01);
 	const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 120);
-	camera.position.set(0, 7.4, 11.6);
-	camera.lookAt(0, 0.3, -1.2);
+	camera.position.set(...TIDE_CAMERA.position);
+	camera.lookAt(...TIDE_CAMERA.lookAt);
 
 	const geos: TideGeo[] = [];
 	const mats: Array<{ dispose: () => void }> = [];
@@ -132,11 +139,12 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 	const cyl = keepGeo(new THREE.CylinderGeometry(1, 1, 1, 8));
 	const cone = keepGeo(new THREE.ConeGeometry(1, 1, 8));
 	const ico = keepGeo(new THREE.IcosahedronGeometry(1, 1));
+	const torus = keepGeo(new THREE.TorusGeometry(1, 0.38, 8, 16));
 
 	const hemi = new THREE.HemisphereLight(0x8ec9ff, 0x0b3a4a, 0.55);
 	scene.add(hemi);
 	const moon = new THREE.DirectionalLight(0xdbe7ff, 1.35);
-	moon.position.set(-6.5, 11, 4.5);
+	moon.position.set(...TIDE_MOON);
 	moon.castShadow = true;
 	moon.shadow.mapSize.set(1024, 1024);
 	moon.shadow.camera.near = 1;
@@ -169,7 +177,7 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 		keepMat(mat(0xf8fafc, { emissive: 0xf8fafc, emissiveIntensity: 0.85, roughness: 0.35 }))
 	);
 	moonBall.position.copy(moon.position);
-	moonBall.scale.setScalar(0.55);
+	moonBall.scale.setScalar(1.15);
 	scene.add(moonBall);
 	const moonGlow = new THREE.Mesh(
 		sphere,
@@ -184,33 +192,80 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 		)
 	);
 	moonGlow.position.copy(moon.position);
-	moonGlow.scale.setScalar(1.35);
+	moonGlow.scale.setScalar(2.4);
 	scene.add(moonGlow);
 
 	const starGeo = keepGeo(new THREE.BufferGeometry());
-	const starCount = 220;
-	const starPos = new Float32Array(starCount * 3);
-	for (let i = 0; i < starCount; i++) {
-		const t = Math.random() * Math.PI * 2;
-		const p = Math.random() * 0.55 + 0.35;
-		starPos[i * 3] = Math.cos(t) * (18 + Math.random() * 12);
-		starPos[i * 3 + 1] = 8 + p * 16;
-		starPos[i * 3 + 2] = Math.sin(t) * (18 + Math.random() * 12) - 4;
-	}
+	const starMax = skyStarCount(false);
+	const starPos = new Float32Array(starMax * 3);
+	fillSkyStarPositions(starMax, starPos);
 	starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
 	const stars = new THREE.Points(
 		starGeo,
 		keepMat(
 			new THREE.PointsMaterial({
-				color: 0xe0f2fe,
-				size: 0.09,
+				color: 0xf8fbff,
+				size: 2.4,
 				transparent: true,
-				opacity: 0.85,
-				depthWrite: false
+				opacity: 1,
+				depthWrite: false,
+				fog: false,
+				sizeAttenuation: false
 			})
 		)
 	);
+	stars.frustumCulled = false;
 	scene.add(stars);
+
+	const constellationRoot = new THREE.Group();
+	constellationRoot.name = 'constellations';
+	for (const constellation of CONSTELLATIONS) {
+		const geo = keepGeo(new THREE.BufferGeometry());
+		geo.setAttribute(
+			'position',
+			new THREE.BufferAttribute(constellationLinePositions(constellation), 3)
+		);
+		const lines = new THREE.LineSegments(
+			geo,
+			keepMat(
+				new THREE.LineBasicMaterial({
+					color: 0xe9d5ff,
+					transparent: true,
+					opacity: 0.95,
+					depthWrite: false,
+					fog: false
+				})
+			)
+		);
+		lines.name = `constellation-${constellation.name}`;
+		lines.frustumCulled = false;
+		constellationRoot.add(lines);
+		const dotGeo = keepGeo(new THREE.BufferGeometry());
+		const dots = new Float32Array(constellation.points.length * 3);
+		constellation.points.forEach((point, i) => {
+			dots[i * 3] = point[0];
+			dots[i * 3 + 1] = point[1];
+			dots[i * 3 + 2] = point[2];
+		});
+		dotGeo.setAttribute('position', new THREE.BufferAttribute(dots, 3));
+		constellationRoot.add(
+			new THREE.Points(
+				dotGeo,
+				keepMat(
+					new THREE.PointsMaterial({
+						color: 0xf5f3ff,
+						size: 5,
+						transparent: true,
+						opacity: 1,
+						depthWrite: false,
+						fog: false,
+						sizeAttenuation: false
+					})
+				)
+			)
+		);
+	}
+	scene.add(constellationRoot);
 
 	const waterSeg = 96;
 	const waterUniforms = {
@@ -243,6 +298,36 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 	floor.position.y = -2.35;
 	floor.receiveShadow = true;
 	scene.add(floor);
+
+	const seabed = new THREE.Group();
+	seabed.name = 'seabed';
+	for (let i = 0; i < 28; i++) {
+		const kelp = new THREE.Mesh(
+			cone,
+			keepMat(mat(0x14532d, { emissive: 0x22c55e, emissiveIntensity: 0.22, roughness: 0.8 }))
+		);
+		kelp.scale.set(0.07 + (i % 3) * 0.02, 0.55 + (i % 5) * 0.14, 0.07 + (i % 3) * 0.02);
+		kelp.position.set(((i % 7) - 3) * 1.65, -2.08, (Math.floor(i / 7) - 2) * 1.7);
+		kelp.rotation.z = (i % 2 ? 1 : -1) * 0.14;
+		seabed.add(kelp);
+	}
+	for (let i = 0; i < 12; i++) {
+		const shell = new THREE.Mesh(
+			torus,
+			keepMat(mat(0xf5d0c8, { emissive: 0xfb7185, emissiveIntensity: 0.28, roughness: 0.45 }))
+		);
+		shell.scale.set(0.12, 0.08, 0.14);
+		shell.position.set(Math.sin(i * 1.1) * 4.6, -2.26, Math.cos(i * 1.7) * 4.1);
+		shell.rotation.set(1.15, i, 0.2);
+		seabed.add(shell);
+	}
+	for (let i = 0; i < 10; i++) {
+		const rock = new THREE.Mesh(ico, keepMat(mat(0x1e293b, { roughness: 0.95 })));
+		rock.scale.setScalar(0.14 + (i % 3) * 0.05);
+		rock.position.set((i - 4.5) * 1.05, -2.28, 3.1 - (i % 4) * 1.35);
+		seabed.add(rock);
+	}
+	scene.add(seabed);
 
 	const planktonGeo = keepGeo(new THREE.BufferGeometry());
 	const planktonMax = 400;
@@ -459,7 +544,125 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 	}
 
 	const coralGroups: TideGroup[] = [];
-	const starMeshes: TideMesh[] = [];
+	const starMeshes: TideGroup[] = [];
+
+	function glowMat(
+		color: number,
+		emissive: number,
+		intensity: number,
+		extras: Record<string, unknown> = {}
+	) {
+		return keepMat(
+			mat(color, {
+				emissive,
+				emissiveIntensity: intensity,
+				roughness: 0.28,
+				...extras
+			})
+		);
+	}
+
+	function makeHaul(kind: HaulKind): TideGroup {
+		const g = new THREE.Group();
+		g.name = `haul-${kind}`;
+		if (kind === '水母光') {
+			const bell = new THREE.Mesh(
+				sphere,
+				glowMat(0x67e8f9, 0x22d3ee, 1.15, { transparent: true, opacity: 0.78 })
+			);
+			bell.scale.set(0.22, 0.14, 0.22);
+			g.add(bell);
+			for (let i = 0; i < 4; i++) {
+				const tent = new THREE.Mesh(
+					cyl,
+					glowMat(0x22d3ee, 0x67e8f9, 0.7, { transparent: true, opacity: 0.7 })
+				);
+				tent.scale.set(0.018, 0.28, 0.018);
+				const a = (i / 4) * Math.PI * 2;
+				tent.position.set(Math.cos(a) * 0.08, -0.18, Math.sin(a) * 0.08);
+				g.add(tent);
+			}
+			g.add(new THREE.PointLight(0x67e8f9, 1.6, 3.2, 2));
+			return g;
+		}
+		if (kind === '灯笼') {
+			const cage = new THREE.Mesh(cyl, glowMat(0x92400e, 0xf59e0b, 0.45));
+			cage.scale.set(0.1, 0.22, 0.1);
+			g.add(cage);
+			const bulb = new THREE.Mesh(sphere, glowMat(0xfde68a, 0xfacc15, 1.4));
+			bulb.scale.setScalar(0.12);
+			bulb.position.y = 0.02;
+			g.add(bulb);
+			const cap = new THREE.Mesh(cone, glowMat(0xb45309, 0xf59e0b, 0.35));
+			cap.scale.set(0.12, 0.1, 0.12);
+			cap.position.y = 0.16;
+			g.add(cap);
+			g.add(new THREE.PointLight(0xfacc15, 1.8, 3.4, 2));
+			return g;
+		}
+		if (kind === '月光水母盘') {
+			const disc = new THREE.Mesh(
+				sphere,
+				glowMat(0xe0f2fe, 0x93c5fd, 1.2, { transparent: true, opacity: 0.62 })
+			);
+			disc.scale.set(0.32, 0.06, 0.32);
+			g.add(disc);
+			const rim = new THREE.Mesh(
+				torus,
+				glowMat(0xf8fafc, 0xbfdbfe, 0.9, { transparent: true, opacity: 0.7 })
+			);
+			rim.scale.set(0.18, 0.18, 0.05);
+			rim.rotation.x = Math.PI / 2;
+			g.add(rim);
+			g.add(new THREE.PointLight(0xbfdbfe, 1.5, 3.2, 2));
+			return g;
+		}
+		if (kind === '浮游团') {
+			const colors = [0x4ade80, 0x22d3ee, 0xa3e635, 0x67e8f9, 0x86efac];
+			for (let i = 0; i < 5; i++) {
+				const bead = new THREE.Mesh(sphereLo, glowMat(colors[i]!, colors[i]!, 1.05));
+				bead.scale.setScalar(0.07 + (i % 2) * 0.03);
+				const a = (i / 5) * Math.PI * 2;
+				bead.position.set(Math.cos(a) * 0.12, (i % 3) * 0.06 - 0.04, Math.sin(a) * 0.12);
+				g.add(bead);
+			}
+			g.add(new THREE.PointLight(0x86efac, 1.4, 3, 2));
+			return g;
+		}
+		if (kind === '夜光贝') {
+			const lower = new THREE.Mesh(sphere, glowMat(0xfbcfe8, 0xf472b6, 0.85));
+			lower.scale.set(0.2, 0.07, 0.16);
+			lower.position.y = -0.04;
+			g.add(lower);
+			const upper = new THREE.Mesh(sphere, glowMat(0xfce7f3, 0xfb7185, 0.7));
+			upper.scale.set(0.18, 0.06, 0.14);
+			upper.position.set(0, 0.05, 0);
+			upper.rotation.z = -0.45;
+			g.add(upper);
+			const pearl = new THREE.Mesh(sphereLo, glowMat(0xfefce8, 0xfde68a, 1.3));
+			pearl.scale.setScalar(0.05);
+			g.add(pearl);
+			g.add(new THREE.PointLight(0xf9a8d4, 1.3, 2.8, 2));
+			return g;
+		}
+		const blade = new THREE.Mesh(cone, glowMat(0x4d7c0f, 0xa3e635, 0.7));
+		blade.scale.set(0.06, 0.42, 0.06);
+		blade.position.y = 0.08;
+		g.add(blade);
+		for (const side of [-1, 1]) {
+			const leaf = new THREE.Mesh(cone, glowMat(0x65a30d, 0x84cc16, 0.55));
+			leaf.scale.set(0.04, 0.28, 0.04);
+			leaf.position.set(side * 0.08, 0.02, 0);
+			leaf.rotation.z = side * 0.45;
+			g.add(leaf);
+		}
+		const tuft = new THREE.Mesh(sphereLo, glowMat(0xd9f99d, 0xbef264, 1.1));
+		tuft.scale.set(0.08, 0.05, 0.08);
+		tuft.position.y = 0.28;
+		g.add(tuft);
+		g.add(new THREE.PointLight(0xa3e635, 1.2, 2.8, 2));
+		return g;
+	}
 
 	const waterPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 	const raycaster = new THREE.Raycaster();
@@ -480,7 +683,12 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 		(plankton.material as TidePointsMat).size = lowDetail ? 0.03 : 0.045;
 		const count = lowDetail ? 80 : planktonMax;
 		planktonGeo.setDrawRange(0, count);
-		stars.visible = !lowDetail;
+		stars.visible = true;
+		const starCount = skyStarCount(lowDetail);
+		starGeo.setDrawRange(0, starCount);
+		(stars.material as TidePointsMat).size = lowDetail ? 3.2 : 2.4;
+		constellationRoot.visible = true;
+		seabed.visible = true;
 	}
 
 	function ensureCreatures(world: TideWorld) {
@@ -527,14 +735,13 @@ export function mountTideScene(canvas: HTMLCanvasElement): TideScene | null {
 
 	function ensureStars(world: TideWorld) {
 		while (starMeshes.length < world.stars.length) {
-			const mesh = new THREE.Mesh(
-				ico,
-				keepMat(mat(0xfef9c3, { emissive: 0xfde68a, emissiveIntensity: 1.1, roughness: 0.2 }))
-			);
-			mesh.scale.setScalar(0.14);
-			mesh.castShadow = true;
-			scene.add(mesh);
-			starMeshes.push(mesh);
+			const star = world.stars[starMeshes.length]!;
+			const group = makeHaul(star.kind);
+			group.traverse((obj: TideObj) => {
+				if (obj instanceof THREE.Mesh) obj.castShadow = true;
+			});
+			scene.add(group);
+			starMeshes.push(group);
 		}
 		for (let i = 0; i < world.stars.length; i++) {
 			const star = world.stars[i]!;

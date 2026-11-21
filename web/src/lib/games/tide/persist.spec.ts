@@ -38,6 +38,34 @@ describe('tide-breath save', () => {
 		expect(TIDE_SAVE_KEY).toBe('qingxin.games.tide-breath');
 	});
 
+	it('restores collected star ids without requiring kind in the save', () => {
+		const storage = memory({
+			'qingxin.games.tide-breath': JSON.stringify({
+				schema: 1,
+				collected: 1,
+				selected: 1,
+				stars: [
+					{ id: 0, collected: true },
+					{ id: 1, collected: false },
+					{ id: 2, collected: false },
+					{ id: 3, collected: false },
+					{ id: 4, collected: false },
+					{ id: 5, collected: false }
+				],
+				coral: [
+					{ id: 0, unlocked: true, growth: 1 },
+					{ id: 1, unlocked: false, growth: 0 },
+					{ id: 2, unlocked: false, growth: 0 }
+				]
+			})
+		});
+		const loaded = readTideSave(storage);
+		expect(loaded.stars.map((s) => s.id)).toEqual([0, 1, 2, 3, 4, 5]);
+		expect(loaded.stars[0]!.collected).toBe(true);
+		expect(loaded.stars[0]!.kind).toBe('水母光');
+		expect(loaded.notice).toMatch(/海光 1 \/ 6/);
+	});
+
 	it('recovers a corrupt save without throwing', () => {
 		const storage = memory({ 'qingxin.games.tide-breath': '{nope' });
 		const loaded = readTideSave(storage);

@@ -12,6 +12,10 @@ function memory() {
 }
 
 describe('store save', () => {
+	it('keeps qingxin.games.convenient-store after the longer shift', () => {
+		expect(STORE_SAVE_KEY).toBe('qingxin.games.convenient-store');
+	});
+
 	it('keeps the best day only', () => {
 		const storage = memory();
 		expect(readStoreSave(storage)).toEqual({ bestRevenue: 0, bestSatisfaction: 0 });

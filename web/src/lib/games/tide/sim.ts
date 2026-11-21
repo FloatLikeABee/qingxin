@@ -1,6 +1,8 @@
 export const STAR_COUNT = 6;
 export const COLLECT_RADIUS = 1.15;
 export const CORAL_THRESHOLDS = [1, 3, 6] as const;
+export const HAUL_KINDS = ['水母光', '灯笼', '月光水母盘', '浮游团', '夜光贝', '海草穗'] as const;
+export type HaulKind = (typeof HAUL_KINDS)[number];
 export const SWELL_UP_PER_MS = 0.35 / 1000;
 export const SWELL_DOWN_PER_MS = 0.22 / 1000;
 export const PULSE_DECAY_PER_MS = 0.9 / 1000;
@@ -21,6 +23,7 @@ export interface Creature {
 
 export interface Starlight {
 	id: number;
+	kind: HaulKind;
 	x: number;
 	z: number;
 	collected: boolean;
@@ -67,14 +70,21 @@ export function createTide(): TideWorld {
 		{ id: 2, kind: 'lantern', x: -3.4, z: -1.1, heading: 0.8, speed: 0.7 },
 		{ id: 3, kind: 'manta', x: 3.8, z: -2.6, heading: -1.1, speed: 1.05 }
 	];
-	const stars: Starlight[] = [
-		{ id: 0, x: 0.08, z: 0.72, collected: false },
-		{ id: 1, x: -2.4, z: 1.1, collected: false },
-		{ id: 2, x: 2.7, z: 0.4, collected: false },
-		{ id: 3, x: -1.6, z: -2.2, collected: false },
-		{ id: 4, x: 1.9, z: -3.1, collected: false },
-		{ id: 5, x: 0.3, z: -4.4, collected: false }
+	const haulAt: Array<{ x: number; z: number }> = [
+		{ x: 0.08, z: 0.72 },
+		{ x: -2.4, z: 1.1 },
+		{ x: 2.7, z: 0.4 },
+		{ x: -1.6, z: -2.2 },
+		{ x: 1.9, z: -3.1 },
+		{ x: 0.3, z: -4.4 }
 	];
+	const stars: Starlight[] = HAUL_KINDS.map((kind, id) => ({
+		id,
+		kind,
+		x: haulAt[id]!.x,
+		z: haulAt[id]!.z,
+		collected: false
+	}));
 	const coral: CoralPatch[] = [
 		{ id: 0, x: -1.8, z: -0.4, unlocked: false, growth: 0 },
 		{ id: 1, x: 2.1, z: -1.6, unlocked: false, growth: 0 },
@@ -107,7 +117,7 @@ export function createTide(): TideWorld {
 export function holdTide(world: TideWorld, holding: boolean) {
 	if (world.holding && !holding) {
 		world.pulse = Math.max(world.pulse, 0.45 + world.swell * 0.55);
-		world.notice = '波纹送出去了。跟着发光的海物去捡星光。';
+		world.notice = '波纹送出去了。跟着发光的海物去捡海光。';
 	} else if (!world.holding && holding) {
 		world.notice = '海面正在升起。';
 	}
@@ -159,7 +169,7 @@ function collectNear(world: TideWorld, creature: Creature) {
 		if (Math.hypot(star.x - creature.x, star.z - creature.z) <= COLLECT_RADIUS) {
 			star.collected = true;
 			world.collected = world.stars.filter((item) => item.collected).length;
-			world.notice = `捡到星光 ${world.collected} / ${STAR_COUNT}。`;
+			world.notice = `捡到海光 ${world.collected} / ${STAR_COUNT}。`;
 			unlockCoral(world);
 		}
 	}
@@ -171,7 +181,7 @@ function unlockCoral(world: TideWorld) {
 		const need = CORAL_THRESHOLDS[i] ?? 99;
 		if (!patch.unlocked && world.collected >= need) {
 			patch.unlocked = true;
-			world.notice = `一片珊瑚园醒了（${world.coral.filter((c) => c.unlocked).length} / ${world.coral.length}）。`;
+			world.notice = `捡到海光 ${world.collected} / ${STAR_COUNT}。一片珊瑚园醒了（${world.coral.filter((c) => c.unlocked).length} / ${world.coral.length}）。`;
 		}
 	}
 }

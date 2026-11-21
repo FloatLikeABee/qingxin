@@ -12,6 +12,7 @@
 	import { readTideSave, writeTideSave } from './persist';
 	import type { TideScene } from './render';
 	import {
+		HAUL_KINDS,
 		STAR_COUNT,
 		clearSteer,
 		cycleCreature,
@@ -48,6 +49,9 @@
 		canvas.dataset.detail = world.lowDetail ? 'low' : 'high';
 		canvas.dataset.anim = world.paused ? '0' : '1';
 		canvas.dataset.audio = audioOn ? '1' : '0';
+		canvas.dataset.sky = '1';
+		canvas.dataset.constellations = '4';
+		canvas.dataset.hauls = String(HAUL_KINDS.length);
 	}
 
 	function togglePause() {
@@ -251,7 +255,7 @@
 		<a href="/modules/games" class="{LINK_CLASS} shrink-0">← 返回目录</a>
 		<h1 class="sr-only">{title}</h1>
 		<ul class="stats" aria-label="潮汐进度">
-			<li><b>{world.collected}</b><span>星光 / {STAR_COUNT}</span></li>
+			<li><b>{world.collected}</b><span>海光 / {STAR_COUNT}</span></li>
 			<li><b>{world.coral.filter((c) => c.unlocked).length}</b><span>珊瑚园</span></li>
 		</ul>
 		<div class="top-actions">
@@ -278,7 +282,7 @@
 		<section class="dock qx-glass" aria-label="潮汐操作">
 			<p class="notice" aria-live="polite">{world.notice}</p>
 			<p class="need">
-				按住随潮升起，松开送出波纹。点海面或用方向键引导发光的海物去捡星光。不必憋气。
+				按住随潮升起，松开送出波纹。点海面或用方向键引导发光的海物去捡海光。不必憋气。
 			</p>
 			<div class="pace" aria-hidden="true">
 				<span class="pace-ring" style="--pace:{world.paceHint}"></span>

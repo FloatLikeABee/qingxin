@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { GOODS, totalUnits } from './goods';
-import { createSim, orderCrate, restockShelf, spawnShopper, summarize, tick } from './sim';
+import {
+	STORE_SHIFT_TICKS,
+	createSim,
+	formatShiftClock,
+	orderCrate,
+	restartSim,
+	restockShelf,
+	spawnShopper,
+	summarize,
+	tick
+} from './sim';
 
 function drive(sim: ReturnType<typeof createSim>, steps: number) {
 	for (let i = 0; i < steps; i++) tick(sim);
@@ -111,6 +121,42 @@ describe('便利店经理 simulation', () => {
 		const sim = createSim({ seed: 1 });
 		expect(sim.shoppers).toHaveLength(1);
 		expect(sim.shoppers[0]?.z).toBe(8);
+	});
+
+	it('defaults to a 1800-tick 3:00 shift without slowing pick, pay, spawn, or orders', () => {
+		const sim = createSim({ seed: 1 });
+		expect(STORE_SHIFT_TICKS).toBe(1800);
+		expect(sim.dayTicks).toBe(1800);
+		expect(formatShiftClock(sim.dayTicks)).toBe('3:00');
+		expect(sim.pickTicks).toBe(5);
+		expect(sim.payTicks).toBe(10);
+		expect(sim.patience).toBe(36);
+		expect(sim.spawnEvery).toBe(28);
+		expect(sim.orderDelay).toBe(18);
+	});
+
+	it('fits several buy and sell loops inside one default shift', () => {
+		const sim = createSim({ seed: 7, shelfFill: 6 });
+		drive(sim, 500);
+		expect(sim.over).toBe(false);
+		expect(sim.tick).toBe(500);
+		expect(sim.stats.soldUnits + sim.stats.customersHappy + sim.stats.customersUnhappy).toBeGreaterThan(
+			1
+		);
+	});
+
+	it('pause freezes the clock and restart restores a full 1800-tick shift', () => {
+		const sim = createSim({ seed: 2 });
+		drive(sim, 40);
+		sim.paused = true;
+		const frozen = sim.tick;
+		drive(sim, 30);
+		expect(sim.tick).toBe(frozen);
+		sim.paused = false;
+		restartSim(sim);
+		expect(sim.dayTicks).toBe(1800);
+		expect(sim.tick).toBe(0);
+		expect(sim.over).toBe(false);
 	});
 
 	it('summarizes leftover stock and satisfaction at day end', () => {

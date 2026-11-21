@@ -1,6 +1,14 @@
 import { emptyStock, GOODS, SKUS, type SkuId } from './goods';
 import { ENTRANCE, pathfind, QUEUE, SHELF_SPOTS, standForShelf, type Cell } from './layout';
 
+export const STORE_SHIFT_TICKS = 1800;
+export const STORE_TICK_MS = 100;
+
+export function formatShiftClock(ticks: number): string {
+	const sec = Math.max(0, Math.ceil(ticks / 10));
+	return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+}
+
 export type ShopperPhase = 'toShelf' | 'pick' | 'toQueue' | 'queue' | 'pay' | 'leave';
 
 export interface Shelf {
@@ -106,7 +114,7 @@ export function createSim(options: SimOptions = {}): SimState {
 		({ water: 10, bread: 8, milk: 8, snacks: 10, bento: 6 } satisfies Record<SkuId, number>);
 	const sim: SimState = {
 		tick: 0,
-		dayTicks: options.dayTicks ?? 720,
+		dayTicks: options.dayTicks ?? STORE_SHIFT_TICKS,
 		cash: options.cash ?? 100,
 		paused: false,
 		over: false,

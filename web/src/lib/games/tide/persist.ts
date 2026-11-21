@@ -120,7 +120,7 @@ export function readTideSave(
 		fresh.dockCollapsed = rec.dockCollapsed === true;
 		fresh.recovered = false;
 		fresh.notice =
-			fresh.collected > 0 ? `海还记得你。星光 ${fresh.collected} / ${STAR_COUNT}。` : fresh.notice;
+			fresh.collected > 0 ? `海还记得你。海光 ${fresh.collected} / ${STAR_COUNT}。` : fresh.notice;
 		return fresh;
 	} catch {
 		fresh.recovered = true;
