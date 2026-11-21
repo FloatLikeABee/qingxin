@@ -75,8 +75,17 @@ describe('games registry', () => {
 			englishTitle: 'Tide Breath',
 			status: 'playable',
 			playCta: '开始入海',
-			category: '节奏'
+			category: '节奏',
+			summary: '夜海里按住升起、松开送浪，引发光的海物去捡海光。',
+			cover: {
+				sky: '#7DD3FC',
+				ground: '#14B8A6',
+				accent: '#EAB308',
+				motif: 'wave'
+			}
 		});
+		expect(getGame('tide-breath')?.about).toMatch(/海光/);
+		expect(getGame('tide-breath')?.tags).toEqual(['呼吸', '海', '海光']);
 		expect(getGame('cloud-walk')).toMatchObject({
 			title: '云上散步',
 			englishTitle: 'Cloud Walk',

@@ -40,7 +40,12 @@ test.describe('潮汐呼吸', () => {
 		await expect(page.getByRole('button', { name: '海声' })).toBeVisible();
 		await expect(page.getByRole('button', { name: '低细腻' })).toBeVisible();
 		const sea = page.locator('canvas[aria-label="潮汐呼吸夜海"]');
+		await expect(page.getByText('海光 / 6')).toBeVisible();
+		await expect(sea).toHaveAttribute('data-sky', '1');
+		await expect(sea).toHaveAttribute('data-constellations', '4');
+		await expect(sea).toHaveAttribute('data-hauls', '6');
 		await page.screenshot({ path: 'screenshots/tide-breath-play-1280-dark.png' });
+		await page.screenshot({ path: 'screenshots/tide-breath-sky-1280-dark.png' });
 		const swell0 = Number(await sea.getAttribute('data-swell'));
 		await page.keyboard.down('Space');
 		await expect
@@ -82,6 +87,9 @@ test.describe('潮汐呼吸', () => {
 		await page.getByRole('button', { name: '继续' }).click();
 		await page.getByRole('button', { name: '低细腻' }).click();
 		await expect(sea).toHaveAttribute('data-detail', 'low');
+		await expect(sea).toHaveAttribute('data-sky', '1');
+		await expect(sea).toHaveAttribute('data-constellations', '4');
+		await page.screenshot({ path: 'screenshots/tide-breath-sky-low-1280.png' });
 		expect(await sea.getAttribute('data-audio')).toBe('0');
 		await page.getByRole('button', { name: '海声' }).click();
 		await expect(sea).toHaveAttribute('data-audio', '1');
@@ -92,6 +100,7 @@ test.describe('潮汐呼吸', () => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await expect(sea).toBeVisible();
 		await page.screenshot({ path: 'screenshots/tide-breath-play-390-dark.png' });
+		await page.screenshot({ path: 'screenshots/tide-breath-sky-390-dark.png' });
 	});
 
 	test('reduced motion still paints a night sea and other games still boot', async ({ page }) => {

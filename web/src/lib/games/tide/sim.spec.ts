@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	COLLECT_RADIUS,
 	CORAL_THRESHOLDS,
+	HAUL_KINDS,
 	STAR_COUNT,
 	createTide,
 	holdTide,
@@ -76,6 +77,26 @@ describe('tide breath field', () => {
 		nudgeTide(world, 0, -1);
 		expect(jelly.z).toBeLessThan(before.z);
 		expect(world.over).toBe(false);
+	});
+
+	it('names six distinct 海光 kinds, keeps coral 1/3/6, and uses 海光 copy', () => {
+		expect(HAUL_KINDS).toEqual(['水母光', '灯笼', '月光水母盘', '浮游团', '夜光贝', '海草穗']);
+		expect(CORAL_THRESHOLDS).toEqual([1, 3, 6]);
+		expect(STAR_COUNT).toBe(6);
+		const world = createTide();
+		expect(world.stars.map((star) => star.id)).toEqual([0, 1, 2, 3, 4, 5]);
+		expect(world.stars.map((star) => star.kind)).toEqual([...HAUL_KINDS]);
+		expect(new Set(world.stars.map((star) => star.kind)).size).toBe(6);
+		holdTide(world, true);
+		holdTide(world, false);
+		expect(world.notice).toMatch(/海光/);
+		const jelly = world.creatures.find((c) => c.kind === 'jelly')!;
+		world.selected = jelly.id;
+		const star = world.stars[0]!;
+		jelly.x = star.x;
+		jelly.z = star.z;
+		nudgeTide(world, 0, 0);
+		expect(world.notice).toMatch(/捡到海光 1 \/ 6/);
 	});
 
 	it('pauses when asked and does not move swell', () => {
