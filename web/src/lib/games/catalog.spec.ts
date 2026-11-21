@@ -1,14 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { aliasTarget, featuredGame, GAMES, GAME_CATEGORIES, getGame } from './catalog';
+import {
+	aliasTarget,
+	featuredGame,
+	GAMES,
+	GAME_CATEGORIES,
+	gameHref,
+	getGame,
+	playHref
+} from './catalog';
 
 describe('games registry', () => {
-	it('lists playable games including 窗前庭园, 晴空出击, 潮汐呼吸, 云上散步, and 记忆货架', () => {
+	it('lists 上班 as a playable catalog game with the existing play route', () => {
+		const game = getGame('shangban');
+		expect(game).toMatchObject({
+			id: 'shangban',
+			title: '上班',
+			englishTitle: 'Workday',
+			status: 'playable',
+			category: '经营',
+			playCta: '开始上班'
+		});
+		expect(playHref(game!)).toBe('/modules/games/shangban/play');
+		expect(gameHref(game!)).toBe('/modules/games/shangban');
+		expect(featuredGame()?.id).toBe('convenient-store');
+	});
+
+	it('lists playable games including 窗前庭园, 晴空出击, 潮汐呼吸, 云上散步, 记忆货架, and 上班', () => {
 		const playable = GAMES.filter((game) => game.status === 'playable');
 		expect(playable.map((game) => game.id).sort()).toEqual(
 			[
 				'cloud-walk',
 				'convenient-store',
 				'memory-shelf',
+				'shangban',
 				'sky-sortie',
 				'tide-breath',
 				'window-garden'

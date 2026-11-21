@@ -49,12 +49,12 @@ Qingxin pages and existing overflow panels SHALL hide classic scrollbar chrome w
 
 ### Requirement: Module hub
 
-The system SHALL present a hub listing these modules: 情绪日记+冥想, 个人财务小助手, 老人助手, 宠物, 健康, 上班, 积木台, 秘密, 游戏. Opening 情绪日记+冥想 SHALL continue to load M1. Opening 健康 SHALL load the M7 wellness app (not the generic placeholder). Opening 上班 SHALL load the company sim (not the generic placeholder). Opening 积木台 SHALL load the construction sandbox (not the generic placeholder). `/modules/create` MAY still load the M9 studio as a legacy drafts route. Opening 游戏 SHALL load the games catalog (not a disabled 即将到来 tile). 组件 SHALL NOT appear as a hub module. 本地生活, AI效率工具箱, 学习打卡, and 求职副业 SHALL NOT appear as live hub modules; their old URLs SHALL show a retired notice or redirect.
+The system SHALL present a hub listing these modules: 情绪日记+冥想, 个人财务小助手, 老人助手, 宠物, 健康, 积木台, 秘密, 游戏. Opening 情绪日记+冥想 SHALL continue to load M1. Opening 健康 SHALL load the M7 wellness app (not the generic placeholder). Opening 积木台 SHALL load the construction sandbox (not the generic placeholder). 上班 SHALL NOT appear as a hub tile; it SHALL appear as a playable game in the games catalog. Opening `/modules/shangban` SHALL redirect to `/modules/games/shangban/play` and load the company sim. `/modules/create` MAY still load the M9 studio as a legacy drafts route. Opening 游戏 SHALL load the games catalog (not a disabled 即将到来 tile). 组件 SHALL NOT appear as a hub module. 本地生活, AI效率工具箱, 学习打卡, and 求职副业 SHALL NOT appear as live hub modules; their old URLs SHALL show a retired notice or redirect.
 
 #### Scenario: Hub lists the product modules
 
 - **WHEN** a user opens the module hub
-- **THEN** the module names above are listed
+- **THEN** 游戏, 秘密, and 积木台 are listed and 上班 is not a board tile
 
 #### Scenario: Hustle is retired
 
@@ -71,10 +71,10 @@ The system SHALL present a hub listing these modules: 情绪日记+冥想, 个�
 - **WHEN** a user opens `/modules/health`
 - **THEN** they land on the wellness 今日 screen (not the generic placeholder)
 
-#### Scenario: Shangban is a real module
+#### Scenario: Shangban deep link still plays
 
 - **WHEN** a user opens `/modules/shangban`
-- **THEN** the heading 上班 is announced and the play canvas or fallback is visible
+- **THEN** they land on `/modules/games/shangban/play` and the heading 上班 is announced with the play canvas or fallback visible
 
 #### Scenario: Legacy create studio remains
 
@@ -177,7 +177,7 @@ Settings SHALL place appearance, account, and 适老 cards in a bento without re
 
 ### Requirement: Icon and text nav
 
-Primary AppShell destinations SHALL keep icon plus short zh-CN labels (首页, 模块中心, 我的). 上班 SHALL be reached from the module board, not a fourth chrome tab. 组件 SHALL NOT appear in primary nav.
+Primary AppShell destinations SHALL keep icon plus short zh-CN labels (首页, 模块中心, 我的). 上班 SHALL be reached from the games catalog and the home shortcut, not a hub tile or a fourth chrome tab. 组件 SHALL NOT appear in primary nav.
 
 #### Scenario: Three primary destinations
 
@@ -191,5 +191,5 @@ Primary AppShell destinations SHALL keep icon plus short zh-CN labels (首页, �
 
 #### Scenario: Play hides chrome
 
-- **WHEN** a user opens a `/play` route or `/modules/shangban`
+- **WHEN** a user opens a `/play` route, `/modules/games/shangban/play`, or `/modules/shangban`
 - **THEN** the top bar and space-dust canvas are not shown so the game can use the full viewport

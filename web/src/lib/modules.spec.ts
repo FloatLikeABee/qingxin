@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { getModule, MODULES } from './modules';
 
 describe('module catalog', () => {
-	it('includes 秘密 and lists 上班 instead of 内容创作', () => {
-		expect(MODULES.some((item) => item.slug === 'shangban' && item.name === '上班')).toBe(true);
+	it('includes 秘密 and keeps 上班 out of the top-level module list', () => {
+		expect(MODULES.some((item) => item.slug === 'shangban')).toBe(false);
+		expect(MODULES.some((item) => item.name === '上班')).toBe(false);
 		expect(MODULES.some((item) => item.slug === 'create' || item.name === '内容创作')).toBe(false);
 		expect(getModule('secrets')).toMatchObject({
 			slug: 'secrets',

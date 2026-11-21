@@ -1,0 +1,4 @@
+schema: spec-driven
+change: shangban-to-games
+created: 2026-11-21
+goal: "Move existing 上班 into the games catalog; keep gameplay, deep links, and qingxin.shangban"

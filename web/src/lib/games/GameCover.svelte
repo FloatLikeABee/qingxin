@@ -53,6 +53,15 @@
 		<div class="cloud c3"></div>
 		<div class="walk-path"></div>
 		<div class="walker"></div>
+	{:else if cover.motif === 'office'}
+		<div class="office-build">
+			<div class="office-row"></div>
+			<div class="office-row"></div>
+			<div class="office-row"></div>
+			<div class="office-row"></div>
+			<div class="office-row"></div>
+		</div>
+		<div class="office-door"></div>
 	{:else}
 		<div class="mini-shelf s1"></div>
 		<div class="mini-shelf s2"></div>
@@ -345,6 +354,40 @@
 		border-radius: 999px 999px 0.2rem 0.2rem;
 		background: var(--cover-accent);
 		box-shadow: 0 -0.55rem 0 0.12rem color-mix(in srgb, var(--cover-accent) 70%, white);
+	}
+
+	.office-build {
+		position: absolute;
+		left: 22%;
+		right: 22%;
+		bottom: 16%;
+		height: 62%;
+		display: grid;
+		grid-template-rows: repeat(5, 1fr);
+		gap: 0.18rem;
+		padding: 0.35rem 0.4rem 0.85rem;
+		border-radius: 0.35rem 0.35rem 0.12rem 0.12rem;
+		background: color-mix(in srgb, var(--qx-card) 82%, var(--cover-accent));
+		box-shadow: 0 10px 24px -16px rgb(15 23 42 / 0.55);
+	}
+
+	.office-row {
+		background: repeating-linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--cover-sky) 55%, white) 0 18%,
+			transparent 18% 24%
+		);
+		border-radius: 0.08rem;
+	}
+
+	.office-door {
+		position: absolute;
+		left: 46%;
+		bottom: 16%;
+		width: 8%;
+		height: 10%;
+		border-radius: 0.12rem 0.12rem 0 0;
+		background: var(--cover-accent);
 	}
 
 	.mini-shelf {

@@ -74,7 +74,8 @@ async function dismissCloseIfNeeded(page: Page) {
 	if (!closed && !dialogVisible) return false;
 	const next = page.getByRole('button', { name: '下一天' }).last();
 	if (!(await next.isVisible().catch(() => false))) return false;
-	await next.click({ timeout: 5_000 });
+	await next.click({ force: true, timeout: 5_000 });
+	await expect(dialog).toHaveCount(0, { timeout: 10_000 });
 	await expect(root).toHaveAttribute('data-closed', '0', { timeout: 10_000 });
 	return true;
 }
@@ -227,9 +228,6 @@ test.describe('上班 Stage 1', () => {
 			await page.setViewportSize({ width: 390, height: 844 });
 			await guestBoot(page, 'light');
 			await openPlay(page);
-			await page.addLocatorHandler(page.getByRole('dialog', { name: '收工' }), async (dialog) => {
-				await dialog.getByRole('button', { name: '下一天' }).click();
-			});
 			await clickVisible(page, '3x');
 
 			const canvas = page.locator('canvas[aria-label="轻心大厦"]');
@@ -598,7 +596,8 @@ test.describe('上班 Stage 1', () => {
 		await expect(nav.getByText('内容')).toHaveCount(0);
 		await expect(page.getByRole('heading', { name: '上班' }).first()).toBeVisible();
 		await page.goto('/modules', { waitUntil: 'networkidle' });
-		await expect(page.getByRole('heading', { name: '上班' })).toBeVisible();
+		await expect(page.locator('[data-board-tile="shangban"]')).toHaveCount(0);
+		await expect(page.getByRole('heading', { name: '游戏' })).toBeVisible();
 		await expect(page.getByRole('heading', { name: '内容创作' })).toHaveCount(0);
 		await expect(page.getByRole('heading', { name: '秘密' })).toBeVisible();
 		await expect(page.getByRole('heading', { name: '积木台' })).toBeVisible();

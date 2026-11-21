@@ -1,5 +1,1 @@
-<script lang="ts">
-	import ShangbanPlay from '#lib/shangban/ShangbanPlay.svelte';
-</script>
-
-<ShangbanPlay />
+<p class="p-6 text-[var(--qx-muted)]">正在去上班…</p>

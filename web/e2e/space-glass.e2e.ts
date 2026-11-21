@@ -54,9 +54,14 @@ test.describe('space-glass shell', () => {
 		await expect(page.getByRole('heading', { name: '上班' }).first()).toBeVisible();
 		await page.locator('[data-qx-topbar]').getByRole('link', { name: '模块中心' }).click();
 		await expect(page).toHaveURL(/\/modules\/?$/);
-		await expect(page.locator('[data-board-tile="shangban"]')).toBeVisible();
-		await page.locator('[data-board-tile="shangban"]').click();
-		await expect(page).toHaveURL(/\/modules\/shangban/);
+		await expect(page.locator('[data-board-tile="shangban"]')).toHaveCount(0);
+		await expect(page.locator('[data-board-tile="games"]')).toBeVisible();
+		await page.locator('[data-board-tile="games"]').click();
+		await expect(page).toHaveURL(/\/modules\/games/);
+		await page.locator('a.game-card').filter({ hasText: '上班' }).click();
+		await expect(page).toHaveURL(/\/modules\/games\/shangban/);
+		await page.getByRole('link', { name: '开始上班' }).click();
+		await expect(page).toHaveURL(/\/modules\/games\/shangban\/play/);
 		await expect(page.locator('[data-qx-dust]')).toHaveCount(0);
 		await expect(page.locator('[data-qx-topbar]')).toHaveCount(0);
 		await page.goto('/settings');
@@ -130,7 +135,9 @@ test.describe('space-glass shell', () => {
 		});
 		await page.goto('/', { waitUntil: 'networkidle' });
 		await expect(page.locator('[data-qx-topbar]')).toBeVisible();
-		await expect(page.locator('[data-board-tile="shangban"]')).toBeVisible();
+		await expect(page.getByRole('heading', { name: '上班' }).first()).toBeVisible();
+		await expect(page.locator('[data-board-tile="shangban"]')).toHaveCount(0);
+		await expect(page.locator('[data-board-tile="games"]')).toBeVisible();
 		expect(await page.evaluate(() => localStorage.getItem('qingxin.theme'))).toBeNull();
 		await page.locator('[data-qx-topbar]').getByRole('link', { name: '我的' }).click();
 		await expect(page.getByRole('link', { name: '登录 / 注册' })).toBeVisible();
@@ -402,7 +409,7 @@ test.describe('space-glass shell', () => {
 		await expect(page.getByRole('link', { name: '← 返回模块' })).toBeVisible();
 		await page.goto('/modules/shangban', { waitUntil: 'networkidle' });
 		await expect(page.locator('[data-qx-topbar]')).toHaveCount(0);
-		await expect(page.getByRole('link', { name: '← 返回模块' })).toBeVisible();
+		await expect(page.getByRole('link', { name: '← 返回目录' })).toBeVisible();
 	});
 
 	test('settings still scrolls with hidden bars and a pinned header', async ({ page }) => {

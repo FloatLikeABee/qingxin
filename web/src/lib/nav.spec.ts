@@ -12,9 +12,13 @@ describe('primary nav', () => {
 
 	it('treats 上班, 积木台, and catalog play as play views without shell atmosphere', () => {
 		expect(isPlayView('/modules/shangban')).toBe(true);
+		expect(isPlayView('/modules/shangban/')).toBe(true);
+		expect(isPlayView('/modules/games/shangban/play')).toBe(true);
+		expect(isPlayView('/modules/games/shangban')).toBe(false);
 		expect(isPlayView('/modules/jimutai')).toBe(true);
 		expect(isPlayView('/modules/games/window-garden/play')).toBe(true);
 		expect(isPlayView('/modules')).toBe(false);
+		expect(isPlayView('/modules/games')).toBe(false);
 		expect(isPlayView('/')).toBe(false);
 	});
 
