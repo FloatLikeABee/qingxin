@@ -41,6 +41,8 @@ test('default shift is 3:00 with real restock and shoppers, pause holds the cloc
 	const paused = Number(await canvas.getAttribute('data-tick'));
 	await page.waitForTimeout(1200);
 	expect(Number(await canvas.getAttribute('data-tick'))).toBe(paused);
-	await page.getByRole('button', { name: '继续' }).click();
+	await expect(page.getByText(/2:5\d/).first()).toBeVisible();
 	await page.screenshot({ path: 'screenshots/store-shift-3min-390.png' });
+	await page.locator('.overlay').getByRole('button', { name: '继续' }).click();
+	await expect(canvas).toHaveAttribute('data-paused', '0');
 });
