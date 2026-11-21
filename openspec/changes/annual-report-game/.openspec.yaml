@@ -1,4 +1,4 @@
 schema: spec-driven
-change: annual-report-game
-created: 2026-11-21
-goal: "Proposal only: fictional Annual Report spreadsheet game"
+id: annual-report-game
+status: approved
+approval: t275u-2026-11-21

@@ -1,8 +1,8 @@
-# 年报 (proposal only — not approved, do not implement)
+# 年报
 
 Independent **game** inside Qingxin. Not Excel automation, not an external document, not a Page, not a real-company workbook.
 
-**Status:** design for parent approval. Do not implement until Ge approves this spec.
+**Status:** approved t275u 2026-11-21; implementing on `cursor/annual-report-4e4e`.
 
 ## Player fantasy
 

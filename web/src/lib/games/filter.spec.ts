@@ -16,12 +16,22 @@ describe('games catalog filter', () => {
 		expect(byTag.some((game) => game.id === 'convenient-store')).toBe(true);
 	});
 
+	it('finds 年报 by Chinese title and Annual Report', () => {
+		expect(filterGames(GAMES, { search: '年报' }).some((game) => game.id === 'annual-report')).toBe(
+			true
+		);
+		expect(
+			filterGames(GAMES, { search: 'Annual Report' }).some((game) => game.id === 'annual-report')
+		).toBe(true);
+	});
+
 	it('filters by category 经营', () => {
 		const ops = filterGames(GAMES, { category: '经营' });
 		expect(ops.length).toBeGreaterThan(0);
 		expect(ops.every((game) => game.category === '经营')).toBe(true);
 		expect(ops.some((game) => game.id === 'convenient-store')).toBe(true);
 		expect(ops.some((game) => game.id === 'shangban')).toBe(true);
+		expect(ops.some((game) => game.id === 'annual-report')).toBe(true);
 	});
 
 	it('finds 上班 by Chinese title and workday tags', () => {

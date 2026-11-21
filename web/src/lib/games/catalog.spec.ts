@@ -29,6 +29,7 @@ describe('games registry', () => {
 		const playable = GAMES.filter((game) => game.status === 'playable');
 		expect(playable.map((game) => game.id).sort()).toEqual(
 			[
+				'annual-report',
 				'cargo-haul',
 				'cloud-walk',
 				'convenient-store',
@@ -122,6 +123,19 @@ describe('games registry', () => {
 			category: '驾驶'
 		});
 		expect(getGame('cargo-haul')?.about).toMatch(/倒车|回收/);
+		expect(getGame('annual-report')).toMatchObject({
+			title: '年报',
+			englishTitle: 'Annual Report',
+			category: '经营',
+			tags: ['表格', '虚构', '财务'],
+			status: 'playable',
+			playCta: '打开年报'
+		});
+		expect(getGame('annual-report')?.about).toMatch(/不是真实财报/);
+		expect(getGame('annual-report')?.about).toMatch(/SUM AVERAGE MIN MAX IF ROUND ABS/);
+		expect(getGame('annual-report')?.about).toMatch(/200 行/);
+		expect(getGame('annual-report')?.about).toMatch(/没有 XLOOKUP/);
+		expect(playHref(getGame('annual-report')!)).toBe('/modules/games/annual-report/play');
 		expect(
 			GAMES.every((game) => game.id && game.summary && game.tags.length > 0 && game.playCta)
 		).toBe(true);

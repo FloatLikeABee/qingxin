@@ -54,6 +54,9 @@ test('catalog search and category filter', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: '便利店经理' }).first()).toBeVisible();
 	await expect(page.getByRole('heading', { name: '晴空出击' })).toHaveCount(0);
 	await page.getByLabel('找一款想玩的').fill('');
+	await page.getByLabel('找一款想玩的').fill('年报');
+	await expect(page.getByRole('heading', { name: '年报' }).first()).toBeVisible();
+	await page.getByLabel('找一款想玩的').fill('');
 	await page.getByRole('button', { name: '节奏' }).click();
 	await expect(page.getByRole('heading', { name: '潮汐呼吸' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: '便利店经理' })).toHaveCount(0);
@@ -102,6 +105,19 @@ test('play mounts without a session', async ({ page }) => {
 	await expect(page.getByRole('button', { name: /架上/ }).first()).toBeVisible();
 	await page.getByRole('button', { name: '暂停' }).click();
 	await expect(page.getByText('客人还在店门口等着。')).toBeVisible();
+});
+
+test('annual report opens from catalog into play chrome', async ({ page }) => {
+	await boot(page);
+	await page.goto('/modules/games/annual-report', { waitUntil: 'networkidle' });
+	await expect(page.getByRole('heading', { name: '年报' })).toBeVisible();
+	await expect(page.getByText(/不是真实财报/)).toBeVisible();
+	await expect(page.getByRole('link', { name: '打开年报' })).toBeVisible();
+	await page.getByRole('link', { name: '打开年报' }).click();
+	await expect(page).toHaveURL(/\/modules\/games\/annual-report\/play/);
+	await expect(page.locator('[data-hud="mark"]')).toHaveText(/不是真实财报，也不连接 Excel/);
+	await expect(page.getByRole('tab', { name: '假设' })).toBeVisible();
+	await expect(page.getByLabel('公式栏')).toBeVisible();
 });
 
 test('cargo haul opens from catalog into play chrome', async ({ page }) => {
