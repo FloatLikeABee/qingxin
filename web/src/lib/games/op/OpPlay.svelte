@@ -399,7 +399,7 @@
 					</div>
 				</div>
 			{:else if world.region}
-				<div class="field-hud" data-hud="field">
+				<div class="field-top" data-hud="phases-wrap">
 					<ol class="phases" data-hud="phases">
 						{#each PHASES as phase}
 							<li
@@ -412,6 +412,8 @@
 						{/each}
 					</ol>
 					<p class="notice" data-hud="notice">{world.notice}</p>
+				</div>
+				<div class="field-hud" data-hud="field">
 					<div class="tray" data-hud="tray">
 						{#each kit as tool (tool)}
 							<button
@@ -557,8 +559,8 @@
 		position: absolute;
 		left: 0.7rem;
 		right: 0.7rem;
-		bottom: 0.7rem;
-		padding: 0.7rem 0.8rem;
+		bottom: 0.45rem;
+		padding: 0.45rem 0.7rem;
 		z-index: 3;
 	}
 
@@ -610,14 +612,23 @@
 		border: 1px dashed color-mix(in srgb, white 25%, transparent);
 	}
 
+	.field-top {
+		position: absolute;
+		left: 0.55rem;
+		right: 0.55rem;
+		top: 0.4rem;
+		z-index: 3;
+		display: grid;
+		gap: 0.25rem;
+		pointer-events: none;
+	}
+
 	.field-hud {
 		position: absolute;
 		left: 0.55rem;
 		right: 0.55rem;
-		bottom: 0.45rem;
+		bottom: 0.4rem;
 		z-index: 3;
-		display: grid;
-		gap: 0.35rem;
 		pointer-events: none;
 	}
 
@@ -740,6 +751,7 @@
 		.hub-panel {
 			left: 0.4rem;
 			right: 0.4rem;
+			bottom: 0.3rem;
 		}
 	}
 </style>

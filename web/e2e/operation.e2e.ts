@@ -99,7 +99,8 @@ async function completeRegion(
 	page: Page,
 	name: string,
 	id: string,
-	steps: Array<{ tool: string; gesture: 'hold' | 'path' | 'pick'; dual?: string }>
+	steps: Array<{ tool: string; gesture: 'hold' | 'path' | 'pick'; dual?: string }>,
+	shots?: { mid?: string; end?: string }
 ) {
 	if ((await playRoot(page).getAttribute('data-view')) !== 'hub') {
 		await page.getByRole('button', { name: '身体图' }).click();
@@ -138,8 +139,13 @@ async function completeRegion(
 			await gesture(step);
 		}
 		await expect(playRoot(page)).toHaveAttribute('data-phase', next, { timeout: 8_000 });
+		if (next === 'operate' && shots?.mid) {
+			await page.waitForTimeout(250);
+			await shot(page, shots.mid);
+		}
 	}
 	await expect(playRoot(page)).toHaveAttribute('data-phase', 'done', { timeout: 8_000 });
+	if (shots?.end) await shot(page, shots.end);
 }
 
 test.describe('手术', () => {
@@ -202,8 +208,13 @@ test.describe('手术', () => {
 		await waitPhase(page, 'operate');
 		const cutBleed = Number((await playRoot(page).getAttribute('data-bleed')) ?? '0');
 		expect(cutBleed).toBeGreaterThan(beforeBleed);
+		await page.waitForTimeout(250);
 		await shot(page, 'operation-forearm-blood-1280');
 		await shot(page, 'operation-forearm-tool-1280');
+		await page.getByRole('button', { name: '细腻' }).click();
+		await page.waitForTimeout(200);
+		await shot(page, 'operation-forearm-lowdetail-1280');
+		await page.getByRole('button', { name: '低细腻' }).click();
 		await useTool(page, '镊');
 		await pickUv(page, t.x, t.y);
 		await waitPhase(page, 'hemostasis');
@@ -225,14 +236,19 @@ test.describe('手术', () => {
 		await boot(page);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await ackAndHub(page);
-		await completeRegion(page, '膝', 'knee', [
-			{ tool: '纱布', gesture: 'hold' },
-			{ tool: '刀', gesture: 'path' },
-			{ tool: '冲洗', gesture: 'hold' },
-			{ tool: '纱布', gesture: 'hold' },
-			{ tool: '缝针', gesture: 'path', dual: '绷带' }
-		]);
-		await shot(page, 'operation-knee-closed-1280');
+		await completeRegion(
+			page,
+			'膝',
+			'knee',
+			[
+				{ tool: '纱布', gesture: 'hold' },
+				{ tool: '刀', gesture: 'path' },
+				{ tool: '冲洗', gesture: 'hold' },
+				{ tool: '纱布', gesture: 'hold' },
+				{ tool: '缝针', gesture: 'path', dual: '绷带' }
+			],
+			{ mid: 'operation-knee-field-1280', end: 'operation-knee-closed-1280' }
+		);
 	});
 
 	test('tooth completes with pack', async ({ page }) => {
@@ -240,14 +256,19 @@ test.describe('手术', () => {
 		await boot(page);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await ackAndHub(page);
-		await completeRegion(page, '口腔', 'tooth', [
-			{ tool: '吸引', gesture: 'hold' },
-			{ tool: '挺子', gesture: 'path' },
-			{ tool: '镊', gesture: 'pick' },
-			{ tool: '纱布', gesture: 'hold' },
-			{ tool: '纱布', gesture: 'hold' }
-		]);
-		await shot(page, 'operation-tooth-closed-1280');
+		await completeRegion(
+			page,
+			'口腔',
+			'tooth',
+			[
+				{ tool: '吸引', gesture: 'hold' },
+				{ tool: '挺子', gesture: 'path' },
+				{ tool: '镊', gesture: 'pick' },
+				{ tool: '纱布', gesture: 'hold' },
+				{ tool: '纱布', gesture: 'hold' }
+			],
+			{ mid: 'operation-tooth-field-1280', end: 'operation-tooth-closed-1280' }
+		);
 	});
 
 	test('belly bags stones and closes', async ({ page }) => {
@@ -255,18 +276,23 @@ test.describe('手术', () => {
 		await boot(page);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await ackAndHub(page);
-		await completeRegion(page, '腹', 'belly', [
-			{ tool: '吸引', gesture: 'hold' },
-			{ tool: '刀', gesture: 'path' },
-			{ tool: '抓钳', gesture: 'pick', dual: '取袋' },
-			{ tool: '吸引', gesture: 'hold' },
-			{ tool: '缝针', gesture: 'path' }
-		]);
-		await shot(page, 'operation-belly-closed-1280');
+		await completeRegion(
+			page,
+			'腹',
+			'belly',
+			[
+				{ tool: '吸引', gesture: 'hold' },
+				{ tool: '刀', gesture: 'path' },
+				{ tool: '抓钳', gesture: 'pick', dual: '取袋' },
+				{ tool: '吸引', gesture: 'hold' },
+				{ tool: '缝针', gesture: 'path' }
+			],
+			{ mid: 'operation-belly-field-1280', end: 'operation-belly-closed-1280' }
+		);
 	});
 
 	test('mobile 390 warning, hub, gesture, pause, and no HUD overlap', async ({ page }) => {
-		test.setTimeout(90_000);
+		test.setTimeout(120_000);
 		await boot(page, 'light');
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto('/modules/games/operation/play', { waitUntil: 'networkidle' });
@@ -292,6 +318,11 @@ test.describe('手术', () => {
 		const t = await target(page);
 		await holdUv(page, t.x, t.y);
 		await waitPhase(page, 'expose');
+		await useTool(page, '刀');
+		await dragUv(page, 0.2, t.y, 0.82, t.y);
+		await waitPhase(page, 'operate');
+		await page.waitForTimeout(250);
+		await shot(page, 'operation-forearm-field-390');
 		await page.getByRole('button', { name: '暂停' }).click();
 		await expect(playRoot(page)).toHaveAttribute('data-paused', '1');
 		await shot(page, 'operation-forearm-pause-390');
