@@ -147,6 +147,40 @@ const ISLAND_FROM_BIOME: Record<BiomeId, number> = {
 	underworld: 0
 };
 
+export function chaseOffset(biome: BiomeId): { dist: number; height: number; lift: number } {
+	if (biome === 'water') return { dist: 4.6, height: 0.82, lift: 0.18 };
+	if (biome === 'underworld') return { dist: 5.8, height: 1.42, lift: 0.14 };
+	return { dist: 10, height: 5.2, lift: 0.45 };
+}
+
+export function skyControlFromKeyboard(event: { code: string; key: string; shiftKey?: boolean }): {
+	move?: keyof SkyKeys;
+	pause?: boolean;
+} {
+	if (event.code === 'Space') return { move: 'rise' };
+	if (event.code === 'ShiftLeft' || event.code === 'ShiftRight' || event.key === 'Shift') {
+		return { move: 'dive' };
+	}
+	const map: Record<string, keyof SkyKeys> = {
+		ArrowUp: 'up',
+		ArrowDown: 'down',
+		ArrowLeft: 'left',
+		ArrowRight: 'right',
+		KeyW: 'up',
+		KeyS: 'down',
+		KeyA: 'left',
+		KeyD: 'right',
+		w: 'up',
+		s: 'down',
+		a: 'left',
+		d: 'right'
+	};
+	const dir = map[event.code] ?? map[event.key];
+	if (dir) return { move: dir };
+	if ((event.key === 'p' || event.key === 'P') && !event.shiftKey) return { pause: true };
+	return {};
+}
+
 export function biomeAt(x: number, y: number, z: number): BiomeId {
 	if (y < -6) return 'underworld';
 	const well = Math.hypot(x - WELL.x, z - WELL.z);

@@ -4,6 +4,7 @@ import {
 	GARDEN_PLOTS,
 	WELL,
 	WIND_TUBE,
+	chaseOffset,
 	type FragKind,
 	type Island,
 	type SkyMode,
@@ -385,13 +386,15 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	}
 
 	const looks = ['home', 'sun', 'rain', 'wild'] as const;
+	let homeIsle: CloudGroup | null = null;
 	for (const isle of [
 		{ id: 0, name: 'home', x: 0, z: 0, y: 0, r: 3.6 },
 		{ id: 1, name: 'sun terrace', x: 12, z: 0.4, y: 1.15, r: 2.6 },
 		{ id: 2, name: 'rain meadow', x: 22.5, z: 1.2, y: 0.45, r: 3.1 },
 		{ id: 3, name: 'creature isle', x: 4.5, z: -12, y: 0.7, r: 3.4 }
 	] satisfies Island[]) {
-		islandGroup(isle, looks[isle.id] ?? 'home');
+		const g = islandGroup(isle, looks[isle.id] ?? 'home');
+		if (isle.id === 0) homeIsle = g;
 	}
 
 	const farRoot = new THREE.Group();
@@ -453,7 +456,8 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	);
 	wellMirror.rotation.x = -Math.PI / 2;
 	wellMirror.scale.setScalar(WELL.r * 0.92);
-	well.add(addWalk(wellMirror));
+	wellMirror.userData.skipOcclude = true;
+	well.add(wellMirror);
 	scene.add(well);
 	const gardenDisk = new THREE.Mesh(cap, keepMat(mat(0x6fbf6a, { roughness: 0.82 })));
 	gardenDisk.rotation.x = -Math.PI / 2;
@@ -680,73 +684,160 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	diveRoot.name = 'dive';
 	const diveHi = new THREE.Group();
 	diveRoot.add(diveHi);
-	const shaft = new THREE.Mesh(
-		keepGeo(new THREE.CylinderGeometry(WELL.r * 0.92, WELL.r * 1.15, 12, 24, 1, true)),
+	const collar = new THREE.Mesh(
+		keepGeo(new THREE.CylinderGeometry(WELL.r * 0.98, WELL.r * 1.08, 1.15, 20, 1, true)),
+		keepMat(mat(0xcbd5e1, { roughness: 0.55, metalness: 0.22, side: THREE.DoubleSide }))
+	);
+	collar.position.set(WELL.x, -0.55, WELL.z);
+	collar.userData.skipOcclude = true;
+	diveRoot.add(collar);
+	const waterSurface = new THREE.Mesh(
+		cap,
 		keepMat(
-			mat(0x0ea5e9, {
+			mat(0x67e8f9, {
 				transparent: true,
-				opacity: 0.18,
+				opacity: 0.48,
+				metalness: 0.62,
+				roughness: 0.08,
+				emissive: 0x22d3ee,
+				emissiveIntensity: 0.55,
 				side: THREE.DoubleSide,
-				emissive: 0x0369a1,
-				emissiveIntensity: 0.35,
 				depthWrite: false
 			})
 		)
 	);
-	shaft.position.set(WELL.x, -6.2, WELL.z);
-	diveRoot.add(shaft);
-	const waterDisk = new THREE.Mesh(
+	waterSurface.rotation.x = -Math.PI / 2;
+	waterSurface.position.set(WELL.x, -0.08, WELL.z);
+	waterSurface.scale.setScalar(9);
+	waterSurface.userData.skipOcclude = true;
+	diveRoot.add(waterSurface);
+	const caustic = new THREE.Mesh(
 		cap,
 		keepMat(
-			mat(0x0369a1, {
+			mat(0xa5f3fc, {
 				transparent: true,
-				opacity: 0.42,
-				metalness: 0.55,
-				roughness: 0.12,
-				emissive: 0x0ea5e9,
-				emissiveIntensity: 0.2
+				opacity: 0.22,
+				emissive: 0x67e8f9,
+				emissiveIntensity: 0.7,
+				side: THREE.DoubleSide,
+				depthWrite: false
 			})
 		)
 	);
-	waterDisk.rotation.x = -Math.PI / 2;
-	waterDisk.position.set(WELL.x, -0.4, WELL.z);
-	waterDisk.scale.setScalar(9);
-	diveRoot.add(waterDisk);
+	caustic.rotation.x = -Math.PI / 2;
+	caustic.position.set(WELL.x, -0.22, WELL.z);
+	caustic.scale.setScalar(6.4);
+	diveRoot.add(caustic);
+	const waterVolume = new THREE.Mesh(
+		keepGeo(new THREE.CylinderGeometry(8.6, 8.6, 5.7, 24, 1, true)),
+		keepMat(
+			mat(0x0e7490, {
+				transparent: true,
+				opacity: 0.14,
+				side: THREE.DoubleSide,
+				depthWrite: false,
+				emissive: 0x155e75,
+				emissiveIntensity: 0.18
+			})
+		)
+	);
+	waterVolume.position.set(WELL.x, -3.05, WELL.z);
+	waterVolume.userData.skipOcclude = true;
+	diveRoot.add(waterVolume);
+	for (let i = 0; i < 7; i++) {
+		const kelp = new THREE.Mesh(
+			cone,
+			keepMat(mat(0x166534, { emissive: 0x14532d, emissiveIntensity: 0.2, roughness: 0.7 }))
+		);
+		const a = (i / 7) * Math.PI * 2 + 0.2;
+		kelp.position.set(Math.cos(a) * 3.6, -3.1, Math.sin(a) * 3.6 - 0.4);
+		kelp.scale.set(0.22 + (i % 3) * 0.06, 2.6 + (i % 2) * 0.7, 0.22);
+		kelp.rotation.z = i % 2 ? 0.18 : -0.16;
+		diveRoot.add(kelp);
+	}
+	const bubbleGeo = keepGeo(new THREE.BufferGeometry());
+	const bubbleN = 48;
+	const bubblePos = new Float32Array(bubbleN * 3);
+	for (let i = 0; i < bubbleN; i++) {
+		const a = (i / bubbleN) * Math.PI * 2;
+		bubblePos[i * 3] = WELL.x + Math.cos(a) * (1.2 + (i % 5) * 0.7);
+		bubblePos[i * 3 + 1] = -0.6 - (i % 8) * 0.55;
+		bubblePos[i * 3 + 2] = WELL.z + Math.sin(a) * (1.2 + (i % 4) * 0.6);
+	}
+	bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePos, 3));
+	const bubbles = new THREE.Points(
+		bubbleGeo,
+		keepMat(
+			new THREE.PointsMaterial({
+				color: 0xecfeff,
+				size: 0.11,
+				transparent: true,
+				opacity: 0.75,
+				depthWrite: false
+			})
+		)
+	);
+	diveRoot.add(bubbles);
+	const cavern = new THREE.Mesh(
+		keepGeo(new THREE.SphereGeometry(7.4, 24, 16)),
+		keepMat(
+			mat(0x1e293b, {
+				roughness: 0.92,
+				side: THREE.BackSide,
+				emissive: 0x111827,
+				emissiveIntensity: 0.22
+			})
+		)
+	);
+	cavern.position.set(WELL.x, -10.6, WELL.z);
+	cavern.userData.skipOcclude = true;
+	diveRoot.add(cavern);
 	for (let i = 0; i < 4; i++) {
 		const lantern = new THREE.Mesh(
 			sphereLo,
-			keepMat(mat(0xfde68a, { emissive: 0xfacc15, emissiveIntensity: 1.15 }))
+			keepMat(mat(0xfde68a, { emissive: 0xfacc15, emissiveIntensity: 1.35 }))
 		);
-		const a = (i / 4) * Math.PI * 2;
-		lantern.position.set(Math.cos(a) * 5.2, -8.4, Math.sin(a) * 5.2 - 0.8);
-		lantern.scale.setScalar(0.22);
+		const a = (i / 4) * Math.PI * 2 + 0.35;
+		lantern.position.set(WELL.x + Math.cos(a) * 2.9, -8.2, WELL.z + Math.sin(a) * 2.9);
+		lantern.scale.setScalar(0.28);
 		diveRoot.add(lantern);
+		const glow = new THREE.PointLight(0xfacc15, 2.6, 6.4, 2);
+		glow.position.copy(lantern.position);
+		diveRoot.add(glow);
+		const root = new THREE.Mesh(
+			cyl,
+			keepMat(mat(0x3f6212, { emissive: 0x4d7c0f, emissiveIntensity: 0.32 }))
+		);
+		root.position.set(WELL.x + Math.cos(a + 0.4) * 2.2, -7.15, WELL.z + Math.sin(a + 0.4) * 2.2);
+		root.rotation.z = i % 2 ? 0.5 : -0.46;
+		root.scale.set(0.14, 2.4, 0.14);
+		diveRoot.add(root);
 	}
 	for (let i = 0; i < 8; i++) {
 		const lantern = new THREE.Mesh(
 			sphereLo,
-			keepMat(mat(0xfdba74, { emissive: 0xfb923c, emissiveIntensity: 0.9 }))
+			keepMat(mat(0xfdba74, { emissive: 0xfb923c, emissiveIntensity: 0.95 }))
 		);
-		const a = (i / 8) * Math.PI * 2 + 0.4;
-		lantern.position.set(Math.cos(a) * 7.4, -10.2 - (i % 3) * 0.7, Math.sin(a) * 7.4);
+		const a = (i / 8) * Math.PI * 2 + 0.5;
+		lantern.position.set(Math.cos(a) * 4.6, -10.2 - (i % 3) * 0.4, Math.sin(a) * 4.6);
 		lantern.scale.setScalar(0.14);
 		diveHi.add(lantern);
-		const root = new THREE.Mesh(
+		const extraRoot = new THREE.Mesh(
 			cyl,
-			keepMat(mat(0x365314, { emissive: 0x4d7c0f, emissiveIntensity: 0.25 }))
+			keepMat(mat(0x3f6212, { emissive: 0x4d7c0f, emissiveIntensity: 0.24 }))
 		);
-		root.position.set(Math.cos(a + 0.2) * 4.6, -11.6, Math.sin(a + 0.2) * 4.6);
-		root.rotation.z = i % 2 ? 0.4 : -0.35;
-		root.scale.set(0.14, 2.8, 0.14);
-		diveHi.add(root);
+		extraRoot.position.set(Math.cos(a + 0.18) * 3.8, -11.1, Math.sin(a + 0.18) * 3.8);
+		extraRoot.rotation.z = i % 2 ? 0.46 : -0.4;
+		extraRoot.scale.set(0.12, 2.4, 0.12);
+		diveHi.add(extraRoot);
 	}
-	const grotto = new THREE.Mesh(
+	const shelf = new THREE.Mesh(
 		icoHi,
-		keepMat(mat(0x1e3a5f, { roughness: 0.85, emissive: 0x0f172a, emissiveIntensity: 0.2 }))
+		keepMat(mat(0x334155, { roughness: 0.88, emissive: 0x1e293b, emissiveIntensity: 0.15 }))
 	);
-	grotto.position.set(-3.4, -12.4, 3.2);
-	grotto.scale.set(3.4, 2.2, 2.8);
-	diveHi.add(addWalk(grotto));
+	shelf.position.set(2.2, -10.6, 1.6);
+	shelf.scale.set(1.8, 1.1, 1.5);
+	diveRoot.add(addWalk(shelf));
 	const hutDown = new THREE.Group();
 	const wall = new THREE.Mesh(box, keepMat(mat(0xf3e6d0)));
 	wall.scale.set(1.1, 0.85, 0.9);
@@ -755,14 +846,35 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	roof.position.y = 0.7;
 	roof.scale.set(1.05, 0.7, 1.05);
 	hutDown.add(roof);
-	hutDown.position.set(2.8, -11.6, -3.4);
+	hutDown.position.set(1.9, -9.35, 0.85);
 	hutDown.rotation.x = Math.PI;
-	diveHi.add(hutDown);
-	const street = new THREE.Mesh(box, keepMat(mat(0x1e293b)));
-	street.position.set(0.4, -12.2, -2);
-	street.scale.set(8, 0.2, 3.4);
-	street.rotation.z = Math.PI;
-	diveHi.add(addWalk(street));
+	diveRoot.add(hutDown);
+	const street = new THREE.Group();
+	street.position.set(1.35, -9.85, 0.55);
+	street.rotation.x = Math.PI;
+	const pavement = new THREE.Mesh(
+		box,
+		keepMat(mat(0x334155, { roughness: 0.7, emissive: 0x1e293b, emissiveIntensity: 0.2 }))
+	);
+	pavement.scale.set(4.6, 0.14, 1.7);
+	street.add(addWalk(pavement));
+	for (let i = 0; i < 4; i++) {
+		const lamp = new THREE.Group();
+		const post = new THREE.Mesh(cyl, keepMat(mat(0x475569)));
+		post.scale.set(0.07, 1.05, 0.07);
+		post.position.y = 0.52;
+		lamp.add(post);
+		const bulb = new THREE.Mesh(
+			sphereLo,
+			keepMat(mat(0xfde68a, { emissive: 0xf59e0b, emissiveIntensity: 1.2 }))
+		);
+		bulb.position.y = 1.08;
+		bulb.scale.setScalar(0.15);
+		lamp.add(bulb);
+		lamp.position.set(-1.6 + i * 1.1, 0.08, i % 2 ? 0.45 : -0.45);
+		street.add(lamp);
+	}
+	diveRoot.add(street);
 	diveRoot.visible = false;
 	scene.add(diveRoot);
 
@@ -1102,6 +1214,7 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	let reduceMotion = false;
 	let lowDetail = false;
 	let skyMode: SkyMode = 'dawn';
+	let lastAir: SkyWorld['biome'] | '' = '';
 
 	function applyPalette(mode: SkyMode) {
 		const p = PALETTES[mode];
@@ -1119,7 +1232,68 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		renderer.toneMappingExposure = p.exposure;
 		renderer.setClearColor(p.fog, 1);
 		stars.visible = mode === 'night' || mode === 'dawn';
+		sun.intensity = 1.55;
+		hemi.intensity = 0.72;
+		sky.visible = true;
+		aurora.visible = true;
 		skyMode = mode;
+	}
+
+	function applyAir(world: SkyWorld) {
+		const fog = scene.fog as InstanceType<typeof THREE.FogExp2>;
+		if (world.biome === 'water') {
+			sky.visible = true;
+			skyUniforms.uTop.value.set(0x0e7490);
+			skyUniforms.uMid.value.set(0x155e75);
+			skyUniforms.uHor.value.set(0xa5f3fc);
+			skyUniforms.uSunColor.value.set(0xecfeff);
+			fog.density = 0.028;
+			fog.color.set(0x0e7490);
+			renderer.setClearColor(0x155e75, 1);
+			hemi.color.set(0x67e8f9);
+			hemi.groundColor.set(0x164e63);
+			hemi.intensity = 0.48;
+			sun.color.set(0x7dd3fc);
+			sun.intensity = 0.28;
+			fill.color.set(0x22d3ee);
+			rim.intensity = 4;
+			renderer.toneMappingExposure = 0.74;
+			aurora.visible = false;
+			cloudField.visible = false;
+			stars.visible = false;
+			farRoot.visible = false;
+			if (homeIsle) homeIsle.visible = false;
+			return;
+		}
+		if (world.biome === 'underworld') {
+			sky.visible = false;
+			fog.density = 0.032;
+			fog.color.set(0x0f172a);
+			renderer.setClearColor(0x0b1024, 1);
+			hemi.color.set(0x475569);
+			hemi.groundColor.set(0x020617);
+			hemi.intensity = 0.22;
+			sun.color.set(0x1e293b);
+			sun.intensity = 0.05;
+			fill.color.set(0xfacc15);
+			rim.intensity = 2;
+			renderer.toneMappingExposure = 0.58;
+			aurora.visible = false;
+			cloudField.visible = false;
+			stars.visible = false;
+			farRoot.visible = false;
+			if (homeIsle) homeIsle.visible = false;
+			return;
+		}
+		aurora.visible = true;
+		cloudField.visible = true;
+		farRoot.visible = !lowDetail;
+		if (homeIsle) homeIsle.visible = true;
+		sun.intensity = 1.55;
+		hemi.intensity = 0.72;
+		rim.intensity = 16;
+		sky.visible = true;
+		fog.density = 0.011;
 	}
 
 	function applyDetail(world: SkyWorld) {
@@ -1208,10 +1382,11 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	}
 
 	function follow(world: SkyWorld) {
+		const chase = chaseOffset(world.biome);
 		const wet = world.biome === 'water' || world.biome === 'underworld';
-		let dist = wet ? 7.2 : 10;
-		const height = wet ? 3.2 : 5.2;
-		camTarget.set(world.x, world.y + 0.45, world.z);
+		let dist = chase.dist;
+		const height = chase.height;
+		camTarget.set(world.x, world.y + chase.lift, world.z);
 		camPos.set(
 			world.x - Math.sin(world.yaw || 0.15) * dist,
 			world.y + height,
@@ -1220,21 +1395,31 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		const origin = new THREE.Vector3(world.x, world.y + 0.4, world.z);
 		const dir = camPos.clone().sub(origin);
 		const span = dir.length() || 1;
-		raycaster.set(origin, dir.normalize());
-		const blocks = raycaster.intersectObjects(walkMeshes, false);
-		if (blocks[0] && blocks[0].distance < span - 0.2) {
-			dist = Math.max(2.4, blocks[0].distance - 0.45);
-			camPos.copy(origin).add(dir.multiplyScalar(dist));
-			const mat = (blocks[0].object as CloudMesh).material as {
-				transparent?: boolean;
-				opacity?: number;
-			};
-			if (mat && blocks[0].distance < 1.2) {
-				mat.transparent = true;
-				mat.opacity = 0.35;
+		if (!wet) {
+			raycaster.set(origin, dir.normalize());
+			const blocks = raycaster
+				.intersectObjects(walkMeshes, false)
+				.filter((hit: { object: CloudMesh }) => !hit.object.userData.skipOcclude);
+			if (blocks[0] && blocks[0].distance < span - 0.2) {
+				dist = Math.max(2.4, blocks[0].distance - 0.45);
+				camPos.copy(origin).add(dir.multiplyScalar(dist));
+				const mat = (blocks[0].object as CloudMesh).material as {
+					transparent?: boolean;
+					opacity?: number;
+				};
+				if (mat && blocks[0].distance < 1.2) {
+					mat.transparent = true;
+					mat.opacity = 0.35;
+				}
 			}
 		}
-		if (reduceMotion || camera.position.distanceTo(camPos) > 14) camera.position.copy(camPos);
+		const nextFov = wet ? 58 : 46;
+		if (Math.abs(camera.fov - nextFov) > 0.2) {
+			camera.fov = nextFov;
+			camera.updateProjectionMatrix();
+		}
+		if (wet || reduceMotion || camera.position.distanceTo(camPos) > 14)
+			camera.position.copy(camPos);
 		else camera.position.lerp(camPos, 0.085);
 		camera.lookAt(camTarget);
 		world.lookX = camTarget.x - camera.position.x;
@@ -1247,30 +1432,27 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	function sync(world: SkyWorld, opts?: { reducedMotion?: boolean }) {
 		if (opts?.reducedMotion != null) reduceMotion = opts.reducedMotion;
 		applyDetail(world);
-		if (world.skyMode !== skyMode) applyPalette(world.skyMode);
+		const wet = world.biome === 'water' || world.biome === 'underworld';
+		if (!wet && (world.skyMode !== skyMode || lastAir === 'water' || lastAir === 'underworld')) {
+			applyPalette(world.skyMode);
+		}
+		applyAir(world);
+		lastAir = world.biome;
 		ghost.position.set(world.x, world.y, world.z);
 		ghost.rotation.y = world.yaw;
 		ghost.rotation.x = Math.max(
 			-0.45,
 			Math.min(0.45, (world.keys.rise ? -0.2 : 0) + (world.keys.dive ? 0.25 : 0))
 		);
+		const veilMat = veil.material as InstanceType<typeof THREE.MeshStandardMaterial>;
+		veilMat.emissiveIntensity = wet ? 1.15 : 0.55;
+		veilMat.opacity = wet ? 0.7 : 0.38;
+		(core.material as InstanceType<typeof THREE.MeshBasicMaterial>).opacity = wet ? 0.95 : 0.7;
+		glow.intensity = wet ? 7.4 : 4.5;
+		ghost.scale.setScalar(wet ? 1.28 : 1);
 		wisps.visible = !lowDetail && !reduceMotion;
 		blob.visible = !lowDetail;
-		diveRoot.visible = world.y < -0.5;
-		const fog = scene.fog as InstanceType<typeof THREE.FogExp2>;
-		if (world.biome === 'water') {
-			fog.density = 0.05;
-			fog.color.set(0x0369a1);
-			renderer.setClearColor(0x0369a1, 1);
-		} else if (world.biome === 'underworld') {
-			fog.density = 0.07;
-			fog.color.set(0x0b1024);
-			renderer.setClearColor(0x0b1024, 1);
-		} else {
-			fog.density = 0.011;
-			fog.color.set(PALETTES[world.skyMode].fog);
-			renderer.setClearColor(PALETTES[world.skyMode].fog, 1);
-		}
+		diveRoot.visible = world.biome === 'water' || world.biome === 'underworld';
 		ensureFrags(world);
 		ensurePlants(world);
 		ensureCreatures(world);
@@ -1294,6 +1476,13 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 				}
 			}
 			cloudField.rotation.y = t * 0.012;
+			const bpos = bubbleGeo.getAttribute('position');
+			for (let i = 0; i < bubbleN; i++) {
+				let y = bpos.getY(i) + 0.0045;
+				if (y > -0.15) y = -4.6 - (i % 5) * 0.2;
+				bpos.setY(i, y);
+			}
+			bpos.needsUpdate = true;
 			const pos = streakGeo.getAttribute('position');
 			for (let i = 0; i < streakCount; i++) {
 				let u = (((i / streakCount + t * 0.18) % 1) + 1) % 1;

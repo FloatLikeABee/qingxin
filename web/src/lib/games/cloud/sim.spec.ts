@@ -5,10 +5,12 @@ import {
 	WORLD_R,
 	Y_MAX,
 	biomeAt,
+	chaseOffset,
 	collectNear,
 	createSky,
 	setSkyKey,
 	setSkyLook,
+	skyControlFromKeyboard,
 	stepSky
 } from './sim';
 
@@ -47,6 +49,31 @@ describe('cloud walk sandbox', () => {
 		expect(world.y).toBeGreaterThan(6);
 		expect(world.biome).toBe('garden');
 		expect(world.over).toBe(false);
+	});
+
+	it('keeps the chase camera inside the water column instead of above the well', () => {
+		const water = chaseOffset('water');
+		const grotto = chaseOffset('underworld');
+		const garden = chaseOffset('garden');
+		expect(water.height).toBeLessThan(1.2);
+		expect(grotto.height).toBeLessThan(1.6);
+		expect(garden.height).toBeGreaterThan(4);
+		expect(water.dist).toBeLessThan(garden.dist);
+	});
+
+	it('maps Shift to dive and Space to rise without Shift+P pausing', () => {
+		expect(skyControlFromKeyboard({ code: 'ShiftLeft', key: 'Shift' })).toEqual({ move: 'dive' });
+		expect(skyControlFromKeyboard({ code: 'ShiftRight', key: 'Shift' })).toEqual({ move: 'dive' });
+		expect(skyControlFromKeyboard({ code: '', key: 'Shift' })).toEqual({ move: 'dive' });
+		expect(skyControlFromKeyboard({ code: 'Space', key: ' ' })).toEqual({ move: 'rise' });
+		expect(skyControlFromKeyboard({ code: 'KeyP', key: 'p' })).toEqual({ pause: true });
+		expect(skyControlFromKeyboard({ code: 'KeyP', key: 'P', shiftKey: true })).toEqual({});
+		const world = createSky();
+		const move = skyControlFromKeyboard({ code: 'ShiftLeft', key: 'Shift' }).move;
+		expect(move).toBe('dive');
+		drive(world, 900, { [move!]: true });
+		expect(world.y).toBeLessThan(0);
+		expect(world.keys.dive).toBe(true);
 	});
 
 	it('dives through the well into water then underworld', () => {

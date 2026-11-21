@@ -11,9 +11,9 @@
 		restartSky,
 		setSkyKey,
 		setSkySteer,
+		skyControlFromKeyboard,
 		stepSky,
 		type BiomeId,
-		type SkyKeys,
 		type SkyWorld
 	} from './sim';
 
@@ -131,54 +131,25 @@
 		const onUp = () => {
 			save();
 		};
-		const bindKey = (event: KeyboardEvent, down: boolean) => {
-			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
-				return;
-			const map: Record<string, keyof SkyKeys> = {
-				ArrowUp: 'up',
-				ArrowDown: 'down',
-				ArrowLeft: 'left',
-				ArrowRight: 'right',
-				KeyW: 'up',
-				KeyS: 'down',
-				KeyA: 'left',
-				KeyD: 'right',
-				w: 'up',
-				s: 'down',
-				a: 'left',
-				d: 'right'
-			};
-			const dir = map[event.code] ?? map[event.key];
-			if (dir) {
-				event.preventDefault();
-				setSkyKey(world, dir, down);
-			}
-		};
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
 				return;
-			if (event.code === 'Space') {
+			const control = skyControlFromKeyboard(event);
+			if (control.move) {
 				event.preventDefault();
-				if (!world.paused) setSkyKey(world, 'rise', true);
+				const vertical = control.move === 'rise' || control.move === 'dive';
+				if (!vertical || !world.paused) setSkyKey(world, control.move, true);
 			}
-			if (event.code === 'ShiftLeft' || event.code === 'ShiftRight' || event.key === 'Shift') {
-				event.preventDefault();
-				if (!world.paused) setSkyKey(world, 'dive', true);
-			}
-			bindKey(event, true);
-			if (event.key === 'p' || event.key === 'P') togglePause();
+			if (control.pause) togglePause();
 			paint();
 		};
 		const onKeyUp = (event: KeyboardEvent) => {
-			if (event.code === 'Space') {
+			const control = skyControlFromKeyboard(event);
+			if (control.move) {
 				event.preventDefault();
-				setSkyKey(world, 'rise', false);
+				setSkyKey(world, control.move, false);
 			}
-			if (event.code === 'ShiftLeft' || event.code === 'ShiftRight' || event.key === 'Shift') {
-				event.preventDefault();
-				setSkyKey(world, 'dive', false);
-			}
-			bindKey(event, false);
+			paint();
 		};
 
 		void (async () => {
@@ -214,13 +185,11 @@
 		})();
 
 		const onVis = () => {
-			if (document.hidden) {
-				world.paused = true;
-				paint();
-			}
+			paint();
 		};
-		window.addEventListener('keydown', onKeyDown);
-		window.addEventListener('keyup', onKeyUp);
+		window.addEventListener('keydown', onKeyDown, true);
+		window.addEventListener('keyup', onKeyUp, true);
+		stage.focus({ preventScroll: true });
 		stage.addEventListener('pointerdown', onDown);
 		stage.addEventListener('pointermove', onMove);
 		stage.addEventListener('pointerup', onUp);
@@ -233,8 +202,8 @@
 			cancelAnimationFrame(raf);
 			clearInterval(interval);
 			resizeObserver?.disconnect();
-			window.removeEventListener('keydown', onKeyDown);
-			window.removeEventListener('keyup', onKeyUp);
+			window.removeEventListener('keydown', onKeyDown, true);
+			window.removeEventListener('keyup', onKeyUp, true);
 			stage.removeEventListener('pointerdown', onDown);
 			stage.removeEventListener('pointermove', onMove);
 			stage.removeEventListener('pointerup', onUp);
@@ -275,7 +244,7 @@
 		</div>
 	</header>
 
-	<div bind:this={stageEl} class="stage" data-play="cloud">
+	<div bind:this={stageEl} class="stage" data-play="cloud" tabindex="-1">
 		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="云上散步天空"></canvas>
 		{#if sceneFailed}
 			<p class="fail">这台设备画不出天空。方向键仍可飞升潜入。</p>
@@ -294,7 +263,10 @@
 					class="min-h-12 min-w-12 px-5"
 					variant="secondary"
 					onpointerdown={() => setSkyKey(world, 'rise', true)}
-					onpointerup={() => setSkyKey(world, 'rise', false)}
+					onpointerup={() => {
+						setSkyKey(world, 'rise', false);
+						stageEl?.focus();
+					}}
 					onpointerleave={() => setSkyKey(world, 'rise', false)}
 				>
 					飞升
@@ -303,12 +275,22 @@
 					class="min-h-12 min-w-12 px-5"
 					variant="secondary"
 					onpointerdown={() => setSkyKey(world, 'dive', true)}
-					onpointerup={() => setSkyKey(world, 'dive', false)}
+					onpointerup={() => {
+						setSkyKey(world, 'dive', false);
+						stageEl?.focus();
+					}}
 					onpointerleave={() => setSkyKey(world, 'dive', false)}
 				>
 					潜入
 				</Button>
-				<Button class="min-h-12 px-5" variant="secondary" onclick={() => recallHome(world)}>
+				<Button
+					class="min-h-12 px-5"
+					variant="secondary"
+					onclick={() => {
+						recallHome(world);
+						stageEl?.focus();
+					}}
+				>
 					回家
 				</Button>
 				<Button class="min-h-12 px-5" variant="secondary" onclick={toggleDetail}>
@@ -380,6 +362,7 @@
 		flex: 1;
 		min-height: 0;
 		touch-action: none;
+		outline: none;
 	}
 
 	.fail {

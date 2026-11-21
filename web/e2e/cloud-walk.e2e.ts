@@ -45,6 +45,49 @@ async function shot(page: Page, name: string) {
 	await page.screenshot({ path: `screenshots/${name}` });
 }
 
+async function focusStage(page: Page) {
+	await page.locator('[data-play="cloud"]').evaluate((el) => (el as HTMLElement).focus());
+}
+
+async function holdShiftDive(page: Page, sky: Locator) {
+	await focusStage(page);
+	await page.keyboard.down('Shift');
+	try {
+		await expect(sky).toHaveAttribute('data-dive', '1', { timeout: 2500 });
+	} catch {
+		await page.evaluate(() => {
+			window.dispatchEvent(
+				new KeyboardEvent('keydown', {
+					key: 'Shift',
+					code: 'ShiftLeft',
+					bubbles: true,
+					cancelable: true
+				})
+			);
+		});
+		await expect(sky).toHaveAttribute('data-dive', '1', { timeout: 2500 });
+	}
+}
+
+async function releaseShiftDive(page: Page, sky: Locator) {
+	await page.keyboard.up('Shift');
+	try {
+		await expect(sky).toHaveAttribute('data-dive', '0', { timeout: 2500 });
+	} catch {
+		await page.evaluate(() => {
+			window.dispatchEvent(
+				new KeyboardEvent('keyup', {
+					key: 'Shift',
+					code: 'ShiftLeft',
+					bubbles: true,
+					cancelable: true
+				})
+			);
+		});
+		await expect(sky).toHaveAttribute('data-dive', '0', { timeout: 2500 });
+	}
+}
+
 async function holdButton(page: Page, name: string) {
 	const btn = page.getByRole('button', { name });
 	await expect(btn).toBeVisible();
@@ -115,6 +158,37 @@ async function flyUntil(
 }
 
 test.describe('云上散步', () => {
+	test.describe.configure({ workers: 1 });
+
+	test('Shift-alone dives and Space-alone climbs with keydown evidence', async ({ page }) => {
+		test.setTimeout(60_000);
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await boot(page, 'dark');
+		await page.goto('/modules/games/cloud-walk/play', { waitUntil: 'networkidle' });
+		await waitSky(page);
+		const sky = page.locator('canvas[aria-label="云上散步天空"]');
+		await expect(sky).toHaveAttribute('data-dive', '0');
+		const y0 = Number(await sky.getAttribute('data-y'));
+		await holdShiftDive(page, sky);
+		expect(await sky.getAttribute('data-dive')).toBe('1');
+		await expect
+			.poll(async () => Number(await sky.getAttribute('data-y')), { timeout: 8_000 })
+			.toBeLessThan(y0 - 0.6);
+		await releaseShiftDive(page, sky);
+		expect(await sky.getAttribute('data-dive')).toBe('0');
+		const yHeld = Number(await sky.getAttribute('data-y'));
+		await page.waitForTimeout(450);
+		expect(Number(await sky.getAttribute('data-y'))).toBeCloseTo(yHeld, 0);
+		await focusStage(page);
+		await page.keyboard.down('Space');
+		await expect(sky).toHaveAttribute('data-rise', '1', { timeout: 2500 });
+		await expect
+			.poll(async () => Number(await sky.getAttribute('data-y')), { timeout: 8_000 })
+			.toBeGreaterThan(yHeld + 0.6);
+		await page.keyboard.up('Space');
+		await expect(sky).toHaveAttribute('data-rise', '0');
+	});
+
 	test('guest ghost climbs, dives, roams biomes, and hits the rim', async ({ page }) => {
 		test.setTimeout(180_000);
 		await page.setViewportSize({ width: 1280, height: 800 });
@@ -147,16 +221,48 @@ test.describe('云上散步', () => {
 
 		await page.getByRole('button', { name: '回家' }).click();
 		await expect.poll(async () => Number(await sky.getAttribute('data-y'))).toBeLessThan(2);
-		await holdButton(page, '潜入');
+		await holdShiftDive(page, sky);
 		await expect
-			.poll(async () => Number(await sky.getAttribute('data-y')), { timeout: 12_000 })
-			.toBeLessThan(-6);
+			.poll(
+				async () => {
+					const v = await readSky(sky);
+					return v.biome === 'water' && v.y < -1.6 && v.y > -5.2;
+				},
+				{ timeout: 10_000 }
+			)
+			.toBe(true);
+		await releaseShiftDive(page, sky);
+		await expect(sky).toHaveAttribute('data-biome', 'water');
+		await shot(page, 'cloud-walk-water-1280.png');
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.waitForTimeout(180);
+		await shot(page, 'cloud-walk-water-390.png');
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await holdShiftDive(page, sky);
+		await expect
+			.poll(
+				async () => {
+					const v = await readSky(sky);
+					return v.biome === 'underworld' && v.y < -7 && v.y > -12;
+				},
+				{ timeout: 12_000 }
+			)
+			.toBe(true);
+		await releaseShiftDive(page, sky);
 		await expect(sky).toHaveAttribute('data-biome', 'underworld');
-		await expect(sky).toHaveAttribute('data-dive', '1');
-		await releaseMouse(page);
+		await shot(page, 'cloud-walk-grotto-1280.png');
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.waitForTimeout(180);
+		await shot(page, 'cloud-walk-grotto-390.png');
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.getByRole('button', { name: '低细腻' }).click();
+		await expect(sky).toHaveAttribute('data-detail', 'low');
+		await page.waitForTimeout(220);
+		await shot(page, 'cloud-walk-grotto-lowdetail-1280.png');
+		await page.getByRole('button', { name: '高细腻' }).click();
 		await shot(page, 'cloud-walk-dive-1280.png');
 		await page.setViewportSize({ width: 390, height: 844 });
-		await page.waitForTimeout(250);
+		await page.waitForTimeout(180);
 		await shot(page, 'cloud-walk-dive-390.png');
 		await page.setViewportSize({ width: 1280, height: 800 });
 
@@ -275,6 +381,19 @@ test.describe('云上散步', () => {
 		await page.goto('/modules/games/cloud-walk/play', { waitUntil: 'networkidle' });
 		await waitSky(page);
 		await shot(page, 'cloud-walk-reduced-1280-light.png');
+		const sky = page.locator('canvas[aria-label="云上散步天空"]');
+		await holdShiftDive(page, sky);
+		await expect
+			.poll(
+				async () => {
+					const v = await readSky(sky);
+					return v.biome === 'water' && v.y < -1.6 && v.y > -5.2;
+				},
+				{ timeout: 10_000 }
+			)
+			.toBe(true);
+		await releaseShiftDive(page, sky);
+		await shot(page, 'cloud-walk-water-reduced-1280-light.png');
 		await page.goto('/modules/games/tide-breath/play', { waitUntil: 'networkidle' });
 		await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 		await page.goto('/modules/games/convenient-store/play', { waitUntil: 'networkidle' });
