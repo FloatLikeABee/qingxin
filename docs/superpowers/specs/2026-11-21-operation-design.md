@@ -1,28 +1,54 @@
-# 手术 (proposal only — not approved, do not implement)
+# 手术 (proposal — visual lane R locked; do not implement yet)
 
-Independent medical-**operation game**. Not a quiz, not a static anatomy diagram, not clinical training.
+Independent medical-**operation game**. Not a quiz, not a static anatomy diagram, not clinical training, not a cartoon toy.
 
-**Status:** design for parent approval. **Visual/gore preference is an open parent question** and must be answered before this spec is treated as final. Do not implement until Ge approves both the loop **and** the visual lane.
+**Status:** Ge locked **visual lane R** (realistic and graphic, including blood) on 2026-11-21. That does **not** approve implementation of 手术, 重卡, 年报, or any pending store/tide/cloud/shelf redesign. Do not add a catalog entry or play route until Ge approves **this amended loop**.
 
 ## Player fantasy
 
-A body overview. You pick a part. You then **perform a short procedure** with tools you actually move: aim, drag, hold, irrigate, close. Phases change the legal tools. Replay the same region with a seeded variation. It is a clear stylized (or, if Ge asks, more realistic) game, never a teaching hospital.
+A body overview. You pick a part. You then **operate**: incise or enter, expose tissue, use tools with the pointer, manage bleeding, finish the phase, close. Blood is visible. Exposed surgical detail is the look. It is a **fictional entertainment simulation**, never a teaching hospital.
 
-If the “operation” is multiple-choice on a still image, it failed. If only one body part exists and the rest are fake locks with no plan, it failed. If we pretend every anatomy procedure is in v1, it failed.
+If the “operation” is multiple-choice on a still image, it failed. If tools are only quiz buttons, it failed. If only one body part exists and the rest are fake locks with no plan, it failed. If we pretend every anatomy procedure is in v1, it failed. If the scene is clay-toy with sparkles instead of tissue and blood, it failed (lane S is **rejected**). If we promise photoreal film scans, it failed.
 
-## Open parent question (must not be silently decided)
+## Visual lane (answered)
 
-Please pick a visual lane before implementation:
-
-| Id | Lane | What the player sees |
+| Id | Lane | Decision |
 | --- | --- | --- |
-| **S** (recommended default for Qingxin) | Stylized clay / toy-clinic | Smooth clay tissue, no blood spray, mistakes are “手滑了” sparks |
-| **I** | Medical-illustration | Clean textbook cuts, pale tissue, minimal fluid, no gore |
-| **R** | Realistic / gore | Wet tissue, blood, more intense — **only if Ge explicitly wants it** |
+| S | Stylized clay / toy-clinic | **Rejected** |
+| I | Medical-illustration, little gore | **Rejected** |
+| **R** | Realistic / graphic, blood | **Locked by Ge:** “Make Operation realistic and graphic, including blood.” |
 
-Until Ge answers, this document **recommends S**, and every v1 procedure is designed so I or R could re-skin meshes/materials without changing the sim. Do not ship R by default on a wellness-adjacent product.
+Lanes S and I are not shipped as toggles. v1 is R only.
 
-Disclaimer on detail + play (all lanes): **这是游戏，不是医学训练，也不能用于真实诊疗。**
+## Honesty: browser / Three.js fidelity
+
+Qingxin already has `three` ^0.187. v1 **will not** look like a surgical film or a purchased anatomy atlas.
+
+**In v1 (committed graphic game, original/procedural meshes, no paid packs):**
+
+- Close-up region meshes with layered skin → fat → a simple muscle/socket volume.
+- Wet/specular PBR-ish materials, warm OR lamp, contact shadows.
+- Wound as real geometry (lips, depth), not a red decal on a sealed mannequin.
+- Blood as: surface film on the wound, gauze that stains, pooled mesh in the well, a **capped** droplet/spray particle set on cut/slip.
+- Tools that look like metal instruments (scalpel, forceps, suction, needle, irrigator), not emoji.
+
+**Not in v1 (do not promise):**
+
+- Photoreal skin pores, scanned cadaver meshes, GPU fluid/SPH, volumetric gore, licensed Visible Body / BioDigital / Unreal assets.
+- Correct surgical anatomy, laterality rules, or “this is how you would operate.”
+- Every body part playable.
+
+A guest should still read it as **graphic surgery**, not a cartoon, within those limits.
+
+## Content warning and opt-in (required)
+
+Detail page and first play **before** the body hub:
+
+> **内容警告：** 本游戏含写实手术画面、伤口与血液，仅供娱乐。这不是医学训练，也不能用于真实诊疗。数据与解剖均为虚构。
+
+Required first-run control: **我已知晓，进入手术**. Play does not mount the graphic scene until that gesture. Persist `graphicAck: true` so the blocking gate does not repeat; the warning line stays on the catalog detail and as a small play HUD mark **含血腥**.
+
+No silent autoplay of wet/surgery audio. 器械声 remains a separate opt-in (off until tapped). Mute, pause, hidden tab, and unmount all stop audio.
 
 ## What exists today
 
@@ -30,81 +56,82 @@ Disclaimer on detail + play (all lanes): **这是游戏，不是医学训练，�
 | --- | --- |
 | Catalog | No `operation` id |
 | 3D | `three` ^0.187, play chrome, local saves |
-| Medical content | None. Do not scrape real surgical video |
+| Medical content | None. Do not scrape real surgical video or paid 3D scans |
 
-CE/ECC not in repo. No paid anatomy packs.
+CE/ECC not in repo. No paid anatomy packs. No new npm unless a later implementation approval says so.
 
-## Approaches
+## Approaches (unchanged recommendation)
 
 ### A. Quiz + labeled diagram (reject)
 
-Tap “阑尾在哪里.” Fails manipulable tools and phases.
+Fails manipulable tools and phases.
 
-### B. Classic board-game cavity (too narrow)
+### B. Classic board-game cavity (reject)
 
-One torso, yank rubber pieces with tweezers. Funny, but **one part**, not procedures, not replayable phases.
+One torso, rubber pieces, no graphic procedure. Conflicts with lane R.
 
 ### C. Body map + finite tool-phase procedures (recommend)
 
-A stylized figure is the hub. **Four v1 procedures** cover **distinct parts**. Each is a real tool loop with 3–5 phases. Replay uses a seed (splinter location, stone count, suture pattern). Further anatomy is **listed as not in v1**, not silently omitted and not promised as “all of medicine.”
+A **readable anatomical** figure is the hub (not clay doll, not a full-body atlas). **Four v1 procedures** cover **distinct parts**. Each is a real tool loop with 3–5 phases, bleeding, and close. Replay uses a seed. Further anatomy is **listed as not in v1**, not silently omitted and not promised as “all of medicine.”
 
-**Recommendation:** C. A/B fail the brief. v1 is finite and honest.
+**Recommendation:** C. A/B fail the brief.
 
-## Recommended v1 procedures (all playable, distinct parts)
+## Four initial regions (kept)
 
-Do not ship a single-part vertical slice as the whole game.
+Ge’s “any body part” aspiration is a **future catalog**, not a v1 promise. v1 ships these four, all selectable from the start. Extra silhouettes on the hub may read **未开放** only if labeled honestly.
 
-| Id | Region | Procedure (game, not real protocol) | Tools | Replay variation |
-| --- | --- | --- | --- | --- |
-| `forearm` | 前臂 | Remove a splinter, irrigate, close | Tweezers, flush, suture/steri | Splinter depth/angle |
-| `knee` | 膝 | Stabilize, wrap, cool | Hands, bandage, pack | Wrap start point |
-| `tooth` | 口腔 | Extract a clearly toy tooth | Elevator, forceps, gauze | Which toy tooth |
-| `belly` | 腹 | Lift a glowing game “stone” through a port | Scope, grasper, bag | Stone count 1–3 |
+| Id | Region | Fictional procedure (not a real protocol) | Tools | Graphic / blood | Replay seed |
+| --- | --- | --- | --- | --- | --- |
+| `forearm` | 前臂 | Incise, extract a foreign body, irrigate, suture | Scalpel, forceps, suction, irrigator, needle | Cut bleeds; well fills until suction/pressure | Depth / angle of the body |
+| `knee` | 膝 | Open a laceration, control bleed, irrigate, close, wrap | Scalpel, gauze/pressure, irrigator, needle, bandage | Spurts on slip; stained wrap | Wound start point |
+| `tooth` | 口腔 | Elevate and extract a marked **fictional** tooth, pack the socket | Elevator, forceps, gauze, suction | Socket bleeds; gauze soaks | Which marked tooth |
+| `belly` | 腹 | Small entry, grasp a **fictional** intra-abdominal stone, bag it, close | Blade/port, grasper, bag, suction, suture | Entry bleeds; field stays wet until suction | Stone count 1–3 |
 
-Later candidates (explicitly **not** v1): heart, eye, spine, birth, trauma bay. Name them on the body as 未开放 if shown; do not imply they work.
+Later candidates (**not** v1, do not imply they work): heart, eye, spine, birth, trauma bay, “any organ on demand.”
 
-Unlock: all four are selectable from the start **or** two start + two unlock after one star. Prefer **all four start** so we do not fake a whole-body product. If implementation time is tight after approval, cut **replay variations**, not regions.
+If implementation time is tight **after** a later build approval, cut **replay variation richness**, not regions, and do not swap R for clay.
 
 ## Recommended v1 playable loop
 
-1. Catalog: id `operation`, title **手术**, englishTitle **Operation**, category **益智**, tags `工具, 身体, 关卡`, playCta **开始手术**.
-2. Play `/modules/games/operation/play`. First view: full-body overview, tappable regions, 返回目录.
-3. Choose a region → procedure intro (one sentence, non-clinical) → **phase strip** (准备 → 操作 → 关闭).
-4. Stage is a close-up 3D (or 2.5D) work area. Active tool follows pointer/finger. Tools are **not** quiz buttons: tweezers must pick, bandage must wrap along a path, flush must be held over the site, grasper must grab and move the stone into the bag.
-5. Success: all phases complete → stars 1–3 from accuracy/time-optional (time is a grade, **not** a fail). Failure: drop / slip → restart phase, no graphic punishment unless lane R is chosen.
-6. Back to body map. Replay same region for a new seed. Pause, low-detail, optional 器械声.
+1. Catalog: id `operation`, title **手术**, englishTitle **Operation**, category **益智**, tags `手术, 工具, 血腥`, playCta **开始手术**. Detail shows the content warning.
+2. `/modules/games/operation/play` → blocking warning → **我已知晓，进入手术** → body overview (tappable 前臂 / 膝 / 口腔 / 腹). 返回目录.
+3. Choose a region → one-line **fictional** intro (no protocol language) → **phase strip** 准备 → 显露 → 操作 → 止血/冲洗 → 关闭.
+4. Close-up Three.js field. Active tool follows pointer/finger. Tools **do the work**: scalpel traces a path to open, forceps pick, suction holds on a pool to clear, irrigator sprays while held, needle follows a close path, bandage wraps a curve. Illegal tool in a phase does nothing but a notice.
+5. Blood **reacts**: opening or a slip raises `bleed`; suction/pressure/gauze lowers it; closing stops new flow. `data-bleed` 0–100 for tests. Field can look messy; it is not a fail unless the phase’s target is missed.
+6. All phases complete → stars 1–3 from accuracy (time is a grade, **not** a fail). Slip restarts the **phase**, not the whole body. Back to hub. Replay same region, new seed.
+7. Pause, 低细腻, 少喷溅 (optional: fewer particles, **blood materials stay**), 器械声 opt-in.
 
-### 390 + desktop
+### Desktop + 390
 
-- 1280: tool tray left or bottom, keyboard `[` `]` cycle tools, mouse drag.
-- 390: tool tray as large chips (min 44px); drag on stage; no `preventDefault` on `window`.
-- Reduced motion: less camera push-in; tools still move.
+- 1280: tool tray (named instruments, min 44px), mouse drag on the field, `[` `]` cycle tools, P pause. No window-level `touchmove` / `preventDefault`.
+- 390: same tray as large chips; drag on the stage only (`touch-action: none` on the canvas wrapper). Warning CTA and 我已知晓 are full-width, min 44px.
+- Reduced motion: no camera lunge, particle cap 0 or very low; **wound mesh and blood film remain**. Reduced motion is not a cartoon mode.
 
 ## Interaction systems
 
 | System | v1 contract |
 | --- | --- |
-| Procedure FSM | `phase`, `tool`, `targets[]`, `complete`. Pure TS, Vitest |
-| Tools | Each tool has `canAct(phase)`, `onDrag`, `onRelease`. Hits use simple volumes, not a surgical IK solver |
-| Body hub | Region ids match procedures; unopened regions labeled 未开放 |
-| Scoring | Accuracy of hits + drops; no medical rubric |
+| Procedure FSM | `phase`, `tool`, `targets[]`, `bleed`, `complete`. Pure TS, Vitest |
+| Tools | `canAct(phase)`, `onDrag`, `onHold`, `onRelease`. Simple hit volumes, not surgical IK |
+| Blood | `bleed` from cut/slip; drain from suction/pressure/pack; stain meshes; particle cap (e.g. 80, 0 if 少喷溅 or reduced motion) |
+| Body hub | Four live regions; any extra part is 未开放, never a silent dummy that looks playable |
+| Scoring | Accuracy of hits + drops; **no** medical rubric |
 
 ## Save / performance
 
 - Key `qingxin.games.operation`, schema 1.
-- Fields: `stars[procedureId]`, `lastSeed`, `visualLane` (S/I/R once chosen), `lowDetail`, `audioWanted`, `dockCollapsed`.
-- Corrupt → recovered hub, notice, sibling keys safe. Never write `qingxin.theme`.
-- One procedure scene mounted at a time; dispose the previous. Mesh budget modest (body hub low-poly; close-up reuses a small kit).
+- Fields: `graphicAck`, `stars[procedureId]`, `lastSeed`, `lowDetail`, `lessSpray`, `audioWanted`, `dockCollapsed`. No `visualLane` toggle (R is the product).
+- Corrupt → recovered hub **behind the warning if `graphicAck` missing**, notice, sibling keys safe. Never write `qingxin.theme`.
+- One procedure scene at a time; dispose the previous. Hub is lower-poly; close-up reuses a small kit.
+- **No** fluid solver. Decals + one wound mesh + capped particles. 低细腻: no shadows, DPR 1 on 390, particle cap 20.
+- Long session: do not accumulate undisposed blood meshes; pool them.
 
 ## Test acceptance (when implemented)
 
-- Unit: phase transitions; illegal tool ignored; seed varies target pose; save stars.
-- Playwright: open hub; select **two different** regions; complete **one** procedure by dragging a tool (assert `data-phase` / `data-complete`, not a quiz radio); replay changes seed; disclaimer visible; 390 and 1280; 返回目录. Do not accept a screenshot of a diagram as proof.
+- Unit: phase transitions; illegal tool ignored; cut raises `bleed`; suction lowers it; seed varies target pose; save `graphicAck` + stars; reduced-motion does not zero `bleed`.
+- Playwright: warning gate before hub; acknowledge; select **two different** regions; complete **one** procedure by dragging a tool (assert `data-phase` / `data-complete` / `data-bleed`, not a quiz radio); blood visible in the canvas path (not only copy); replay changes seed; 390 and 1280; 器械声 starts **only** after opt-in; 返回目录.
+- Do not accept a screenshot of a diagram, a clay doll, or a quiz as proof.
 
-## Visual world (proposal, pending Ge)
+## Out of scope until a later **implementation** approval
 
-Default **S**: clay clinic, Qingxin teal/coral tools, warm lamp, no gore. Lane I swaps materials to illustration paper. Lane R is a **parent-only** opt-in. Impeccable concept-seed **not** run.
-
-## Out of scope until approval **and** gore/style answer
-
-Playable body, tools, catalog card, clinical claims, extra anatomy beyond the four, paid 3D scans.
+Playable body, tools, catalog card, clinical claims, extra anatomy beyond the four, paid 3D scans, photoreal promises, forced audio, lanes S/I as modes, store/tide/cloud/shelf, 重卡/年报 code, merge/Mac.

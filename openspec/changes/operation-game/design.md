@@ -1,7 +1,9 @@
 # Design: 手术
 
-See `docs/superpowers/specs/2026-11-21-operation-design.md`.
+Canonical spec: `docs/superpowers/specs/2026-11-21-operation-design.md`.
 
-Recommended loop: body map + four tool-phase procedures. Quiz and board-game cavity rejected.
+Loop: body map + four tool-phase procedures. Quiz and board-game cavity rejected.
 
-**Blocked on Ge:** visual lane S (stylized clay, recommended) vs I (illustration) vs R (gore).
+**Visual lane R locked** (Ge, 2026-11-21). S/I are not product modes.
+
+Fidelity: layered wound meshes, wet materials, blood film/pool/capped spray — not SPH, not purchased anatomy.

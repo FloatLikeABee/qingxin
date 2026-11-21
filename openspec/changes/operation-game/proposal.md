@@ -1,17 +1,19 @@
 # Change: 手术 (proposal only)
 
-Medical-operation **game** with body-part selection and tool phases. **Not approved. Do not implement.** Visual/gore lane is an open parent question.
+Medical-operation **game** with body-part selection, tool phases, and **locked visual lane R** (realistic, graphic, blood). **Implementation is not approved.** Do not add catalog or play code in this change.
 
 ## Why
 
-Ge asked for an Operation game: pick a body region, then manipulate tools through procedure phases — not a quiz or static diagram. Finite distinct parts, replayable, stylized game not clinical training.
+Ge asked for an Operation game: pick a body region, then manipulate tools through procedure phases — not a quiz or static diagram. On 2026-11-21 they answered the style question: **Make Operation realistic and graphic, including blood.**
 
-## What (when approved and gore/style chosen)
+## What (when the amended loop is later approved to build)
 
 - Catalog id `operation` / 手术.
-- Body hub + four v1 procedures (forearm, knee, tooth, belly) with real tool drags.
-- Local save `qingxin.games.operation`. Disclaimer: not medical training.
+- Content warning + first-run **我已知晓，进入手术**.
+- Body hub + four v1 procedures (forearm, knee, tooth, belly) with real tool drags, wound geometry, and blood feedback.
+- Honest Three.js fidelity (no photoreal scans, no paid assets).
+- Local save `qingxin.games.operation`. Fictional entertainment, not training. Audio opt-in only.
 
 ## Out of scope
 
-Every anatomy procedure, clinical accuracy, paid scans, quiz-only v1, silently shipping a single part as the whole game, merge/Mac.
+Every anatomy procedure, clinical accuracy, paid scans, photoreal promises, quiz-only v1, clay/cartoon lane, silently shipping a single part as the whole game, forced audio, merge/Mac, 重卡/年报 implementation.
