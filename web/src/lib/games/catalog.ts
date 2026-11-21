@@ -2,7 +2,8 @@ export const GAME_CATEGORIES = ['全部', '经营', '休闲', '益智', '节奏'
 
 export type GameCategory = Exclude<(typeof GAME_CATEGORIES)[number], '全部'>;
 export type GameStatus = 'playable' | 'coming';
-export type CoverMotif = 'store' | 'garden' | 'jet' | 'wave' | 'cloud' | 'shelf' | 'office' | 'truck';
+export type CoverMotif =
+	'store' | 'garden' | 'jet' | 'wave' | 'cloud' | 'shelf' | 'office' | 'truck' | 'ledger';
 
 export const GAME_ALIASES: Record<string, string> = {
 	'corner-florist': 'window-garden',
@@ -106,6 +107,24 @@ export const GAMES: GameInfo[] = [
 			ground: '#8FA98A',
 			accent: '#3B82F6',
 			motif: 'truck'
+		}
+	},
+	{
+		id: 'annual-report',
+		title: '年报',
+		englishTitle: 'Annual Report',
+		summary: '打开一本虚构公司的年报，改假设，三张报表一起算。',
+		about:
+			'本表是游戏里的虚构公司数据，不是真实财报，也不连接 Excel。青柠示意有限公司（示意代码 QX-SHOW-0001，不是真的 ISIN）有假设、利润表、资产负债表、现金流量表。改增长率和费用率，公式会跨表重算。支持加减乘除、括号、比较、A1、$A$1、跨表引用，以及 SUM AVERAGE MIN MAX IF ROUND ABS。每张表最多 200 行、26 列；撤销约 50 步只在这本打开的表里。没有 XLOOKUP、透视、VBA，也没有 xlsx。这不是 Microsoft Excel。',
+		category: '经营',
+		tags: ['表格', '虚构', '财务'],
+		status: 'playable',
+		playCta: '打开年报',
+		cover: {
+			sky: '#F8E6C8',
+			ground: '#E8D5B5',
+			accent: '#3B82F6',
+			motif: 'ledger'
 		}
 	},
 	{

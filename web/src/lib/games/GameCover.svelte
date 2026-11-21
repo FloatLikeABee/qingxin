@@ -62,6 +62,13 @@
 			<div class="office-row"></div>
 		</div>
 		<div class="office-door"></div>
+	{:else if cover.motif === 'ledger'}
+		<div class="ledger">
+			<div class="ledger-row"></div>
+			<div class="ledger-row"></div>
+			<div class="ledger-row"></div>
+			<div class="ledger-ink"></div>
+		</div>
 	{:else if cover.motif === 'truck'}
 		<div class="haul-road"></div>
 		<div class="haul-line"></div>
@@ -400,6 +407,37 @@
 		background: var(--cover-accent);
 	}
 
+	.ledger {
+		position: absolute;
+		left: 16%;
+		right: 16%;
+		bottom: 16%;
+		height: 58%;
+		border-radius: 0.35rem;
+		background: color-mix(in srgb, #fff8ee 80%, var(--cover-accent));
+		box-shadow: 0 10px 24px -16px rgb(15 23 42 / 0.55);
+		padding: 0.45rem;
+		display: grid;
+		grid-template-rows: 1fr 1fr 1fr auto;
+		gap: 0.22rem;
+	}
+
+	.ledger-row {
+		background: repeating-linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--cover-accent) 35%, white) 0 22%,
+			transparent 22% 28%
+		);
+		border-radius: 0.12rem;
+	}
+
+	.ledger-ink {
+		height: 0.28rem;
+		width: 42%;
+		border-radius: 999px;
+		background: var(--cover-accent);
+	}
+
 	.haul-road {
 		position: absolute;
 		left: 0;
@@ -415,11 +453,7 @@
 		right: 8%;
 		bottom: 24%;
 		height: 0.18rem;
-		background: repeating-linear-gradient(
-			90deg,
-			#facc15 0 18px,
-			transparent 18px 32px
-		);
+		background: repeating-linear-gradient(90deg, #facc15 0 18px, transparent 18px 32px);
 	}
 
 	.haul-cab {

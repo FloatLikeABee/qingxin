@@ -1,12 +1,12 @@
-# games-catalog Delta (proposal — do not apply until approved)
+# games-catalog Delta
 
 ## ADDED Requirements
 
 ### Requirement: 年报 catalog game
 
-WHEN approved, the registry SHALL include playable `annual-report` (title 年报, category 经营, play CTA 打开年报). Play SHALL show a fictional-data disclaimer. UNTIL approved, the registry SHALL NOT list this id.
+The registry SHALL include playable `annual-report` (title 年报, englishTitle Annual Report, category 经营, tags 表格/虚构/财务, play CTA 打开年报) with play route `/modules/games/annual-report/play`. Detail and play SHALL show the fictional-data disclaimer.
 
-#### Scenario: Not shipped as a stub
+#### Scenario: Shipped playable, not a stub
 
-- **WHEN** this change is still a proposal
-- **THEN** `getGame('annual-report')` is undefined
+- **WHEN** a guest opens the games catalog
+- **THEN** `getGame('annual-report')` is defined, category 经营 lists it, and 打开年报 routes to `/modules/games/annual-report/play`
