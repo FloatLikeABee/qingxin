@@ -50,6 +50,8 @@
 		canvas.dataset.exitside = world.exitSide;
 		canvas.dataset.along = String(Math.round(world.along));
 		canvas.dataset.plen = String(Math.round(world.pieceLength));
+		canvas.dataset.drift =
+			world.lateral > 1.4 ? 'left' : world.lateral < -1.4 ? 'right' : '';
 		canvas.dataset.recover = String(world.recoverCount);
 		canvas.dataset.anim = world.paused ? '0' : '1';
 		canvas.dataset.detail = world.lowDetail ? 'low' : 'high';

@@ -92,7 +92,7 @@ describe('cargo haul sim', () => {
 		const world = createHaul(7);
 		const start = { x: world.x, z: world.z, biome: world.biome };
 		let changed = false;
-		for (let i = 0; i < 2200; i++) {
+		for (let i = 0; i < 4000; i++) {
 			autoFollowHaul(world, world.forkNearby ? 'exit' : 'main');
 			stepHaul(world, 32);
 			if (world.biome !== start.biome) {
@@ -104,6 +104,18 @@ describe('cargo haul sim', () => {
 		expect(Math.hypot(world.x - start.x, world.z - start.z)).toBeGreaterThan(30);
 	});
 
+	it('does not stay stuck off-road while throttle is held', () => {
+		const world = createHaul(9);
+		world.x += 22;
+		world.z += 6;
+		world.odometer = 80;
+		setHaulControl(world, 'throttle', 1);
+		for (let i = 0; i < 160; i++) stepHaul(world, 32);
+		expect(world.onRoad).toBe(true);
+		expect(world.recoverCount).toBeGreaterThan(0);
+		expect(world.odometer).toBeGreaterThanOrEqual(80);
+	});
+
 	it('recovers off-road without resetting the odometer', () => {
 		const world = createHaul(9);
 		world.odometer = 1234;
@@ -111,6 +123,7 @@ describe('cargo haul sim', () => {
 		world.z += 40;
 		world.speed = 0;
 		world.stuckT = 4000;
+		world.offRoadT = 4000;
 		recoverHaul(world);
 		expect(world.onRoad).toBe(true);
 		expect(world.odometer).toBe(1234);

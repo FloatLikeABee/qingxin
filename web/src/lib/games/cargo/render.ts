@@ -54,8 +54,8 @@ function std(color: number, extras: Record<string, unknown> = {}) {
 	return new THREE.MeshStandardMaterial({ color, roughness: 0.62, metalness: 0.08, ...extras });
 }
 
-function ribbon(piece: RoadPiece, y = 0.05, inset = 0) {
-	const hw = Math.max(1.2, piece.width / 2 - inset);
+function ribbon(piece: RoadPiece, y = 0.05, halfWidth?: number) {
+	const hw = halfWidth ?? piece.width / 2;
 	const samples = piece.samples;
 	const positions: number[] = [];
 	const normals: number[] = [];
@@ -336,9 +336,8 @@ export function mountCargoScene(canvas: HTMLCanvasElement): CargoScene | null {
 		country: std(0x6a655c, { roughness: 0.95 })
 	};
 	const shoulderMat = std(0xd6d3c4, { roughness: 1 });
-	const lineMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
 	const dashMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
-	mats.push(roadMats.highway, roadMats.city, roadMats.country, shoulderMat, lineMat, dashMat);
+	mats.push(roadMats.highway, roadMats.city, roadMats.country, shoulderMat, dashMat);
 
 	const roadMap = new Map<string, Group>();
 
@@ -356,13 +355,12 @@ export function mountCargoScene(canvas: HTMLCanvasElement): CargoScene | null {
 		for (const piece of world.pieces) {
 			if (roadMap.has(piece.id)) continue;
 			const g = new THREE.Group();
-			const pavement = new THREE.Mesh(ribbon(piece, 0.06, 0), roadMats[piece.biome]);
+			const pavement = new THREE.Mesh(ribbon(piece, 0.06), roadMats[piece.biome]);
 			pavement.receiveShadow = true;
-			const shoulder = new THREE.Mesh(ribbon(piece, 0.03, -1.6), shoulderMat);
+			const shoulder = new THREE.Mesh(ribbon(piece, 0.03, piece.width / 2 + 1.7), shoulderMat);
 			shoulder.receiveShadow = true;
-			const line = new THREE.Mesh(ribbon(piece, 0.075, piece.width / 2 - 0.18), lineMat);
-			const dash = new THREE.Mesh(ribbon(piece, 0.078, piece.width / 2 - 0.08), dashMat);
-			g.add(shoulder, pavement, line, dash);
+			const line = new THREE.Mesh(ribbon(piece, 0.08, 0.08), dashMat);
+			g.add(shoulder, pavement, line);
 			roadGroup.add(g);
 			roadMap.set(piece.id, g);
 		}
@@ -447,16 +445,18 @@ export function mountCargoScene(canvas: HTMLCanvasElement): CargoScene | null {
 
 		const aheadX = Math.sin(world.yaw);
 		const aheadZ = Math.cos(world.yaw);
-		const back = 15.5 + Math.min(6, Math.abs(world.speed) * 0.18);
-		const height = 5.8 + Math.min(3, Math.abs(world.speed) * 0.08);
+		const rightX = Math.cos(world.yaw);
+		const rightZ = -Math.sin(world.yaw);
+		const back = 16.8 + Math.min(5, Math.abs(world.speed) * 0.14);
+		const height = 7.2 + Math.min(2.2, Math.abs(world.speed) * 0.06);
 		bob += opts?.reducedMotion ? 0 : Math.abs(world.speed) * 0.002;
 		const want = new THREE.Vector3(
-			world.x - aheadX * back + Math.cos(world.yaw) * 0.6,
+			world.x - aheadX * back + rightX * 2.4,
 			height + (opts?.reducedMotion ? 0 : Math.sin(bob) * 0.12),
-			world.z - aheadZ * back
+			world.z - aheadZ * back + rightZ * 2.4
 		);
 		camPos.lerp(want, 0.12);
-		look.set(world.x + aheadX * 16, 1.6, world.z + aheadZ * 16);
+		look.set(world.x + aheadX * 12, 2.1, world.z + aheadZ * 12);
 		camera.position.copy(camPos);
 		camera.lookAt(look);
 		sun.position.set(world.x + 48, 34, world.z - 28);

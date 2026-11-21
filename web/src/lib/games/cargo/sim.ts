@@ -78,6 +78,8 @@ export type HaulWorld = {
 	exitSide: 'left' | 'right' | '';
 	along: number;
 	pieceLength: number;
+	pieceId: string;
+	lateral: number;
 	notice: string;
 	paused: boolean;
 	lowDetail: boolean;
@@ -87,6 +89,7 @@ export type HaulWorld = {
 	recovered: boolean;
 	recoverCount: number;
 	stuckT: number;
+	offRoadT: number;
 	t: number;
 	cargoLog: string[];
 	checkpoint: { x: number; z: number; yaw: number; trailerYaw: number; biome: Biome };
@@ -254,7 +257,7 @@ function scatterScenery(world: HaulWorld, piece: RoadPiece) {
 			pieceId: piece.id
 		});
 	}
-	if (world.cars.length < CAR_POOL && world.rng() > 0.45) {
+	if (world.cars.length < CAR_POOL && piece.seq > 2 && world.rng() > 0.55) {
 		world.cars.push({
 			id: alloc(world.freeCar, 'c', world, 'car'),
 			pieceId: piece.id,
@@ -279,7 +282,6 @@ function recyclePiece(world: HaulWorld, piece: RoadPiece) {
 	world.cars = world.cars.filter((c) => c.pieceId !== piece.id);
 	for (const other of world.pieces) {
 		other.exits = other.exits.filter((id) => id !== piece.id);
-		if (other.exits.length === 0 && other.seq < piece.seq) other.frontier = true;
 	}
 }
 
@@ -291,13 +293,24 @@ export type RoadHit = {
 	dist: number;
 };
 
-export function projectPoint(world: HaulWorld, x: number, z: number): RoadHit | null {
+export function projectPoint(world: HaulWorld, x: number, z: number, yaw = world.yaw): RoadHit | null {
 	let best: RoadHit | null = null;
+	const here = world.pieces.find((p) => p.id === world.pieceId);
+	const preferred = new Set<string>();
+	if (here) {
+		preferred.add(here.id);
+		for (const id of here.exits) preferred.add(id);
+		if (here.parentId) preferred.add(here.parentId);
+	}
 	for (const piece of world.pieces) {
 		for (const sample of piece.samples) {
 			const dx = x - sample.x;
 			const dz = z - sample.z;
-			const dist = dx * dx + dz * dz;
+			let dist = dx * dx + dz * dz;
+			const align = Math.cos(wrap(sample.yaw - yaw));
+			if (align < 0.2) dist += 80;
+			else dist -= align * 6;
+			if (preferred.has(piece.id)) dist -= 18;
 			if (best && dist >= best.dist) continue;
 			const lat = dx * Math.cos(sample.yaw) - dz * Math.sin(sample.yaw);
 			const along = dx * Math.sin(sample.yaw) + dz * Math.cos(sample.yaw);
@@ -310,10 +323,12 @@ export function projectPoint(world: HaulWorld, x: number, z: number): RoadHit | 
 function growFrom(world: HaulWorld, parent: RoadPiece) {
 	if (parent.exits.length > 0) return;
 	const from = { x: parent.endX, z: parent.endZ, yaw: parent.endYaw };
-	const cycle = Math.floor(parent.seq / 4);
-	const biome = (['highway', 'city', 'country'] as const)[cycle % 3]!;
+	let biome = parent.biome;
+	if (parent.branch !== 'exit' && Math.floor(parent.seq / 3) !== Math.floor((parent.seq + 1) / 3)) {
+		biome = nextBiome(parent.biome);
+	}
 	const fork = (parent.seq === 1 || parent.seq % 3 === 2) && parent.branch !== 'exit';
-	const bend = (world.rng() - 0.5) * (biome === 'city' ? 0.72 : 0.48);
+	const bend = (world.rng() - 0.5) * 0.1;
 	const main = makePiece(world, from, biome, {
 		angle: bend,
 		parentId: parent.id,
@@ -324,8 +339,8 @@ function growFrom(world: HaulWorld, parent: RoadPiece) {
 	if (fork) {
 		const side: 'left' | 'right' = world.rng() < 0.5 ? 'left' : 'right';
 		const exit = makePiece(world, from, nextBiome(biome), {
-			angle: side === 'left' ? 0.62 : -0.62,
-			length: 78,
+			angle: side === 'left' ? 0.4 : -0.4,
+			length: 88,
 			parentId: parent.id,
 			branch: 'exit'
 		});
@@ -344,7 +359,7 @@ function ensureAhead(world: HaulWorld) {
 	const queue = [here];
 	const seen = new Set<string>();
 	let guard = 0;
-	while (queue.length && guard < 16) {
+	while (queue.length && guard < 8) {
 		guard += 1;
 		const piece = queue.shift()!;
 		if (seen.has(piece.id)) continue;
@@ -355,13 +370,23 @@ function ensureAhead(world: HaulWorld) {
 			if (child) queue.push(child);
 		}
 	}
+	for (const piece of [...world.pieces]) {
+		if (piece.id === here.id) continue;
+		if (here.exits.includes(piece.id)) continue;
+		if (piece.exits.includes(here.id)) continue;
+		if (piece.seq < here.seq - 1) recyclePiece(world, piece);
+	}
 	while (world.pieces.length > ROAD_POOL) {
 		const hitNow = projectPoint(world, world.x, world.z);
-		const oldest = world.pieces
+		const farthest = world.pieces
 			.filter((p) => p.id !== hitNow?.piece.id && !p.exits.includes(hitNow?.piece.id ?? ''))
-			.sort((a, b) => a.seq - b.seq)[0];
-		if (!oldest) break;
-		recyclePiece(world, oldest);
+			.sort((a, b) => {
+				const da = Math.hypot(a.endX - world.x, a.endZ - world.z);
+				const db = Math.hypot(b.endX - world.x, b.endZ - world.z);
+				return db - da;
+			})[0];
+		if (!farthest) break;
+		recyclePiece(world, farthest);
 	}
 }
 
@@ -369,7 +394,7 @@ export function poseOnPiece(piece: RoadPiece, s: number, lane = 0) {
 	const t = clamp(s / piece.length, 0, 1);
 	const idx = Math.min(piece.samples.length - 1, Math.floor(t * (piece.samples.length - 1)));
 	const sample = piece.samples[idx]!;
-	const lat = lane * 3.1;
+	const lat = lane * 5.4;
 	return {
 		x: sample.x + Math.cos(sample.yaw) * lat,
 		z: sample.z - Math.sin(sample.yaw) * lat,
@@ -418,7 +443,9 @@ export function createHaul(seed = 1, opts?: { biome?: Biome; x?: number; z?: num
 		forkNearby: false,
 		exitSide: '',
 		along: 0,
-		pieceLength: 48,
+		pieceLength: 110,
+		pieceId: '',
+		lateral: 0,
 		notice: '方向盘转向，右脚加油，左脚刹车。车很沉，弯要提前打。',
 		paused: false,
 		lowDetail: false,
@@ -428,6 +455,7 @@ export function createHaul(seed = 1, opts?: { biome?: Biome; x?: number; z?: num
 		recovered: false,
 		recoverCount: 0,
 		stuckT: 0,
+		offRoadT: 0,
 		t: 0,
 		cargoLog: [],
 		checkpoint: { x: 0, z: 8, yaw: 0, trailerYaw: 0, biome: 'highway' },
@@ -445,7 +473,7 @@ export function createHaul(seed = 1, opts?: { biome?: Biome; x?: number; z?: num
 		world,
 		{ x: opts?.x ?? 0, z: opts?.z ?? 0, yaw: opts?.yaw ?? 0 },
 		opts?.biome ?? 'highway',
-		{ angle: 0, length: 48, parentId: null, branch: 'only' }
+		{ angle: 0, length: 110, parentId: null, branch: 'only' }
 	);
 	scatterScenery(world, first);
 	const pose = poseOnPiece(first, 12);
@@ -460,6 +488,7 @@ export function createHaul(seed = 1, opts?: { biome?: Biome; x?: number; z?: num
 		trailerYaw: world.trailerYaw,
 		biome: first.biome
 	};
+	world.pieceId = first.id;
 	ensureAhead(world);
 	return world;
 }
@@ -489,20 +518,41 @@ export function haulControlFromKeyboard(event: { key: string; code: string }): {
 }
 
 export function recoverHaul(world: HaulWorld) {
-	world.x = world.checkpoint.x;
-	world.z = world.checkpoint.z;
-	world.yaw = world.checkpoint.yaw;
-	world.trailerYaw = world.checkpoint.trailerYaw;
-	world.speed = 4;
+	const hit =
+		projectPoint(world, world.checkpoint.x, world.checkpoint.z, world.checkpoint.yaw) ??
+		projectPoint(world, world.x, world.z);
+	if (hit) {
+		world.x = hit.sample.x;
+		world.z = hit.sample.z;
+		world.yaw = hit.sample.yaw;
+		world.trailerYaw = hit.sample.yaw;
+		world.pieceId = hit.piece.id;
+		world.biome = hit.piece.biome;
+		world.checkpoint = {
+			x: hit.sample.x,
+			z: hit.sample.z,
+			yaw: hit.sample.yaw,
+			trailerYaw: hit.sample.yaw,
+			biome: hit.piece.biome
+		};
+	} else {
+		world.x = world.checkpoint.x;
+		world.z = world.checkpoint.z;
+		world.yaw = world.checkpoint.yaw;
+		world.trailerYaw = world.checkpoint.trailerYaw;
+		world.biome = world.checkpoint.biome;
+	}
+	world.speed = 5;
+	world.steer = 0;
 	world.steerInput = 0;
 	world.throttle = 0;
 	world.brake = 0;
 	world.gear = 'drive';
 	world.stuckT = 0;
+	world.offRoadT = 0;
 	world.recoverCount += 1;
 	world.notice = '回收到上一个路面。里程还在。';
 	world.onRoad = true;
-	world.biome = world.checkpoint.biome;
 	ensureAhead(world);
 }
 
@@ -528,8 +578,9 @@ function tick(world: HaulWorld, dt: number) {
 	const hit = projectPoint(world, world.x, world.z);
 	const width = hit?.piece.width ?? 10;
 	const lateral = hit?.lateral ?? 99;
-	world.onRoad = Boolean(hit && Math.abs(lateral) < width / 2 + 1.2);
+	world.onRoad = Boolean(hit && Math.abs(lateral) < width / 2 + 2.6);
 	world.biome = hit?.piece.biome ?? world.biome;
+	if (hit) world.pieceId = hit.piece.id;
 	const forkChild = hit?.piece.exits
 		.map((id) => world.pieces.find((p) => p.id === id))
 		.find((p) => p?.branch === 'exit');
@@ -537,6 +588,7 @@ function tick(world: HaulWorld, dt: number) {
 	world.exitSide = forkChild?.exitSide || hit?.piece.exitSide || '';
 	world.along = hit?.sample.s ?? 0;
 	world.pieceLength = hit?.piece.length ?? 0;
+	world.lateral = hit?.lateral ?? 0;
 
 	if (world.gear === 'reverse' && world.speed > 1.4) {
 		world.brake = Math.max(world.brake, 0.4);
@@ -551,12 +603,20 @@ function tick(world: HaulWorld, dt: number) {
 	else world.speed = clamp(world.speed, -2, MAX_SPEED);
 
 	if (!world.onRoad) {
-		world.speed *= Math.max(0, 1 - 0.55 * sec);
+		world.speed *= Math.max(0, 1 - 1.8 * sec);
 		world.notice = '轧到路肩了。打回路面，或等回收。';
-		if (Math.abs(world.speed) < 1.4) world.stuckT += dt;
-		else world.stuckT = 0;
+		world.offRoadT += dt;
+		if (Math.abs(world.speed) < 2.2) world.stuckT += dt;
+		if (hit && Math.abs(world.speed) > 1) {
+			const pull = clamp(-hit.lateral * 0.12, -0.4, 0.4);
+			world.yaw = wrap(world.yaw + pull * sec);
+		}
 	} else {
 		world.stuckT = 0;
+		world.offRoadT = 0;
+		if (world.notice.startsWith('轧到')) {
+			world.notice = '方向盘转向，右脚加油，左脚刹车。车很沉，弯要提前打。';
+		}
 		if (Math.abs(world.speed) > 3) {
 			world.checkpoint = {
 				x: world.x,
@@ -569,7 +629,7 @@ function tick(world: HaulWorld, dt: number) {
 	}
 
 	const jack = Math.abs(wrap(world.yaw - world.trailerYaw));
-	if (Math.abs(lateral) > width / 2 + 11 || world.stuckT > 2600 || jack > 1.9) {
+	if (world.stuckT > 2200 || world.offRoadT > 3800 || jack > 2.05) {
 		recoverHaul(world);
 		return;
 	}
@@ -589,9 +649,9 @@ function tick(world: HaulWorld, dt: number) {
 		const piece = world.pieces.find((p) => p.id === car.pieceId);
 		if (!piece) continue;
 		const pose = poseOnPiece(piece, car.s, car.lane);
-		if (Math.hypot(pose.x - world.x, pose.z - world.z) < 3.6 && Math.abs(world.speed) > 7) {
+		if (Math.hypot(pose.x - world.x, pose.z - world.z) < 2.3 && Math.abs(world.speed) > 8) {
 			world.notice = '蹭到了旁车。';
-			world.speed *= 0.45;
+			world.speed *= 0.72;
 		}
 	}
 
@@ -611,31 +671,39 @@ export function stepHaul(world: HaulWorld, dt: number) {
 
 export function autoFollowHaul(world: HaulWorld, prefer: 'main' | 'exit' = 'main') {
 	world.gear = 'drive';
-	world.throttle = 0.85;
-	world.brake = 0;
 	world.handbrake = false;
 	const hit = projectPoint(world, world.x, world.z);
-	if (!hit) return;
-	let target = hit;
+	if (!hit) {
+		world.throttle = 0.7;
+		return;
+	}
+	let sample = hit.sample;
+	let approaching = false;
 	if (hit.piece.exits.length) {
 		const kids = hit.piece.exits
 			.map((id) => world.pieces.find((p) => p.id === id))
 			.filter((p): p is RoadPiece => Boolean(p));
 		const chosen =
 			kids.find((p) => (prefer === 'exit' ? p.branch === 'exit' : p.branch !== 'exit')) ?? kids[0];
-		if (chosen && hit.sample.s > hit.piece.length - 18) {
-			const s0 = chosen.samples[0]!;
-			target = {
-				piece: chosen,
-				sample: s0,
-				lateral: 0,
-				along: 0,
-				dist: 0
-			};
+		if (chosen && hit.sample.s > hit.piece.length * 0.84) {
+			approaching = true;
+			sample = chosen.samples[Math.min(3, chosen.samples.length - 1)]!;
 		}
 	}
-	const yawErr = wrap(target.sample.yaw - world.yaw);
-	world.steerInput = clamp(-target.lateral * 0.12 - yawErr * 1.6, -1, 1);
+	if (!approaching) {
+		const idx = Math.max(
+			0,
+			hit.piece.samples.findIndex((s) => s.s >= hit.sample.s)
+		);
+		sample = hit.piece.samples[Math.min(idx + 2, hit.piece.samples.length - 1)]!;
+	}
+	world.throttle = approaching || world.speed > 18 ? 0.55 : 0.8;
+	world.brake = approaching && world.speed > 12 ? 0.35 : 0;
+	const dx = world.x - sample.x;
+	const dz = world.z - sample.z;
+	const lat = dx * Math.cos(sample.yaw) - dz * Math.sin(sample.yaw);
+	const yawErr = wrap(sample.yaw - world.yaw);
+	world.steerInput = clamp(-lat * 0.16 - yawErr * 1.45, -1, 1);
 }
 
 export function generateHaulMeters(world: HaulWorld, meters: number) {

@@ -104,6 +104,17 @@ test('play mounts without a session', async ({ page }) => {
 	await expect(page.getByText('客人还在店门口等着。')).toBeVisible();
 });
 
+test('cargo haul opens from catalog into play chrome', async ({ page }) => {
+	await boot(page);
+	await page.goto('/modules/games/cargo-haul', { waitUntil: 'networkidle' });
+	await expect(page.getByRole('heading', { name: '重卡' })).toBeVisible();
+	await expect(page.getByRole('link', { name: '开始开车' })).toBeVisible();
+	await page.getByRole('link', { name: '开始开车' }).click();
+	await expect(page).toHaveURL(/\/modules\/games\/cargo-haul\/play/);
+	await expect(page.locator('canvas[aria-label="重卡公路"]')).toBeVisible();
+	await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
+});
+
 test('memory shelf opens from catalog into play chrome', async ({ page }) => {
 	await boot(page);
 	await page.goto('/modules/games/memory-shelf', { waitUntil: 'networkidle' });

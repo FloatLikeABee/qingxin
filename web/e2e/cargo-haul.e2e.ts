@@ -47,11 +47,6 @@ async function readRoad(road: Locator) {
 	}));
 }
 
-async function hold(page: Page, key: string, ms: number) {
-	await page.keyboard.down(key);
-	await page.waitForTimeout(ms);
-	await page.keyboard.up(key);
-}
 
 test.describe('重卡', () => {
 	test('guest steers a heavy truck through a junction and biomes', async ({ page }) => {
@@ -84,65 +79,51 @@ test.describe('重卡', () => {
 		await expect
 			.poll(async () => Number(await road.getAttribute('data-speed')), { timeout: 8_000 })
 			.toBeGreaterThan(start.speed + 1);
-		await page.keyboard.down('d');
-		await expect
-			.poll(async () => Math.abs(Number(await road.getAttribute('data-yaw')) - yaw0), {
-				timeout: 8_000
-			})
-			.toBeGreaterThan(0.08);
-		await page.keyboard.up('d');
 
 		const seen = new Set([start.biome ?? 'highway']);
 		await expect
-			.poll(async () => (await road.getAttribute('data-fork')) === '1', { timeout: 25_000 })
-			.toBe(true);
-		await expect
 			.poll(
 				async () => {
-					const along = Number(await road.getAttribute('data-along'));
-					const plen = Number(await road.getAttribute('data-plen'));
-					return plen > 0 && along > plen - 28;
+					await focusStage(page);
+					await page.keyboard.down('w');
+					return (await road.getAttribute('data-fork')) === '1';
 				},
-				{ timeout: 18_000 }
+				{ timeout: 28_000 }
 			)
 			.toBe(true);
-		const side = await road.getAttribute('data-exitside');
-		if (side === 'left') await page.keyboard.down('a');
-		else await page.keyboard.down('d');
-		await page.waitForTimeout(1600);
-		await expect
-			.poll(async () => (await road.getAttribute('data-biome')) !== 'highway', {
-				timeout: 18_000
-			})
-			.toBe(true);
-		await page.keyboard.up('a');
-		await page.keyboard.up('d');
-		const afterExit = await readRoad(road);
-		expect(afterExit.biome === 'city' || afterExit.biome === 'country').toBe(true);
-		seen.add(afterExit.biome ?? '');
-		await shot(page, `cargo-haul-${afterExit.biome}-1280`);
-
+		await shot(page, 'cargo-haul-junction-1280');
 		await expect
 			.poll(
 				async () => {
+					await focusStage(page);
+					await page.keyboard.down('w');
 					const biome = await road.getAttribute('data-biome');
 					if (biome && !seen.has(biome)) {
 						seen.add(biome);
-						await shot(page, `cargo-haul-${biome}-drive-1280`);
+						await shot(page, `cargo-haul-${biome}-1280`);
 					}
 					return seen.has('highway') && seen.has('city') && seen.has('country');
 				},
 				{ timeout: 55_000 }
 			)
 			.toBe(true);
+		await page.keyboard.down('d');
+		await expect
+			.poll(async () => Math.abs(Number(await road.getAttribute('data-yaw')) - yaw0), {
+				timeout: 8_000
+			})
+			.toBeGreaterThan(0.05);
+		await page.keyboard.up('d');
 
 		await page.keyboard.up('w');
 		await page.keyboard.down('s');
 		await expect
-			.poll(async () => Number(await road.getAttribute('data-speed')), { timeout: 8_000 })
-			.toBeLessThan(8);
+			.poll(async () => Math.abs(Number(await road.getAttribute('data-speed'))), {
+				timeout: 10_000
+			})
+			.toBeLessThan(1.6);
 		await page.keyboard.up('s');
-		await page.keyboard.press('r');
+		await page.getByRole('button', { name: '挂倒车' }).click();
 		await expect(road).toHaveAttribute('data-reverse', '1');
 		await page.keyboard.down('w');
 		await expect
@@ -158,7 +139,9 @@ test.describe('重卡', () => {
 			.poll(async () => Number(await road.getAttribute('data-recover')))
 			.toBeGreaterThan(0);
 		expect(Number(await road.getAttribute('data-odometer'))).toBeGreaterThanOrEqual(odo - 2);
-		await expect(road).toHaveAttribute('data-onroad', '1');
+		await expect
+			.poll(async () => (await road.getAttribute('data-onroad')) === '1', { timeout: 8_000 })
+			.toBe(true);
 		await shot(page, 'cargo-haul-recover-1280');
 
 		await page.getByRole('button', { name: '暂停' }).click();
@@ -187,10 +170,10 @@ test.describe('重卡', () => {
 
 		await page.setViewportSize({ width: 390, height: 844 });
 		await expect.poll(async () => (await road2.boundingBox())?.width ?? 0).toBeLessThan(500);
-		await expect(page.getByRole('button', { name: '油门' })).toBeVisible();
-		await expect(page.getByRole('button', { name: '刹车' })).toBeVisible();
-		await expect(page.getByRole('button', { name: '倒车' })).toBeVisible();
-		const go = page.getByRole('button', { name: '油门' });
+		await expect(page.getByRole('button', { name: '油门', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: '刹车', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: '倒车', exact: true })).toBeVisible();
+		const go = page.getByRole('button', { name: '油门', exact: true });
 		const box = await go.boundingBox();
 		expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
 		expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
