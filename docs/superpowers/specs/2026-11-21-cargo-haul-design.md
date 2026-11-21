@@ -1,8 +1,8 @@
-# 重卡 (proposal only — not approved, do not implement)
+# 重卡
 
 Independent catalog game. Not 上班 relocation, not store/tide/cloud/shelf, not Stage 2/3.
 
-**Status:** design for parent approval. Do not add a catalog entry or play route until Ge says to build this spec.
+**Status:** approved t275u 2026-11-21 and implemented on `cursor/cargo-haul-4e4e`.
 
 ## Player fantasy
 

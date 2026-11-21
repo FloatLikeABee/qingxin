@@ -1,8 +1,8 @@
-export const GAME_CATEGORIES = ['全部', '经营', '休闲', '益智', '节奏', '飞行'] as const;
+export const GAME_CATEGORIES = ['全部', '经营', '休闲', '益智', '节奏', '飞行', '驾驶'] as const;
 
 export type GameCategory = Exclude<(typeof GAME_CATEGORIES)[number], '全部'>;
 export type GameStatus = 'playable' | 'coming';
-export type CoverMotif = 'store' | 'garden' | 'jet' | 'wave' | 'cloud' | 'shelf' | 'office';
+export type CoverMotif = 'store' | 'garden' | 'jet' | 'wave' | 'cloud' | 'shelf' | 'office' | 'truck';
 
 export const GAME_ALIASES: Record<string, string> = {
 	'corner-florist': 'window-garden',
@@ -88,6 +88,24 @@ export const GAMES: GameInfo[] = [
 			ground: '#DBEAFE',
 			accent: '#3B82F6',
 			motif: 'jet'
+		}
+	},
+	{
+		id: 'cargo-haul',
+		title: '重卡',
+		englishTitle: 'Heavy Haul',
+		summary: '开着大货车在公路、城市和乡间路上一直开下去。',
+		about:
+			'宽路、真转向。方向盘打弯、油门刹车倒车都算。公路接到城市接到田野，路段会回收所以开很久也不会把内存撑爆。轧出路面会刮底板，卡住了就回收到上一条路面，里程还在。没有通关，也不逼你赶路。',
+		category: '驾驶',
+		tags: ['卡车', '公路', '无尽'],
+		status: 'playable',
+		playCta: '开始开车',
+		cover: {
+			sky: '#F4C38A',
+			ground: '#8FA98A',
+			accent: '#3B82F6',
+			motif: 'truck'
 		}
 	},
 	{

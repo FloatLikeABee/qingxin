@@ -62,6 +62,16 @@
 			<div class="office-row"></div>
 		</div>
 		<div class="office-door"></div>
+	{:else if cover.motif === 'truck'}
+		<div class="haul-road"></div>
+		<div class="haul-line"></div>
+		<div class="haul-cab"></div>
+		<div class="haul-sleeper"></div>
+		<div class="haul-box"></div>
+		<div class="haul-wheel a"></div>
+		<div class="haul-wheel b"></div>
+		<div class="haul-wheel c"></div>
+		<div class="haul-hill"></div>
 	{:else}
 		<div class="mini-shelf s1"></div>
 		<div class="mini-shelf s2"></div>
@@ -388,6 +398,89 @@
 		height: 10%;
 		border-radius: 0.12rem 0.12rem 0 0;
 		background: var(--cover-accent);
+	}
+
+	.haul-road {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 12%;
+		height: 28%;
+		background: color-mix(in srgb, #64748b 70%, var(--cover-ground));
+	}
+
+	.haul-line {
+		position: absolute;
+		left: 8%;
+		right: 8%;
+		bottom: 24%;
+		height: 0.18rem;
+		background: repeating-linear-gradient(
+			90deg,
+			#facc15 0 18px,
+			transparent 18px 32px
+		);
+	}
+
+	.haul-cab {
+		position: absolute;
+		left: 22%;
+		bottom: 28%;
+		width: 1.55rem;
+		height: 1.7rem;
+		border-radius: 0.25rem 0.35rem 0.12rem 0.12rem;
+		background: var(--cover-accent);
+		box-shadow: 0.35rem 0.55rem 0 -0.45rem #ffe08a;
+	}
+
+	.haul-sleeper {
+		position: absolute;
+		left: 30%;
+		bottom: 28%;
+		width: 1.1rem;
+		height: 1.35rem;
+		background: color-mix(in srgb, var(--cover-accent) 70%, #1e3a8a);
+		border-radius: 0.12rem;
+	}
+
+	.haul-box {
+		position: absolute;
+		left: 40%;
+		bottom: 30%;
+		width: 3.4rem;
+		height: 1.55rem;
+		border-radius: 0.12rem;
+		background: color-mix(in srgb, white 82%, var(--cover-accent));
+		box-shadow: inset 0 -0.35rem 0 var(--qx-accent-teal);
+	}
+
+	.haul-wheel {
+		position: absolute;
+		bottom: 22%;
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 999px;
+		background: #111827;
+	}
+
+	.haul-wheel.a {
+		left: 24%;
+	}
+	.haul-wheel.b {
+		left: 44%;
+	}
+	.haul-wheel.c {
+		left: 62%;
+	}
+
+	.haul-hill {
+		position: absolute;
+		right: 6%;
+		bottom: 38%;
+		width: 28%;
+		height: 22%;
+		border-radius: 50% 50% 0 0;
+		background: color-mix(in srgb, var(--qx-accent-teal) 55%, var(--cover-ground));
 	}
 
 	.mini-shelf {

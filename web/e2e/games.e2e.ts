@@ -49,6 +49,7 @@ test('catalog search and category filter', async ({ page }) => {
 	await expect(page.getByRole('button', { name: '益智' })).toBeVisible();
 	await expect(page.getByRole('button', { name: '节奏' })).toBeVisible();
 	await expect(page.getByRole('button', { name: '飞行' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '驾驶' })).toBeVisible();
 	await page.getByLabel('找一款想玩的').fill('经理');
 	await expect(page.getByRole('heading', { name: '便利店经理' }).first()).toBeVisible();
 	await expect(page.getByRole('heading', { name: '晴空出击' })).toHaveCount(0);
@@ -101,6 +102,17 @@ test('play mounts without a session', async ({ page }) => {
 	await expect(page.getByRole('button', { name: /架上/ }).first()).toBeVisible();
 	await page.getByRole('button', { name: '暂停' }).click();
 	await expect(page.getByText('客人还在店门口等着。')).toBeVisible();
+});
+
+test('cargo haul opens from catalog into play chrome', async ({ page }) => {
+	await boot(page);
+	await page.goto('/modules/games/cargo-haul', { waitUntil: 'networkidle' });
+	await expect(page.getByRole('heading', { name: '重卡' })).toBeVisible();
+	await expect(page.getByRole('link', { name: '开始开车' })).toBeVisible();
+	await page.getByRole('link', { name: '开始开车' }).click();
+	await expect(page).toHaveURL(/\/modules\/games\/cargo-haul\/play/);
+	await expect(page.locator('canvas[aria-label="重卡公路"]')).toBeVisible();
+	await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 });
 
 test('memory shelf opens from catalog into play chrome', async ({ page }) => {

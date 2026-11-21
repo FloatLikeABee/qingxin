@@ -3,6 +3,7 @@
 	import ShooterPlay from '#lib/games/shooter/ShooterPlay.svelte';
 	import StorePlay from '#lib/games/store/StorePlay.svelte';
 	import CloudPlay from '#lib/games/cloud/CloudPlay.svelte';
+	import CargoPlay from '#lib/games/cargo/CargoPlay.svelte';
 	import ShelfPlay from '#lib/games/shelf/ShelfPlay.svelte';
 	import TidePlay from '#lib/games/tide/TidePlay.svelte';
 	import ShangbanPlay from '#lib/shangban/ShangbanPlay.svelte';
@@ -21,6 +22,8 @@
 	<CloudPlay title={data.game.title} />
 {:else if data.game.id === 'memory-shelf'}
 	<ShelfPlay title={data.game.title} />
+{:else if data.game.id === 'cargo-haul'}
+	<CargoPlay title={data.game.title} />
 {:else if data.game.id === 'shangban'}
 	<ShangbanPlay />
 {:else}

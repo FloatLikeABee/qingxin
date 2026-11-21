@@ -36,6 +36,11 @@
 			id: '飞行',
 			icon: 'jet',
 			wash: 'linear-gradient(135deg, var(--qx-primary), var(--qx-accent-teal))'
+		},
+		{
+			id: '驾驶',
+			icon: 'truck',
+			wash: 'linear-gradient(135deg, var(--qx-accent-gold), var(--qx-primary))'
 		}
 	];
 
@@ -70,7 +75,7 @@
 
 	<section class="mt-5">
 		<h2 class="text-lg font-semibold">按类型逛</h2>
-		<div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+		<div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
 			{#each tiles as tile (tile.id)}
 				<button
 					type="button"
