@@ -1,121 +1,107 @@
 import { describe, expect, it } from 'vitest';
-import {
-	closeInspect,
-	createStudy,
-	enterRoom,
-	hintShelf,
-	inspectProp,
-	isShelfRestored,
-	nextShelf,
-	placeInRoom,
-	putInSlot,
-	rememberShelf,
-	stepStudy,
-	takeProp
-} from './sim';
+import { createShelf, itemAt, nextRound, pickItem, placeHeld, shelfLayout, stepShelf } from './sim';
 
-function restoreAll(world: ReturnType<typeof createStudy>) {
-	for (let i = 0; i < world.goal.length; i++) {
-		const want = world.goal[i]!;
-		if (world.slots[i] === want) continue;
-		const at = world.slots.indexOf(want);
-		if (at >= 0) takeProp(world, want);
-		putInSlot(world, i);
+function drive(world: ReturnType<typeof createShelf>, ms: number) {
+	let left = ms;
+	while (left > 0) {
+		const dt = Math.min(50, left);
+		stepShelf(world, dt);
+		left -= dt;
 	}
 }
 
-describe('memory shelf study', () => {
-	it('starts in observe with a three-object shelf and no timer fail', () => {
-		const world = createStudy();
-		expect(world.phase).toBe('observe');
-		expect(world.puzzle).toBe(0);
-		expect(world.slots).toHaveLength(3);
-		expect(world.goal).toEqual(world.slots);
+describe('haunted bookshelf', () => {
+	it('starts with a packed bookcase, exactly one haunted book, and no timer fail', () => {
+		const world = createShelf(() => 0.2);
+		expect(world.items.length).toBeGreaterThanOrEqual(20);
+		expect(world.items.filter((i) => i.kind === 'book').length).toBeGreaterThanOrEqual(16);
+		expect(world.items.filter((i) => i.kind === 'prop').length).toBeGreaterThanOrEqual(4);
+		expect(world.phase).toBe('idle');
 		expect(world.over).toBe(false);
-		stepStudy(world, 20_000);
+		const haunted = world.items.filter((i) => i.id === world.hauntId);
+		expect(haunted).toHaveLength(1);
+		expect(haunted[0]?.kind).toBe('book');
+		drive(world, 20_000);
 		expect(world.over).toBe(false);
-		expect(world.phase).toBe('observe');
+		expect(world.phase).toBe('idle');
 	});
 
-	it('scrambles after you remember, without matching the goal', () => {
-		const world = createStudy();
-		rememberShelf(world, () => 0.99);
-		stepStudy(world, 800);
-		expect(world.phase).toBe('restore');
-		expect(world.slots.join(',')).not.toBe(world.goal.join(','));
-		const moved = world.slots.filter((k, i) => k !== world.goal[i]).length;
-		expect(moved).toBeGreaterThanOrEqual(2);
+	it('swaps two items on pick and place without moving the rest', () => {
+		const world = createShelf(() => 0.4);
+		const haunt = world.hauntId;
+		const a = world.items.find((i) => i.kind === 'book' && i.id !== haunt)!;
+		const b = world.items.find((i) => i.id !== a.id && i.id !== haunt && i.row === a.row)!;
+		const before = shelfLayout(world);
+		const aRow = a.row;
+		const aSlot = a.slot;
+		const bRow = b.row;
+		const bSlot = b.slot;
+		pickItem(world, a.id);
+		expect(world.heldId).toBe(a.id);
+		expect(world.phase).toBe('idle');
+		placeHeld(world, bRow, bSlot);
+		expect(world.heldId).toBeNull();
+		expect(itemAt(world, bRow, bSlot)?.id).toBe(a.id);
+		expect(itemAt(world, aRow, aSlot)?.id).toBe(b.id);
+		expect(shelfLayout(world).filter((line, i) => line !== before[i])).toHaveLength(2);
 	});
 
-	it('lets a wrong placement be corrected instead of failing', () => {
-		const world = createStudy();
-		rememberShelf(world, () => 0.8);
-		stepStudy(world, 800);
-		const home = world.goal.indexOf('globe');
-		const wrong = world.goal.findIndex((_, i) => i !== home);
-		takeProp(world, 'globe');
-		putInSlot(world, wrong);
-		expect(world.lastWrong).toBe(true);
-		expect(isShelfRestored(world)).toBe(false);
-		expect(world.over).toBe(false);
-		restoreAll(world);
-		expect(isShelfRestored(world)).toBe(true);
-		expect(world.phase).toBe('cleared');
-		expect(world.unlocked).toContain('globe');
+	it('plays emerge cry apology return once, then will not retrigger', () => {
+		const world = createShelf(() => 0.1);
+		pickItem(world, world.hauntId);
+		expect(world.phase).toBe('emerge');
+		expect(world.heldId).toBe(world.hauntId);
+		drive(world, 1200);
+		expect(['face', 'cry', 'sorry']).toContain(world.phase);
+		drive(world, 8000);
+		expect(world.phase).toBe('done');
+		expect(world.apology).toBe(false);
+		const haunt = world.hauntId;
+		placeHeld(
+			world,
+			world.items.find((i) => i.id === haunt)!.row,
+			world.items.find((i) => i.id === haunt)!.slot
+		);
+		pickItem(world, haunt);
+		expect(world.phase).toBe('done');
+		expect(world.items.filter((i) => i.kind === 'book' && i.id === haunt)).toHaveLength(1);
 	});
 
-	it('unlocks the collection and opens a harder shelf next', () => {
-		const world = createStudy();
-		rememberShelf(world);
-		stepStudy(world, 800);
-		restoreAll(world);
-		expect(world.unlocked.length).toBeGreaterThanOrEqual(1);
-		nextShelf(world);
-		expect(world.puzzle).toBe(1);
-		expect(world.phase).toBe('observe');
-		expect(world.slots.length).toBeGreaterThan(3);
+	it('shows 对不起 during sorry even with reduced motion', () => {
+		const world = createShelf(() => 0.3);
+		world.reducedMotion = true;
+		pickItem(world, world.hauntId);
+		let sawSorry = false;
+		for (let i = 0; i < 80; i++) {
+			stepShelf(world, 40);
+			if (world.phase === 'sorry' && world.apology) sawSorry = true;
+		}
+		expect(sawSorry).toBe(true);
+		expect(world.phase).toBe('done');
 	});
 
-	it('inspects an object in 3D without moving it', () => {
-		const world = createStudy();
-		inspectProp(world, 'cup');
-		expect(world.inspecting).toBe('cup');
-		expect(world.slots.includes('cup')).toBe(true);
-		closeInspect(world);
-		expect(world.inspecting).toBeNull();
-	});
-
-	it('pauses during the veil so the scramble waits', () => {
-		const world = createStudy();
-		rememberShelf(world);
-		expect(world.phase).toBe('veil');
+	it('pauses the haunt sequence', () => {
+		const world = createShelf(() => 0.15);
+		pickItem(world, world.hauntId);
+		expect(world.phase).toBe('emerge');
 		world.paused = true;
-		stepStudy(world, 2000);
-		expect(world.phase).toBe('veil');
+		drive(world, 4000);
+		expect(world.phase).toBe('emerge');
 		world.paused = false;
-		stepStudy(world, 800);
-		expect(world.phase).toBe('restore');
+		drive(world, 8000);
+		expect(world.phase).toBe('done');
 	});
 
-	it('places an unlocked object in the collection room', () => {
-		const world = createStudy();
-		rememberShelf(world);
-		stepStudy(world, 800);
-		restoreAll(world);
-		enterRoom(world);
-		expect(world.room).toBe('collection');
-		placeInRoom(world, 'globe', 1.2, -0.4, 0.3);
-		const put = world.placements.find((p) => p.kind === 'globe');
-		expect(put?.arranged).toBe(true);
-		expect(put?.x).toBeCloseTo(1.2);
-	});
-
-	it('offers a hint without solving the shelf', () => {
-		const world = createStudy();
-		rememberShelf(world);
-		stepStudy(world, 800);
-		hintShelf(world);
-		expect(world.hintSlot).not.toBeNull();
-		expect(isShelfRestored(world)).toBe(false);
+	it('starts a new round with a different haunt and the same arrangement', () => {
+		const world = createShelf(() => 0.6);
+		pickItem(world, world.hauntId);
+		drive(world, 8000);
+		const layout = shelfLayout(world);
+		const prev = world.hauntId;
+		nextRound(world, () => 0.05);
+		expect(world.phase).toBe('idle');
+		expect(world.hauntId).not.toBe(prev);
+		expect(world.round).toBe(1);
+		expect(shelfLayout(world)).toEqual(layout);
 	});
 });

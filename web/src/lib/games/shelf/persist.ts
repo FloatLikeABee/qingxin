@@ -1,16 +1,16 @@
 import {
-	createStudy,
-	PROP_KINDS,
-	PUZZLES,
-	type PropKind,
-	type RoomPlacement,
-	type StudyPhase,
-	type StudyRoom,
-	type StudyWorld
+	ROWS,
+	SLOTS,
+	createShelf,
+	type HauntPhase,
+	type ItemKind,
+	type PropId,
+	type ShelfItem,
+	type ShelfWorld
 } from './sim';
 
 export const SHELF_SAVE_KEY = 'qingxin.games.memory-shelf';
-export const SHELF_SCHEMA = 1;
+export const SHELF_SCHEMA = 2;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return value && typeof value === 'object' && !Array.isArray(value)
@@ -24,60 +24,57 @@ function clamp(n: unknown, min: number, max: number, fallback: number) {
 	return Math.min(max, Math.max(min, value));
 }
 
-const KIND_SET = new Set<string>(PROP_KINDS);
-const PHASES = new Set(['observe', 'veil', 'restore', 'cleared']);
+const KINDS = new Set<ItemKind>(['book', 'prop']);
+const PHASES = new Set<HauntPhase>(['idle', 'emerge', 'face', 'cry', 'sorry', 'retreat', 'done']);
+const PROPS = new Set<string>([
+	'globe',
+	'cup',
+	'clock',
+	'cat',
+	'candle',
+	'plant',
+	'frame',
+	'ink',
+	'teapot',
+	'moth'
+]);
 
-function parseKinds(raw: unknown): PropKind[] {
-	if (!Array.isArray(raw)) return [];
-	const out: PropKind[] = [];
-	for (const item of raw) {
-		const k = String(item);
-		if (KIND_SET.has(k) && !out.includes(k as PropKind)) out.push(k as PropKind);
+function parseItems(raw: unknown, fallback: ShelfItem[]): ShelfItem[] {
+	if (!Array.isArray(raw) || raw.length !== fallback.length) {
+		return fallback.map((item) => ({ ...item }));
 	}
-	return out;
-}
-
-function parseSlots(raw: unknown, len: number): Array<PropKind | null> {
-	if (!Array.isArray(raw) || raw.length !== len) return [];
-	return raw.map((item) => {
-		if (item == null || item === '') return null;
-		const k = String(item);
-		return KIND_SET.has(k) ? (k as PropKind) : null;
+	const used = new Set<string>();
+	return fallback.map((base, i) => {
+		const rec = asRecord(raw[i]);
+		const id = String(rec?.id ?? base.id);
+		if (used.has(id)) return { ...base };
+		used.add(id);
+		const kind = String(rec?.kind ?? base.kind);
+		const item: ShelfItem = {
+			...base,
+			id: fallback.some((f) => f.id === id) ? id : base.id,
+			kind: KINDS.has(kind as ItemKind) ? (kind as ItemKind) : base.kind,
+			title: String(rec?.title ?? base.title).slice(0, 12),
+			tone: clamp(rec?.tone, 0, 1, base.tone),
+			row: clamp(rec?.row, 0, ROWS - 1, base.row),
+			slot: clamp(rec?.slot, 0, SLOTS - 1, base.slot),
+			tall: clamp(rec?.tall, 0.2, 0.8, base.tall),
+			thick: clamp(rec?.thick, 0.08, 0.4, base.thick)
+		};
+		const prop = String(rec?.prop ?? base.prop ?? '');
+		if (item.kind === 'prop' && PROPS.has(prop)) item.prop = prop as PropId;
+		return item;
 	});
 }
 
-function parsePlacements(raw: unknown): RoomPlacement[] {
-	if (!Array.isArray(raw)) return [];
-	const out: RoomPlacement[] = [];
-	const seen = new Set<string>();
-	for (const item of raw) {
-		const rec = asRecord(item);
-		if (!rec || !KIND_SET.has(String(rec.kind))) continue;
-		const kind = rec.kind as PropKind;
-		if (seen.has(kind)) continue;
-		seen.add(kind);
-		out.push({
-			kind,
-			x: clamp(rec.x, -2.2, 2.2, 0),
-			z: clamp(rec.z, -2, 2, 0),
-			yaw: clamp(rec.yaw, -6.4, 6.4, 0),
-			arranged: rec.arranged === true
-		});
-	}
-	return out;
-}
-
-export function serializeStudy(world: StudyWorld) {
+export function serializeShelf(world: ShelfWorld) {
 	return {
 		schema: SHELF_SCHEMA,
-		puzzle: world.puzzle,
-		phase: world.phase === 'veil' ? 'observe' : world.phase,
-		room: world.room,
-		slots: world.phase === 'veil' ? world.goal : world.slots,
-		goal: world.goal,
-		unlocked: world.unlocked,
-		placements: world.placements,
-		mistakes: world.mistakes,
+		items: world.items,
+		hauntId: world.hauntId,
+		lastHauntId: world.lastHauntId,
+		phase: world.phase === 'idle' || world.phase === 'done' ? world.phase : 'idle',
+		round: world.round,
 		lowDetail: world.lowDetail,
 		audioWanted: world.audioWanted,
 		dockCollapsed: world.dockCollapsed
@@ -85,50 +82,64 @@ export function serializeStudy(world: StudyWorld) {
 }
 
 export function writeShelfSave(
-	world: StudyWorld,
-	storage: Pick<Storage, 'setItem'> | undefined = globalThis.localStorage
+	world: ShelfWorld,
+	storage: Pick<Storage, 'setItem'> | undefined = globalThis.localStorage,
+	extra: Record<string, unknown> = {}
 ) {
 	try {
-		storage?.setItem(SHELF_SAVE_KEY, JSON.stringify(serializeStudy(world)));
+		storage?.setItem(SHELF_SAVE_KEY, JSON.stringify({ ...serializeShelf(world), ...extra }));
 	} catch {
 		// private mode / quota
 	}
 }
 
+function keepSettings(fresh: ShelfWorld, rec: Record<string, unknown>) {
+	fresh.lowDetail = rec.lowDetail === true;
+	fresh.audioWanted = rec.audioWanted === true;
+	fresh.dockCollapsed = rec.dockCollapsed === true;
+}
+
 export function readShelfSave(
-	storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage
-): StudyWorld {
-	const fresh = createStudy();
+	storage: Pick<Storage, 'getItem' | 'setItem'> | undefined = globalThis.localStorage
+): ShelfWorld {
+	const fresh = createShelf();
 	try {
 		const raw = storage?.getItem(SHELF_SAVE_KEY);
 		if (!raw) return fresh;
 		const rec = asRecord(JSON.parse(raw) as unknown);
-		if (!rec || rec.schema !== SHELF_SCHEMA) {
+		if (!rec) {
 			fresh.recovered = true;
 			fresh.notice = '书房的记事读不出来，货架重新摆好了。';
 			return fresh;
 		}
-		const puzzle = clamp(rec.puzzle, 0, PUZZLES.length - 1, 0);
-		fresh.puzzle = puzzle;
-		const spec = PUZZLES[puzzle]!;
-		const fallbackGoal = PROP_KINDS.slice(0, spec.count);
-		const goal = parseKinds(rec.goal);
-		fresh.goal = goal.length === spec.count ? goal : fallbackGoal;
-		const slots = parseSlots(rec.slots, fresh.goal.length);
-		fresh.slots = slots.length === fresh.goal.length ? slots : [...fresh.goal];
+		if (rec.schema === 1) {
+			keepSettings(fresh, rec);
+			fresh.recovered = true;
+			fresh.notice = '货架换了样子，书还在等你摆。';
+			writeShelfSave(fresh, storage, { flash: 'migrated' });
+			return fresh;
+		}
+		if (rec.schema !== SHELF_SCHEMA) {
+			fresh.recovered = true;
+			fresh.notice = '货架换了样子，书还在等你摆。';
+			return fresh;
+		}
+		fresh.items = parseItems(rec.items, fresh.items);
+		const haunt = String(rec.hauntId ?? '');
+		if (fresh.items.some((i) => i.id === haunt && i.kind === 'book')) fresh.hauntId = haunt;
+		const last = rec.lastHauntId == null ? null : String(rec.lastHauntId);
+		fresh.lastHauntId = last && fresh.items.some((i) => i.id === last) ? last : null;
 		const phase = String(rec.phase);
-		fresh.phase = PHASES.has(phase) ? (phase as StudyPhase) : 'observe';
-		if (fresh.phase === 'veil') fresh.phase = 'observe';
-		fresh.room = rec.room === 'collection' ? 'collection' : ('study' as StudyRoom);
-		fresh.unlocked = parseKinds(rec.unlocked);
-		fresh.placements = parsePlacements(rec.placements);
-		fresh.mistakes = clamp(rec.mistakes, 0, 99, 0);
-		fresh.lowDetail = rec.lowDetail === true;
-		fresh.audioWanted = rec.audioWanted === true;
-		fresh.dockCollapsed = rec.dockCollapsed === true;
-		fresh.recovered = false;
-		if (fresh.unlocked.length > 0) {
-			fresh.notice = `书房还记得你。解开 ${fresh.unlocked.length} 件收藏。`;
+		fresh.phase = PHASES.has(phase as HauntPhase) ? (phase as HauntPhase) : 'idle';
+		if (fresh.phase !== 'idle' && fresh.phase !== 'done') fresh.phase = 'idle';
+		fresh.round = clamp(rec.round, 0, 99, 0);
+		keepSettings(fresh, rec);
+		if (rec.flash === 'migrated') {
+			fresh.recovered = true;
+			fresh.notice = '货架换了样子，书还在等你摆。';
+		} else {
+			fresh.recovered = false;
+			fresh.notice = `书柜还记得你。这是第 ${fresh.round + 1} 轮。`;
 		}
 		return fresh;
 	} catch {

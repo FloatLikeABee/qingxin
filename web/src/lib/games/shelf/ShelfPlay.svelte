@@ -2,63 +2,117 @@
 	import { onMount } from 'svelte';
 	import Button from '#lib/components/Button.svelte';
 	import { LINK_CLASS } from '#lib/ui/affordance';
-	import { chimeShelf, setShelfMuted, stopShelfAudio, unlockShelfAudio } from './audio';
+	import { popShelf, setShelfMuted, stopShelfAudio, unlockShelfAudio, whimperShelf } from './audio';
 	import { readShelfSave, writeShelfSave } from './persist';
 	import type { ShelfScene } from './render';
 	import {
-		PROP_INFO,
-		PUZZLES,
-		closeInspect,
-		enterRoom,
-		enterStudy,
-		hintShelf,
-		inspectProp,
-		matchedCount,
-		nextShelf,
-		orbitInspect,
-		placeInRoom,
-		putInSlot,
-		rememberShelf,
-		restartStudy,
-		setFocus,
-		stepStudy,
-		takeProp,
-		type PropKind,
-		type StudyWorld
+		findItem,
+		hauntProgress,
+		isHaunting,
+		nextRound,
+		pickItem,
+		placeHeld,
+		restartShelf,
+		shelfLayout,
+		stepShelf,
+		type HauntPhase,
+		type ShelfWorld
 	} from './sim';
+
+	const PHASE_LABEL: Record<HauntPhase, string> = {
+		idle: '闲逛',
+		emerge: '钻出来',
+		face: '露脸',
+		cry: '大哭',
+		sorry: '道歉',
+		retreat: '钻回去',
+		done: '安静了'
+	};
+
+	const DRAG_PX = 12;
 
 	let { title }: { title: string } = $props();
 
-	let world = $state<StudyWorld>(readShelfSave());
+	let world = $state<ShelfWorld>(readShelfSave());
 	let sceneFailed = $state(false);
 	let canvasEl = $state<HTMLCanvasElement | null>(null);
 	let stageEl = $state<HTMLDivElement | null>(null);
 	let audioOn = $state(false);
-	let lastMatched = 0;
-	let lastPhase: StudyWorld['phase'] = 'observe';
-	let dragging = false;
-	let lastX = 0;
+	let bubbleX = $state(50);
+	let bubbleY = $state(28);
+	let fpsLabel = $state('—');
+	let lastPhase: HauntPhase = 'idle';
 
 	function save() {
 		writeShelfSave(world);
 	}
 
-	function paint(canvas: HTMLCanvasElement | null = canvasEl) {
+	function heldTitle() {
+		if (!world.heldId) return '空手';
+		return findItem(world, world.heldId)?.title ?? '空手';
+	}
+
+	function paint(canvas: HTMLCanvasElement | null = canvasEl, scene: ShelfScene | null = null) {
 		if (!canvas) return;
 		canvas.dataset.phase = world.phase;
-		canvas.dataset.puzzle = String(world.puzzle);
-		canvas.dataset.slots = world.slots.map((k) => k ?? '').join(',');
-		canvas.dataset.held = world.held ?? '';
-		canvas.dataset.inspect = world.inspecting ?? '';
-		canvas.dataset.wrong = world.lastWrong ? '1' : '0';
-		canvas.dataset.matched = String(matchedCount(world));
-		canvas.dataset.unlocked = String(world.unlocked.length);
-		canvas.dataset.room = world.room;
-		canvas.dataset.arranged = String(world.placements.filter((p) => p.arranged).length);
+		canvas.dataset.haunt = world.hauntId;
+		canvas.dataset.held = world.heldId ?? '';
+		canvas.dataset.layout = shelfLayout(world).join('|');
+		canvas.dataset.apology = world.apology ? '1' : '0';
+		canvas.dataset.round = String(world.round);
 		canvas.dataset.anim = world.paused ? '0' : '1';
 		canvas.dataset.detail = world.lowDetail ? 'low' : 'high';
 		canvas.dataset.audio = audioOn ? '1' : '0';
-		canvas.dataset.focus = String(world.focus);
+		canvas.dataset.progress = String(Math.round(hauntProgress(world) * 100) / 100);
+		canvas.dataset.playing = isHaunting(world) ? '1' : '0';
+		canvas.dataset.items = String(world.items.length);
+		canvas.dataset.fps = fpsLabel;
+		canvas.dataset.notice = world.notice;
+		const others = world.items.filter((item) => item.id !== world.hauntId);
+		const other = others.reduce((best, item) => {
+			if (!best) return item;
+			if (item.slot < best.slot || (item.slot === best.slot && item.row <= best.row)) return item;
+			return best;
+		}, others[0]);
+		const buddy = others.reduce(
+			(best, item) => {
+				if (!best) return item;
+				if (item.id === other?.id) return best;
+				if (item.slot > best.slot || (item.slot === best.slot && item.row >= best.row)) return item;
+				return best;
+			},
+			others.find((item) => item.id !== other?.id)
+		);
+		canvas.dataset.aid = other?.id ?? '';
+		canvas.dataset.bid = buddy?.id ?? '';
+		if (scene) {
+			const hauntPt = scene.project(world.hauntId);
+			if (hauntPt) {
+				canvas.dataset.hx = String(Math.round(hauntPt.x));
+				canvas.dataset.hy = String(Math.round(hauntPt.y));
+			}
+			if (other) {
+				const a = scene.project(other.id);
+				if (a) {
+					canvas.dataset.ax = String(Math.round(a.x));
+					canvas.dataset.ay = String(Math.round(a.y));
+				}
+			}
+			if (buddy) {
+				const b = scene.project(buddy.id);
+				if (b) {
+					canvas.dataset.bx = String(Math.round(b.x));
+					canvas.dataset.by = String(Math.round(b.y));
+				}
+			}
+			const ghostPt = scene.projectGhost() ?? hauntPt;
+			if (ghostPt) {
+				canvas.dataset.gx = String(Math.round(ghostPt.x));
+				canvas.dataset.gy = String(Math.round(ghostPt.y));
+				bubbleX = Math.min(88, Math.max(12, (ghostPt.x / (canvas.clientWidth || 1)) * 100));
+				bubbleY = Math.min(70, Math.max(14, (ghostPt.y / (canvas.clientHeight || 1)) * 100));
+			}
+		}
 	}
 
 	function togglePause() {
@@ -94,33 +148,26 @@
 	}
 
 	function restart() {
-		restartStudy(world);
-		lastMatched = 0;
+		restartShelf(world);
 		lastPhase = world.phase;
 		save();
 		paint();
 	}
 
-	function play(fn: () => void) {
-		fn();
+	function goNext() {
+		nextRound(world);
 		save();
 		paint();
-	}
-
-	function presentKinds(): PropKind[] {
-		const kinds = new Set<PropKind>();
-		for (const k of world.slots) if (k) kinds.add(k);
-		if (world.held) kinds.add(world.held);
-		return [...kinds];
 	}
 
 	onMount(() => {
 		world = readShelfSave();
-		lastMatched = matchedCount(world);
 		lastPhase = world.phase;
 		let scene: ShelfScene | null = null;
 		let raf = 0;
 		let last = performance.now();
+		let frames = 0;
+		let fpsAt = performance.now();
 		const canvas = canvasEl;
 		const stage = stageEl;
 		if (!canvas || !stage) return;
@@ -129,82 +176,76 @@
 		const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
 		world.reducedMotion = motion.matches;
 
+		let pointerDown = false;
+		let pickedThisDown = false;
+		let moved = false;
+		let startX = 0;
+		let startY = 0;
+
 		const onDown = (event: PointerEvent) => {
 			if (event.pointerType === 'mouse' && event.button !== 0) return;
 			if (world.paused) return;
-			const hit = scene?.hit(event.clientX, event.clientY);
-			dragging = true;
-			lastX = event.clientX;
+			pointerDown = true;
+			moved = false;
+			pickedThisDown = false;
+			startX = event.clientX;
+			startY = event.clientY;
 			stage.setPointerCapture(event.pointerId);
-			if (world.inspecting) return;
-			if (!hit) return;
-			if (world.room === 'collection') {
-				if (hit.kind) inspectProp(world, hit.kind);
-				if (hit.table && world.inspecting) {
-					placeInRoom(world, world.inspecting, hit.table.x, hit.table.z, world.inspectYaw);
-					closeInspect(world);
-				} else if (hit.table && world.unlocked[0]) {
-					placeInRoom(world, world.unlocked[0], hit.table.x, hit.table.z, 0);
-				}
-				paint();
+			if (isHaunting(world)) {
+				paint(canvas, scene);
 				return;
 			}
-			if (hit.kind && world.phase === 'observe') inspectProp(world, hit.kind);
-			else if (hit.kind && (world.phase === 'restore' || world.phase === 'cleared')) {
-				if (world.held) {
-					const slot = world.slots.indexOf(hit.kind);
-					if (slot >= 0) putInSlot(world, slot);
-				} else takeProp(world, hit.kind);
-			} else if (hit.slot != null && world.held) putInSlot(world, hit.slot);
-			paint();
+			const hit = scene?.hit(event.clientX, event.clientY);
+			if (!world.heldId && hit?.id) {
+				pickItem(world, hit.id);
+				pickedThisDown = true;
+				save();
+			}
+			paint(canvas, scene);
 		};
 		const onMove = (event: PointerEvent) => {
-			if (!dragging || world.paused) return;
-			if (world.inspecting) {
-				orbitInspect(world, (event.clientX - lastX) * 0.01);
-				lastX = event.clientX;
-				paint();
-			}
+			if (!pointerDown) return;
+			if (Math.hypot(event.clientX - startX, event.clientY - startY) > DRAG_PX) moved = true;
 		};
-		const onUp = () => {
-			dragging = false;
-			save();
+		const onUp = (event: PointerEvent) => {
+			if (!pointerDown) return;
+			pointerDown = false;
+			try {
+				stage.releasePointerCapture(event.pointerId);
+			} catch {
+				// already released
+			}
+			if (world.paused || isHaunting(world) || !world.heldId) {
+				paint(canvas, scene);
+				return;
+			}
+			if (pickedThisDown && !moved) {
+				paint(canvas, scene);
+				return;
+			}
+			const hit = scene?.hit(event.clientX, event.clientY, world.heldId);
+			if (
+				hit?.row != null &&
+				hit.slot != null &&
+				Number.isFinite(hit.row) &&
+				Number.isFinite(hit.slot)
+			) {
+				placeHeld(world, hit.row, hit.slot);
+				save();
+			}
+			paint(canvas, scene);
 		};
 
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
 				return;
-			if (event.key === 'Escape') {
-				closeInspect(world);
-				paint();
-				return;
-			}
-			if (world.inspecting && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-				event.preventDefault();
-				orbitInspect(world, event.key === 'ArrowLeft' ? -0.18 : 0.18);
-				paint();
-				return;
-			}
-			if (event.key === 'ArrowLeft') {
-				event.preventDefault();
-				setFocus(world, Math.max(0, world.focus - 1));
-			}
-			if (event.key === 'ArrowRight') {
-				event.preventDefault();
-				setFocus(world, Math.min(world.slots.length - 1, world.focus + 1));
-			}
-			if (event.key === 'Enter') {
-				const k = world.slots[world.focus];
-				if (k) inspectProp(world, k);
-			}
-			if (event.code === 'Space') {
-				event.preventDefault();
-				const k = world.slots[world.focus];
-				if (world.held) putInSlot(world, world.focus);
-				else if (k) takeProp(world, k);
-			}
 			if (event.key === 'p' || event.key === 'P') togglePause();
-			paint();
+			if (event.key === 'Escape' && world.heldId && !isHaunting(world)) {
+				const held = findItem(world, world.heldId);
+				if (held) placeHeld(world, held.row, held.slot);
+				save();
+			}
+			paint(canvas, scene);
 		};
 
 		void (async () => {
@@ -215,43 +256,41 @@
 			else scene.resize();
 			canvas.dataset.ready = '1';
 			scene?.sync(world, { reducedMotion: motion.matches });
-			paint();
+			paint(canvas, scene);
 			resizeObserver = new ResizeObserver(() => scene?.resize());
 			resizeObserver.observe(stage);
 			const loop = (now: number) => {
 				const dt = Math.min(48, now - last);
 				last = now;
+				world.reducedMotion = motion.matches;
 				if (!world.paused && !document.hidden) {
-					stepStudy(world, dt);
-					const matched = matchedCount(world);
-					if (world.phase === 'restore' && matched > lastMatched) chimeShelf(true);
-					if (world.lastWrong && lastPhase === 'restore') {
-						/* chime on rising wrong handled below */
+					stepShelf(world, dt);
+					if (world.phase === 'emerge' && lastPhase !== 'emerge') popShelf();
+					if (world.phase === 'cry' && lastPhase !== 'cry') whimperShelf();
+					if (world.phase !== lastPhase) {
+						lastPhase = world.phase;
+						if (world.phase === 'done' || world.phase === 'idle') save();
 					}
-					if (world.phase === 'cleared' && lastPhase !== 'cleared') chimeShelf(true);
-					lastMatched = matched;
-					lastPhase = world.phase;
 				}
 				scene?.sync(world, { reducedMotion: motion.matches });
 				scene?.render(now);
-				paint(canvas);
+				frames += 1;
+				if (now - fpsAt >= 1000) {
+					fpsLabel = String(frames);
+					frames = 0;
+					fpsAt = now;
+				}
+				paint(canvas, scene);
 				raf = requestAnimationFrame(loop);
 			};
 			raf = requestAnimationFrame(loop);
 		})();
 
-		const onVis = () => {
-			if (document.hidden) {
-				world.paused = true;
-				paint();
-			}
-		};
 		window.addEventListener('keydown', onKeyDown);
 		stage.addEventListener('pointerdown', onDown);
 		stage.addEventListener('pointermove', onMove);
 		stage.addEventListener('pointerup', onUp);
 		stage.addEventListener('pointercancel', onUp);
-		document.addEventListener('visibilitychange', onVis);
 		window.addEventListener('pagehide', save);
 		const interval = setInterval(save, 4000);
 		return () => {
@@ -264,7 +303,6 @@
 			stage.removeEventListener('pointermove', onMove);
 			stage.removeEventListener('pointerup', onUp);
 			stage.removeEventListener('pointercancel', onUp);
-			document.removeEventListener('visibilitychange', onVis);
 			window.removeEventListener('pagehide', save);
 			scene?.dispose();
 			stopShelfAudio();
@@ -282,9 +320,9 @@
 		<a href="/modules/games" class="{LINK_CLASS} shrink-0">← 返回目录</a>
 		<h1 class="sr-only">{title}</h1>
 		<ul class="stats" aria-label="书房进度">
-			<li><b>{world.puzzle + 1}</b><span>货架 / {PUZZLES.length}</span></li>
-			<li><b>{matchedCount(world)}/{world.goal.length}</b><span>归位</span></li>
-			<li><b>{world.unlocked.length}</b><span>收藏</span></li>
+			<li><b>{world.round + 1}</b><span>轮次</span></li>
+			<li><b>{heldTitle()}</b><span>手里</span></li>
+			<li><b>{PHASE_LABEL[world.phase]}</b><span>书柜</span></li>
 		</ul>
 		<div class="top-actions">
 			<Button variant="secondary" class="px-4" onclick={togglePause}>
@@ -298,8 +336,14 @@
 
 	<div bind:this={stageEl} class="stage" data-play="shelf">
 		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="记忆货架书房"></canvas>
+		{#if world.apology}
+			<p class="sorry" data-apology="1" style="left: {bubbleX}%; top: {bubbleY}%">
+				对不起！<small>sorry</small>
+			</p>
+		{/if}
+		<p class="sr-only" aria-live="polite">{world.notice}</p>
 		{#if sceneFailed}
-			<p class="fail">这台设备画不出书房。下面的按钮仍可整理货架。</p>
+			<p class="fail">这台设备画不出书房。暂停和下一轮仍可用。</p>
 		{/if}
 	</div>
 
@@ -307,90 +351,11 @@
 		<section class="dock qx-glass" aria-label="书房操作">
 			<p class="notice" aria-live="polite">{world.notice}</p>
 			<p class="need">
-				点物件端详，转一转再放下。看清以后按「我记住了」，布帘落下会换位置。凭记忆放回去。没有分数。
+				点一下拿起，再点或拖到格子上放下。每轮只有一本会闹鬼。没有计时，也没有分数。
 			</p>
 			<div class="actions">
-				{#if world.room === 'study'}
-					{#if world.phase === 'observe'}
-						<Button class="min-h-12 px-5" onclick={() => play(() => rememberShelf(world))}
-							>我记住了</Button
-						>
-					{/if}
-					{#if world.phase === 'restore'}
-						<Button
-							class="min-h-12 px-5"
-							variant="secondary"
-							onclick={() => play(() => hintShelf(world))}>提示</Button
-						>
-					{/if}
-					{#if world.phase === 'cleared' && world.puzzle < PUZZLES.length - 1}
-						<Button class="min-h-12 px-5" onclick={() => play(() => nextShelf(world))}
-							>下一架</Button
-						>
-					{/if}
-					{#each presentKinds() as kind (kind)}
-						<Button
-							class="min-h-12 px-5"
-							variant="secondary"
-							onclick={() => play(() => inspectProp(world, kind))}
-						>
-							端详{PROP_INFO[kind].name}
-						</Button>
-						{#if world.phase === 'restore'}
-							<Button
-								class="min-h-12 px-5"
-								variant="secondary"
-								onclick={() => play(() => takeProp(world, kind))}
-							>
-								拿起{PROP_INFO[kind].name}
-							</Button>
-						{/if}
-					{/each}
-					{#if world.held && world.phase === 'restore'}
-						{#each world.slots as _, i (i)}
-							<Button
-								class="min-h-12 px-5"
-								variant="secondary"
-								onclick={() => play(() => putInSlot(world, i))}
-							>
-								放到第{i + 1}格
-							</Button>
-						{/each}
-					{/if}
-					{#if world.inspecting}
-						<Button
-							class="min-h-12 px-5"
-							variant="secondary"
-							onclick={() => play(() => closeInspect(world))}>放下</Button
-						>
-					{/if}
-					<Button
-						class="min-h-12 px-5"
-						variant="secondary"
-						onclick={() => play(() => enterRoom(world))}>收藏室</Button
-					>
-				{:else}
-					<Button class="min-h-12 px-5" onclick={() => play(() => enterStudy(world))}>回书房</Button
-					>
-					{#each world.unlocked as kind (kind)}
-						<Button
-							class="min-h-12 px-5"
-							variant="secondary"
-							onclick={() => play(() => inspectProp(world, kind))}
-						>
-							端详{PROP_INFO[kind].name}
-						</Button>
-						<Button
-							class="min-h-12 px-5"
-							variant="secondary"
-							onclick={() =>
-								play(() =>
-									placeInRoom(world, kind, (world.unlocked.indexOf(kind) - 1) * 0.7, 0.15, 0.2)
-								)}
-						>
-							摆放{PROP_INFO[kind].name}
-						</Button>
-					{/each}
+				{#if world.phase === 'done'}
+					<Button class="min-h-12 px-5" onclick={goNext}>下一轮</Button>
 				{/if}
 				<Button class="min-h-12 px-5" variant="secondary" onclick={toggleDetail}>
 					{world.lowDetail ? '高细腻' : '低细腻'}
@@ -413,6 +378,8 @@
 		min-height: 0;
 		overflow: hidden;
 		background: #140e0a;
+		user-select: none;
+		-webkit-user-select: none;
 	}
 
 	.top {
@@ -421,7 +388,7 @@
 		gap: 0.45rem;
 		margin: 0.4rem 0.65rem 0;
 		padding: 0.4rem 0.6rem;
-		padding-top: max(0.4rem, env(safe-area-inset-top));
+		padding-top: max(0.4rem, env(safe-area-inset-top, 0px));
 		border-radius: 1.15rem;
 		z-index: 10;
 	}
@@ -461,6 +428,39 @@
 		flex: 1;
 		min-height: 0;
 		touch-action: none;
+		cursor: grab;
+	}
+
+	.stage:active {
+		cursor: grabbing;
+	}
+
+	.sorry {
+		position: absolute;
+		z-index: 4;
+		translate: -50% -120%;
+		margin: 0;
+		padding: 0.45rem 0.85rem 0.4rem;
+		border-radius: 1.1rem 1.1rem 1.1rem 0.35rem;
+		background: #fff6e8;
+		color: #4a1d6a;
+		font-size: 1.65rem;
+		font-weight: 800;
+		line-height: 1.1;
+		letter-spacing: 0.04em;
+		box-shadow: 0 10px 28px rgb(40 16 8 / 0.35);
+		pointer-events: none;
+		text-wrap: balance;
+	}
+
+	.sorry small {
+		display: block;
+		margin-top: 0.12rem;
+		font-size: 0.72rem;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		color: #7c3aed;
+		text-transform: lowercase;
 	}
 
 	.fail {
@@ -476,12 +476,10 @@
 
 	.dock {
 		flex-shrink: 0;
-		margin: 0.35rem 0.65rem max(0.4rem, env(safe-area-inset-bottom));
+		margin: 0.35rem 0.65rem max(0.4rem, env(safe-area-inset-bottom, 0px));
 		padding: 0.7rem 0.75rem 0.65rem;
 		border-radius: 1.35rem;
 		z-index: 10;
-		max-height: 42dvh;
-		overflow: auto;
 	}
 
 	.notice {
@@ -494,6 +492,7 @@
 		margin: 0.25rem 0 0;
 		font-size: 0.95rem;
 		font-weight: 600;
+		text-wrap: pretty;
 	}
 
 	.actions {
@@ -515,6 +514,20 @@
 		border: 0;
 	}
 
+	@media (pointer: coarse) {
+		.actions :global(button),
+		.top-actions :global(button) {
+			min-width: 44px;
+			min-height: 44px;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.sorry {
+			translate: -50% -110%;
+		}
+	}
+
 	@media (max-width: 430px) {
 		.stats {
 			gap: 0.4rem;
@@ -527,6 +540,10 @@
 		.top-actions :global(button) {
 			min-width: 0;
 			padding-inline: 0.7rem;
+		}
+
+		.sorry {
+			font-size: 1.35rem;
 		}
 	}
 </style>
