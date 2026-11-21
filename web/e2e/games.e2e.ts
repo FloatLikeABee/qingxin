@@ -49,6 +49,7 @@ test('catalog search and category filter', async ({ page }) => {
 	await expect(page.getByRole('button', { name: '益智' })).toBeVisible();
 	await expect(page.getByRole('button', { name: '节奏' })).toBeVisible();
 	await expect(page.getByRole('button', { name: '飞行' })).toBeVisible();
+	await expect(page.getByRole('button', { name: '驾驶' })).toBeVisible();
 	await page.getByLabel('找一款想玩的').fill('经理');
 	await expect(page.getByRole('heading', { name: '便利店经理' }).first()).toBeVisible();
 	await expect(page.getByRole('heading', { name: '晴空出击' })).toHaveCount(0);

@@ -37,4 +37,11 @@ describe('games catalog filter', () => {
 		expect(flight.every((game) => game.category === '飞行')).toBe(true);
 		expect(flight.some((game) => game.id === 'convenient-store')).toBe(false);
 	});
+
+	it('filters by category 驾驶', () => {
+		const drive = filterGames(GAMES, { category: '驾驶' });
+		expect(drive.some((game) => game.id === 'cargo-haul')).toBe(true);
+		expect(drive.every((game) => game.category === '驾驶')).toBe(true);
+		expect(drive.some((game) => game.id === 'sky-sortie')).toBe(false);
+	});
 });

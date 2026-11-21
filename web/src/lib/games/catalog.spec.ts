@@ -25,10 +25,11 @@ describe('games registry', () => {
 		expect(featuredGame()?.id).toBe('convenient-store');
 	});
 
-	it('lists playable games including 窗前庭园, 晴空出击, 潮汐呼吸, 云上散步, 记忆货架, and 上班', () => {
+	it('lists playable games including 窗前庭园, 晴空出击, 潮汐呼吸, 云上散步, 记忆货架, 重卡, and 上班', () => {
 		const playable = GAMES.filter((game) => game.status === 'playable');
 		expect(playable.map((game) => game.id).sort()).toEqual(
 			[
+				'cargo-haul',
 				'cloud-walk',
 				'convenient-store',
 				'memory-shelf',
@@ -65,6 +66,16 @@ describe('games registry', () => {
 		expect(aliasTarget('night-puzzle')).toBe('sky-sortie');
 		expect(featuredGame()?.id).toBe('convenient-store');
 		expect(GAME_CATEGORIES).toContain('飞行');
+		expect(GAME_CATEGORIES).toContain('驾驶');
+		expect(getGame('cargo-haul')).toMatchObject({
+			title: '重卡',
+			englishTitle: 'Heavy Haul',
+			category: '驾驶',
+			tags: ['卡车', '公路', '无尽'],
+			status: 'playable',
+			playCta: '开始开车'
+		});
+		expect(playHref(getGame('cargo-haul')!)).toBe('/modules/games/cargo-haul/play');
 	});
 
 	it('keeps 潮汐呼吸, 云上散步, and 记忆货架 playable', () => {
@@ -105,6 +116,12 @@ describe('games registry', () => {
 		expect(getGame('memory-shelf')?.about).toMatch(/对不起！/);
 		expect(getGame('memory-shelf')?.about).toMatch(/没有计时，也没有分数/);
 		expect(getGame('memory-shelf')?.about).not.toMatch(/布帘|收藏室/);
+		expect(getGame('cargo-haul')).toMatchObject({
+			title: '重卡',
+			playCta: '开始开车',
+			category: '驾驶'
+		});
+		expect(getGame('cargo-haul')?.about).toMatch(/倒车|回收/);
 		expect(
 			GAMES.every((game) => game.id && game.summary && game.tags.length > 0 && game.playCta)
 		).toBe(true);

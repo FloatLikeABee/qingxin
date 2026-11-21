@@ -1,4 +1,4 @@
 schema: spec-driven
-change: cargo-haul-game
-created: 2026-11-21
-goal: "Proposal only: endless heavy-truck driving game in the catalog"
+id: cargo-haul-game
+status: approved
+approval: t275u-2026-11-21
