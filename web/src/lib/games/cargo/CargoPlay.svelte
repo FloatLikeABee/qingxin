@@ -14,6 +14,16 @@
 		type Biome,
 		type HaulWorld
 	} from './sim';
+	import {
+		createHaulPointers,
+		haulPointerActive,
+		haulPointerCancelAll,
+		haulPointerDown,
+		haulPointerMove,
+		haulPointerUp,
+		haulSteerFromPad,
+		type HaulPointerKind
+	} from './touch';
 
 	const BIOME_LABEL: Record<Biome, string> = {
 		highway: '公路',
@@ -27,8 +37,15 @@
 	let sceneFailed = $state(false);
 	let canvasEl = $state<HTMLCanvasElement | null>(null);
 	let stageEl = $state<HTMLDivElement | null>(null);
+	let wheelEl = $state<HTMLDivElement | null>(null);
 	let audioOn = $state(false);
-	let steerTouch = $state(false);
+	const pointers = createHaulPointers();
+	let keyHeld = {
+		steer: 0,
+		throttle: false,
+		brake: false,
+		handbrake: false
+	};
 
 	function save() {
 		writeHaulSave(world);
@@ -36,6 +53,7 @@
 
 	function paint(canvas: HTMLCanvasElement | null = canvasEl) {
 		if (!canvas) return;
+		const active = haulPointerActive(pointers);
 		canvas.dataset.speed = String(Math.round(world.speed * 10) / 10);
 		canvas.dataset.yaw = String(Math.round(world.yaw * 1000) / 1000);
 		canvas.dataset.x = String(Math.round(world.x * 10) / 10);
@@ -50,17 +68,96 @@
 		canvas.dataset.exitside = world.exitSide;
 		canvas.dataset.along = String(Math.round(world.along));
 		canvas.dataset.plen = String(Math.round(world.pieceLength));
-		canvas.dataset.drift =
-			world.lateral > 1.4 ? 'left' : world.lateral < -1.4 ? 'right' : '';
+		canvas.dataset.drift = world.lateral > 1.4 ? 'left' : world.lateral < -1.4 ? 'right' : '';
 		canvas.dataset.recover = String(world.recoverCount);
 		canvas.dataset.anim = world.paused ? '0' : '1';
 		canvas.dataset.detail = world.lowDetail ? 'low' : 'high';
 		canvas.dataset.audio = audioOn ? '1' : '0';
 		canvas.dataset.hidden = document.hidden ? '1' : '0';
+		canvas.dataset.steer = String(Math.round(world.steerInput * 100) / 100);
+		canvas.dataset.throttle = String(world.throttle);
+		canvas.dataset.brake = String(world.brake);
+		canvas.dataset.steerPtr = String(active.steerHeld ? 1 : 0);
+		canvas.dataset.throttlePtr = String(active.throttleHeld ? 1 : 0);
+		canvas.dataset.brakePtr = String(active.brakeHeld ? 1 : 0);
+		if (wheelEl) {
+			wheelEl.dataset.steer = canvas.dataset.steer;
+			wheelEl.dataset.held = active.steerHeld ? '1' : '0';
+		}
+	}
+
+	function applyPointers() {
+		const active = haulPointerActive(pointers);
+		if (world.paused) {
+			setHaulControl(world, 'steer', 0);
+			setHaulControl(world, 'throttle', 0);
+			setHaulControl(world, 'brake', 0);
+			setHaulControl(world, 'handbrake', 0);
+			paint();
+			return;
+		}
+		if (active.steerHeld) setHaulControl(world, 'steer', active.steer);
+		else setHaulControl(world, 'steer', keyHeld.steer);
+		if (active.throttleHeld) setHaulControl(world, 'throttle', 1);
+		else setHaulControl(world, 'throttle', keyHeld.throttle ? 1 : 0);
+		if (active.brakeHeld) setHaulControl(world, 'brake', 1);
+		else setHaulControl(world, 'brake', keyHeld.brake ? 1 : 0);
+		paint();
+	}
+
+	function releaseTouch(reason: string) {
+		haulPointerCancelAll(pointers);
+		keyHeld = { steer: 0, throttle: false, brake: false, handbrake: false };
+		setHaulControl(world, 'steer', 0);
+		setHaulControl(world, 'throttle', 0);
+		setHaulControl(world, 'brake', 0);
+		setHaulControl(world, 'handbrake', 0);
+		if (canvasEl) canvasEl.dataset.release = reason;
+		paint();
+	}
+
+	function capturePointer(event: PointerEvent) {
+		try {
+			(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+		} catch {
+			/* Playwright synthetic pointers are not active */
+		}
+	}
+
+	function onSteerPointer(event: PointerEvent, phase: 'down' | 'move' | 'up') {
+		if (phase === 'move' && !pointers.steer.has(event.pointerId)) return;
+		event.preventDefault();
+		event.stopPropagation();
+		if (phase === 'down') capturePointer(event);
+		const box = (wheelEl ?? (event.currentTarget as HTMLElement)).getBoundingClientRect();
+		const steer = haulSteerFromPad(event.clientX, box.left, box.width);
+		if (phase === 'down') haulPointerDown(pointers, 'steer', event.pointerId, steer);
+		else if (phase === 'move') haulPointerMove(pointers, event.pointerId, steer);
+		else haulPointerUp(pointers, event.pointerId);
+		applyPointers();
+		if (phase === 'up') save();
+	}
+
+	function onPedalPointer(
+		kind: Exclude<HaulPointerKind, 'steer'>,
+		event: PointerEvent,
+		down: boolean
+	) {
+		event.preventDefault();
+		event.stopPropagation();
+		if (down) {
+			capturePointer(event);
+			haulPointerDown(pointers, kind, event.pointerId);
+		} else {
+			haulPointerUp(pointers, event.pointerId);
+		}
+		applyPointers();
+		if (!down) save();
 	}
 
 	function togglePause() {
 		world.paused = !world.paused;
+		if (world.paused) releaseTouch('pause');
 		paint();
 	}
 
@@ -92,6 +189,7 @@
 	}
 
 	function restart() {
+		releaseTouch('restart');
 		restartHaul(world);
 		save();
 		paint();
@@ -113,6 +211,9 @@
 		return `${(meters / 1000).toFixed(1)} km`;
 	}
 
+	const steerNow = $derived(world.steerInput);
+	const steerLabel = $derived(steerNow === 0 ? '回正' : steerNow < 0 ? '左转' : '右转');
+
 	onMount(() => {
 		world = readHaulSave();
 		let scene: CargoScene | null = null;
@@ -126,31 +227,6 @@
 		const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
 		world.reducedMotion = motion.matches;
 
-		const onSteer = (event: PointerEvent) => {
-			if (world.paused) return;
-			const box = stage.getBoundingClientRect();
-			const nx = (event.clientX - box.left) / Math.max(1, box.width * 0.66);
-			if (nx > 1.05) return;
-			steerTouch = true;
-			setHaulControl(world, 'steer', Math.max(-1, Math.min(1, nx * 2 - 1)));
-			paint();
-		};
-		const onDown = (event: PointerEvent) => {
-			if (event.pointerType === 'mouse' && event.button !== 0) return;
-			const box = stage.getBoundingClientRect();
-			if (event.clientX > box.left + box.width * 0.66) return;
-			stage.setPointerCapture(event.pointerId);
-			onSteer(event);
-		};
-		const onMove = (event: PointerEvent) => {
-			if (!steerTouch && event.buttons === 0) return;
-			onSteer(event);
-		};
-		const onUp = (event: PointerEvent) => {
-			if (event.pointerType !== 'mouse') setHaulControl(world, 'steer', 0);
-			steerTouch = false;
-			save();
-		};
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
 				return;
@@ -169,15 +245,21 @@
 			}
 			if (control.move) {
 				event.preventDefault();
+				if (control.move === 'steer') keyHeld.steer = control.value ?? 0;
+				if (control.move === 'throttle') keyHeld.throttle = true;
+				if (control.move === 'brake') keyHeld.brake = true;
+				if (control.move === 'handbrake') keyHeld.handbrake = true;
 				if (!world.paused) setHaulControl(world, control.move, control.value ?? 1);
 			}
 			paint();
 		};
 		const onKeyUp = (event: KeyboardEvent) => {
 			const control = haulControlFromKeyboard(event);
-			if (control.move === 'steer') setHaulControl(world, 'steer', 0);
-			if (control.move === 'throttle') setHaulControl(world, 'throttle', 0);
-			if (control.move === 'brake') setHaulControl(world, 'brake', 0);
+			if (control.move === 'steer') keyHeld.steer = 0;
+			if (control.move === 'throttle') keyHeld.throttle = false;
+			if (control.move === 'brake') keyHeld.brake = false;
+			if (control.move === 'handbrake') keyHeld.handbrake = false;
+			applyPointers();
 			if (control.move === 'handbrake') setHaulControl(world, 'handbrake', 0);
 			paint();
 		};
@@ -211,15 +293,14 @@
 		})();
 
 		const onVis = () => {
-			paint();
+			if (document.hidden) releaseTouch('blur');
+			else paint();
 		};
+		const onBlur = () => releaseTouch('blur');
 		window.addEventListener('keydown', onKeyDown, true);
 		window.addEventListener('keyup', onKeyUp, true);
+		window.addEventListener('blur', onBlur);
 		stage.focus({ preventScroll: true });
-		stage.addEventListener('pointerdown', onDown);
-		stage.addEventListener('pointermove', onMove);
-		stage.addEventListener('pointerup', onUp);
-		stage.addEventListener('pointercancel', onUp);
 		document.addEventListener('visibilitychange', onVis);
 		window.addEventListener('pagehide', save);
 		const interval = setInterval(save, 4000);
@@ -230,10 +311,7 @@
 			resizeObserver?.disconnect();
 			window.removeEventListener('keydown', onKeyDown, true);
 			window.removeEventListener('keyup', onKeyUp, true);
-			stage.removeEventListener('pointerdown', onDown);
-			stage.removeEventListener('pointermove', onMove);
-			stage.removeEventListener('pointerup', onUp);
-			stage.removeEventListener('pointercancel', onUp);
+			window.removeEventListener('blur', onBlur);
 			document.removeEventListener('visibilitychange', onVis);
 			window.removeEventListener('pagehide', save);
 			scene?.dispose();
@@ -248,21 +326,25 @@
 </svelte:head>
 
 <div class="haul-play">
-	<header class="top qx-glass">
-		<a href="/modules/games" class="{LINK_CLASS} shrink-0">← 返回目录</a>
+	<header class="top qx-glass" data-hud="top">
+		<a href="/modules/games" class="{LINK_CLASS} hud-back" data-hud="back">← 返回目录</a>
 		<h1 class="sr-only">{title}</h1>
-		<ul class="stats" aria-label="重卡进度">
-			<li>
+		<ul class="stats" aria-label="重卡进度" data-hud="stats">
+			<li data-hud="km">
 				<b>{kmLabel(world.odometer)}</b><span>里程</span>
 			</li>
-			<li><b>{Math.abs(world.speed).toFixed(0)}</b><span>km 感</span></li>
-			<li><b>{BIOME_LABEL[world.biome]}</b><span>路况</span></li>
+			<li data-hud="speed">
+				<b>{Math.abs(world.speed).toFixed(0)}</b><span>km 感</span>
+			</li>
+			<li data-hud="biome">
+				<b>{BIOME_LABEL[world.biome]}</b><span>路况</span>
+			</li>
 		</ul>
-		<div class="top-actions">
-			<Button variant="secondary" class="px-4" onclick={togglePause}>
+		<div class="top-actions" data-hud="actions">
+			<Button variant="secondary" class="hud-btn" onclick={togglePause}>
 				{world.paused ? '继续' : '暂停'}
 			</Button>
-			<Button variant="secondary" class="px-4" onclick={toggleDock}>
+			<Button variant="secondary" class="hud-btn" onclick={toggleDock}>
 				{world.dockCollapsed ? '展开操作' : '收起操作'}
 			</Button>
 		</div>
@@ -273,15 +355,41 @@
 		{#if sceneFailed}
 			<p class="fail">这台设备画不出公路。方向键仍可开车。</p>
 		{/if}
-		<div class="steer-zone" aria-hidden="true"></div>
+		<div
+			bind:this={wheelEl}
+			class="wheel"
+			data-wheel="1"
+			data-steer={steerNow}
+			role="slider"
+			aria-label="方向盘"
+			aria-valuemin="-1"
+			aria-valuemax="1"
+			aria-valuenow={steerNow}
+			aria-valuetext={steerLabel}
+			tabindex="0"
+			onpointerdown={(event) => onSteerPointer(event, 'down')}
+			onpointermove={(event) => onSteerPointer(event, 'move')}
+			onpointerup={(event) => onSteerPointer(event, 'up')}
+			onpointercancel={(event) => onSteerPointer(event, 'up')}
+			onlostpointercapture={(event) => onSteerPointer(event, 'up')}
+		>
+			<div class="wheel-face" style="transform: rotate({steerNow * 78}deg)">
+				<span class="spoke"></span>
+				<span class="spoke cross"></span>
+				<span class="hub"></span>
+			</div>
+			<span class="wheel-label">{steerLabel}</span>
+		</div>
 		<div class="pedals">
 			<button
 				type="button"
 				class="pedal go"
 				aria-label="油门"
-				onpointerdown={() => setHaulControl(world, 'throttle', 1)}
-				onpointerup={() => setHaulControl(world, 'throttle', 0)}
-				onpointerleave={() => setHaulControl(world, 'throttle', 0)}
+				data-throttle-held={world.throttle > 0 ? '1' : '0'}
+				onpointerdown={(event) => onPedalPointer('throttle', event, true)}
+				onpointerup={(event) => onPedalPointer('throttle', event, false)}
+				onpointercancel={(event) => onPedalPointer('throttle', event, false)}
+				onlostpointercapture={(event) => onPedalPointer('throttle', event, false)}
 			>
 				油门
 			</button>
@@ -289,9 +397,10 @@
 				type="button"
 				class="pedal stop"
 				aria-label="刹车"
-				onpointerdown={() => setHaulControl(world, 'brake', 1)}
-				onpointerup={() => setHaulControl(world, 'brake', 0)}
-				onpointerleave={() => setHaulControl(world, 'brake', 0)}
+				onpointerdown={(event) => onPedalPointer('brake', event, true)}
+				onpointerup={(event) => onPedalPointer('brake', event, false)}
+				onpointercancel={(event) => onPedalPointer('brake', event, false)}
+				onlostpointercapture={(event) => onPedalPointer('brake', event, false)}
 			>
 				刹车
 			</button>
@@ -305,7 +414,7 @@
 		<section class="dock qx-glass" aria-label="重卡操作">
 			<p class="notice" aria-live="polite">{world.notice}</p>
 			<p class="need">
-				A/D 转向，W 加油，S 刹车，R 倒车，空格手刹。左边划方向盘，右边油门刹车。没有通关。
+				A/D 转向，W 加油，S 刹车，R 倒车。左边方向盘可回正，右边油门刹车倒车。没有通关。
 			</p>
 			<div class="actions">
 				<Button class="min-h-12 px-5" variant="secondary" onclick={recover}>回收</Button>
@@ -337,18 +446,24 @@
 
 	.top {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.45rem;
+		gap: 0.35rem 0.5rem;
 		margin: 0.4rem 0.65rem 0;
 		padding: 0.4rem 0.6rem;
 		padding-top: max(0.4rem, env(safe-area-inset-top));
 		border-radius: 1.15rem;
 		z-index: 10;
+		flex-shrink: 0;
+	}
+
+	.hud-back {
+		flex: 0 0 auto;
 	}
 
 	.stats {
 		display: flex;
-		flex: 1;
+		flex: 1 1 auto;
 		justify-content: center;
 		gap: 1rem;
 		min-width: 0;
@@ -374,6 +489,7 @@
 		display: flex;
 		gap: 0.35rem;
 		flex-shrink: 0;
+		margin-left: auto;
 	}
 
 	.stage {
@@ -395,10 +511,64 @@
 		color: var(--qx-muted);
 	}
 
-	.steer-zone {
+	.wheel {
 		display: none;
 		position: absolute;
-		inset: 0 34% 0 0;
+		left: 0.45rem;
+		bottom: 0.65rem;
+		width: 7.25rem;
+		height: 7.25rem;
+		z-index: 8;
+		touch-action: none;
+		pointer-events: auto;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.15rem;
+		user-select: none;
+	}
+
+	.wheel-face {
+		width: 5.6rem;
+		height: 5.6rem;
+		border-radius: 999px;
+		border: 0.55rem solid color-mix(in srgb, var(--qx-primary) 82%, #0b1220);
+		background: color-mix(in srgb, #111827 70%, transparent);
+		box-shadow:
+			0 8px 22px rgba(0, 0, 0, 0.35),
+			inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+		position: relative;
+		pointer-events: none;
+	}
+
+	.spoke {
+		position: absolute;
+		left: 50%;
+		top: 18%;
+		width: 0.38rem;
+		height: 64%;
+		margin-left: -0.19rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, white 70%, var(--qx-primary));
+	}
+
+	.spoke.cross {
+		transform: rotate(90deg);
+	}
+
+	.hub {
+		position: absolute;
+		inset: 34%;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--qx-accent-coral) 70%, #1e293b);
+		box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+	}
+
+	.wheel-label {
+		font-size: 0.72rem;
+		font-weight: 700;
+		color: white;
+		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
 		pointer-events: none;
 	}
 
@@ -410,6 +580,7 @@
 		flex-direction: column;
 		gap: 0.4rem;
 		z-index: 8;
+		pointer-events: auto;
 	}
 
 	.pedal {
@@ -421,6 +592,7 @@
 		font-weight: 700;
 		color: white;
 		background: color-mix(in srgb, var(--qx-primary) 82%, black);
+		touch-action: none;
 	}
 
 	.pedal.stop {
@@ -471,10 +643,7 @@
 	}
 
 	@media (pointer: coarse) {
-		.steer-zone {
-			display: block;
-		}
-
+		.wheel,
 		.pedals {
 			display: flex;
 		}
@@ -485,26 +654,81 @@
 		}
 	}
 
-	@media (max-width: 430px) {
-		.stats {
-			gap: 0.45rem;
+	@media (max-width: 720px) {
+		.top {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto;
+			align-items: center;
+			column-gap: 0.4rem;
+			row-gap: 0.28rem;
 		}
 
-		.stats span {
-			font-size: 0.58rem;
-		}
-
-		.top-actions :global(button) {
+		.hud-back {
+			grid-column: 1;
+			grid-row: 1;
 			min-width: 0;
-			padding-inline: 0.7rem;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 
+		.top-actions {
+			grid-column: 2;
+			grid-row: 1;
+			margin-left: 0;
+		}
+
+		.stats {
+			grid-column: 1 / -1;
+			grid-row: 2;
+			justify-content: space-around;
+			gap: 0.35rem;
+			flex: 0 0 auto;
+		}
+
+		.wheel,
 		.pedals {
 			display: flex;
 		}
 
-		.steer-zone {
-			display: block;
+		.top :global(.hud-btn) {
+			min-width: 0;
+			min-height: 2.5rem;
+			padding-inline: 0.55rem;
+			font-size: 0.85rem;
+		}
+	}
+
+	@media (max-width: 430px) {
+		.stats span {
+			font-size: 0.58rem;
+		}
+
+		.dock {
+			padding: 0.45rem 0.6rem 0.5rem;
+		}
+
+		.notice {
+			display: none;
+		}
+
+		.need {
+			font-size: 0.8rem;
+			margin-top: 0;
+		}
+
+		.actions {
+			margin-top: 0.4rem;
+		}
+
+		.wheel {
+			width: 6.6rem;
+			height: 6.6rem;
+		}
+
+		.wheel-face {
+			width: 5.1rem;
+			height: 5.1rem;
 		}
 	}
 </style>

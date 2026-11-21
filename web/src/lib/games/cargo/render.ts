@@ -1,11 +1,5 @@
 import * as THREE from 'three';
-import {
-	dummyCarPose,
-	type Biome,
-	type HaulWorld,
-	type RoadPiece,
-	type SceneryBit
-} from './sim';
+import { dummyCarPose, type Biome, type HaulWorld, type RoadPiece, type SceneryBit } from './sim';
 
 export interface CargoScene {
 	sync(world: HaulWorld, opts?: { reducedMotion?: boolean }): void;
@@ -54,9 +48,29 @@ function std(color: number, extras: Record<string, unknown> = {}) {
 	return new THREE.MeshStandardMaterial({ color, roughness: 0.62, metalness: 0.08, ...extras });
 }
 
-function ribbon(piece: RoadPiece, y = 0.05, halfWidth?: number) {
+function ribbon(piece: RoadPiece, y = 0.05, halfWidth?: number, overlap = 2.8) {
 	const hw = halfWidth ?? piece.width / 2;
-	const samples = piece.samples;
+	const raw = piece.samples;
+	const first = raw[0];
+	const last = raw[raw.length - 1];
+	const samples =
+		first && last
+			? [
+					{
+						x: first.x - Math.sin(first.yaw) * overlap,
+						z: first.z - Math.cos(first.yaw) * overlap,
+						yaw: first.yaw,
+						s: first.s - overlap
+					},
+					...raw,
+					{
+						x: last.x + Math.sin(last.yaw) * overlap,
+						z: last.z + Math.cos(last.yaw) * overlap,
+						yaw: last.yaw,
+						s: last.s + overlap
+					}
+				]
+			: raw;
 	const positions: number[] = [];
 	const normals: number[] = [];
 	const uvs: number[] = [];
@@ -109,9 +123,15 @@ function makeTruck(geos: Geo[], mats: Mat[]) {
 		keepM(std(0x9ec9ff, { metalness: 0.4, roughness: 0.12, transparent: true, opacity: 0.78 }))
 	);
 	glass.position.set(0, 2.62, 2.02);
-	const bumper = new THREE.Mesh(keepG(new THREE.BoxGeometry(2.7, 0.38, 0.42)), keepM(std(0x1e293b)));
+	const bumper = new THREE.Mesh(
+		keepG(new THREE.BoxGeometry(2.7, 0.38, 0.42)),
+		keepM(std(0x1e293b))
+	);
 	bumper.position.set(0, 0.62, 2.28);
-	const grille = new THREE.Mesh(keepG(new THREE.BoxGeometry(1.4, 0.55, 0.12)), keepM(std(0x0f172a)));
+	const grille = new THREE.Mesh(
+		keepG(new THREE.BoxGeometry(1.4, 0.55, 0.12)),
+		keepM(std(0x0f172a))
+	);
 	grille.position.set(0, 1.12, 2.28);
 	const lamp = keepM(
 		new THREE.MeshStandardMaterial({
@@ -125,9 +145,15 @@ function makeTruck(geos: Geo[], mats: Mat[]) {
 	const hr = hl.clone();
 	hl.position.set(-0.82, 1.18, 2.3);
 	hr.position.set(0.82, 1.18, 2.3);
-	const stack = new THREE.Mesh(keepG(new THREE.CylinderGeometry(0.09, 0.11, 1.8, 8)), keepM(std(0x334155)));
+	const stack = new THREE.Mesh(
+		keepG(new THREE.CylinderGeometry(0.09, 0.11, 1.8, 8)),
+		keepM(std(0x334155))
+	);
 	stack.position.set(-1.15, 2.6, 0.1);
-	const sleeper = new THREE.Mesh(keepG(new THREE.BoxGeometry(2.45, 1.7, 1.4)), keepM(std(0x1d4ed8)));
+	const sleeper = new THREE.Mesh(
+		keepG(new THREE.BoxGeometry(2.45, 1.7, 1.4)),
+		keepM(std(0x1d4ed8))
+	);
 	sleeper.position.set(0, 2.15, -0.85);
 	sleeper.castShadow = true;
 	cab.add(body, cabin, glass, bumper, grille, hl, hr, stack, sleeper);
@@ -143,7 +169,10 @@ function makeTruck(geos: Geo[], mats: Mat[]) {
 	root.add(cab);
 
 	const trailer = new THREE.Group();
-	const hitch = new THREE.Mesh(keepG(new THREE.CylinderGeometry(0.12, 0.12, 1.6, 8)), keepM(std(0x475569)));
+	const hitch = new THREE.Mesh(
+		keepG(new THREE.CylinderGeometry(0.12, 0.12, 1.6, 8)),
+		keepM(std(0x475569))
+	);
 	hitch.rotation.x = Math.PI / 2;
 	hitch.position.set(0, 1.05, -2.15);
 	const deck = new THREE.Mesh(keepG(new THREE.BoxGeometry(2.5, 0.28, 9.4)), keepM(std(0x334155)));
@@ -155,7 +184,10 @@ function makeTruck(geos: Geo[], mats: Mat[]) {
 	);
 	box.position.set(0, 2.52, -7.2);
 	box.castShadow = true;
-	const stripe = new THREE.Mesh(keepG(new THREE.BoxGeometry(2.44, 0.18, 8.62)), keepM(std(0x14b8a6)));
+	const stripe = new THREE.Mesh(
+		keepG(new THREE.BoxGeometry(2.44, 0.18, 8.62)),
+		keepM(std(0x14b8a6))
+	);
 	stripe.position.set(0, 2.05, -7.2);
 	const coral = keepM(
 		new THREE.MeshStandardMaterial({
@@ -309,10 +341,7 @@ export function mountCargoScene(canvas: HTMLCanvasElement): CargoScene | null {
 	sun.shadow.camera.bottom = -40;
 	scene.add(sun);
 
-	const ground = new THREE.Mesh(
-		new THREE.CircleGeometry(180, 40),
-		std(0x7f9b72, { roughness: 1 })
-	);
+	const ground = new THREE.Mesh(new THREE.CircleGeometry(180, 40), std(0x7f9b72, { roughness: 1 }));
 	ground.rotation.x = -Math.PI / 2;
 	ground.receiveShadow = true;
 	scene.add(ground);

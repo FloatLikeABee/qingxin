@@ -133,7 +133,12 @@ function nextBiome(b: Biome): Biome {
 	return 'highway';
 }
 
-function alloc(free: string[], prefix: string, world: HaulWorld, kind: 'road' | 'tree' | 'build' | 'car') {
+function alloc(
+	free: string[],
+	prefix: string,
+	world: HaulWorld,
+	kind: 'road' | 'tree' | 'build' | 'car'
+) {
 	const reused = free.pop();
 	if (reused) return reused;
 	if (kind === 'road') {
@@ -162,6 +167,59 @@ export function pieceConnected(world: HaulWorld, id: string) {
 	if (!piece) return false;
 	if (piece.frontier) return true;
 	return piece.exits.some((ex) => world.pieces.some((p) => p.id === ex));
+}
+
+export function haulSpineDepth(world: HaulWorld) {
+	const here = world.pieces.find((p) => p.id === world.pieceId);
+	if (!here) return 0;
+	let depth = 0;
+	let piece: RoadPiece | null = here;
+	while (piece && depth < 8) {
+		const child = mainChild(world, piece);
+		if (!child) break;
+		depth += 1;
+		piece = child;
+	}
+	return depth;
+}
+
+export function haulJointGaps(world: HaulWorld) {
+	const gaps: number[] = [];
+	for (const piece of world.pieces) {
+		for (const id of piece.exits) {
+			const child = world.pieces.find((p) => p.id === id);
+			if (!child) continue;
+			gaps.push(Math.hypot(child.startX - piece.endX, child.startZ - piece.endZ));
+		}
+	}
+	return gaps;
+}
+
+function mainChild(world: HaulWorld, piece: RoadPiece) {
+	const kids = piece.exits
+		.map((id) => world.pieces.find((p) => p.id === id))
+		.filter((p): p is RoadPiece => Boolean(p));
+	return kids.find((p) => p.branch !== 'exit') ?? kids[0] ?? null;
+}
+
+function keepPieceIds(world: HaulWorld, here: RoadPiece) {
+	const keep = new Set<string>([here.id]);
+	if (here.parentId) {
+		keep.add(here.parentId);
+		const parent = world.pieces.find((p) => p.id === here.parentId);
+		if (parent) {
+			for (const id of parent.exits) keep.add(id);
+		}
+	}
+	for (const id of here.exits) keep.add(id);
+	let piece: RoadPiece | null = here;
+	for (let i = 0; i < 6; i++) {
+		if (!piece) break;
+		keep.add(piece.id);
+		for (const id of piece.exits) keep.add(id);
+		piece = mainChild(world, piece);
+	}
+	return keep;
 }
 
 function fillSamples(piece: RoadPiece) {
@@ -194,7 +252,8 @@ function makePiece(
 	const length = opts.length ?? LEN[biome];
 	const absA = Math.abs(opts.angle);
 	const minR = biome === 'highway' ? 28 : biome === 'country' ? 22 : MIN_RADIUS;
-	const angle = absA < 0.02 ? 0 : absA < length / minR ? opts.angle : (Math.sign(opts.angle) * length) / minR;
+	const angle =
+		absA < 0.02 ? 0 : absA < length / minR ? opts.angle : (Math.sign(opts.angle) * length) / minR;
 	const piece: RoadPiece = {
 		id: alloc(world.freeRoad, 'r', world, 'road'),
 		seq: world.seq,
@@ -228,7 +287,13 @@ function link(parent: RoadPiece, child: RoadPiece) {
 
 function scatterScenery(world: HaulWorld, piece: RoadPiece) {
 	const treeN = world.lowDetail ? 2 : piece.biome === 'city' ? 2 : 5;
-	const buildN = world.lowDetail ? 1 : piece.biome === 'city' ? 4 : piece.biome === 'highway' ? 1 : 2;
+	const buildN = world.lowDetail
+		? 1
+		: piece.biome === 'city'
+			? 4
+			: piece.biome === 'highway'
+				? 1
+				: 2;
 	for (let i = 0; i < treeN && world.trees.length < TREE_POOL; i++) {
 		const s = piece.samples[1 + Math.floor(world.rng() * (piece.samples.length - 2))]!;
 		const side = world.rng() < 0.5 ? -1 : 1;
@@ -293,7 +358,12 @@ export type RoadHit = {
 	dist: number;
 };
 
-export function projectPoint(world: HaulWorld, x: number, z: number, yaw = world.yaw): RoadHit | null {
+export function projectPoint(
+	world: HaulWorld,
+	x: number,
+	z: number,
+	yaw = world.yaw
+): RoadHit | null {
 	let best: RoadHit | null = null;
 	const here = world.pieces.find((p) => p.id === world.pieceId);
 	const preferred = new Set<string>();
@@ -356,37 +426,35 @@ function ensureAhead(world: HaulWorld) {
 	const hit = projectPoint(world, world.x, world.z);
 	const here = hit?.piece ?? world.pieces[0];
 	if (!here) return;
-	const queue = [here];
-	const seen = new Set<string>();
-	let guard = 0;
-	while (queue.length && guard < 8) {
-		guard += 1;
-		const piece = queue.shift()!;
-		if (seen.has(piece.id)) continue;
-		seen.add(piece.id);
+	let piece: RoadPiece | null = here;
+	for (let i = 0; i < 6; i++) {
+		if (!piece) break;
 		if (piece.exits.length === 0) growFrom(world, piece);
-		for (const id of piece.exits) {
+		const kids = piece.exits
+			.map((id) => world.pieces.find((p) => p.id === id))
+			.filter((p): p is RoadPiece => Boolean(p));
+		for (const kid of kids) {
+			if (kid.exits.length === 0) growFrom(world, kid);
+		}
+		piece = mainChild(world, piece);
+	}
+	const parent = world.pieces.find((p) => p.id === here.parentId);
+	for (const near of [here, parent]) {
+		if (!near) continue;
+		for (const id of near.exits) {
 			const child = world.pieces.find((p) => p.id === id);
-			if (child) queue.push(child);
+			if (child && child.exits.length === 0) growFrom(world, child);
 		}
 	}
-	for (const piece of [...world.pieces]) {
-		if (piece.id === here.id) continue;
-		if (here.exits.includes(piece.id)) continue;
-		if (piece.exits.includes(here.id)) continue;
-		if (piece.seq < here.seq - 1) recyclePiece(world, piece);
+	const keep = keepPieceIds(world, here);
+	for (const extra of [...world.pieces]) {
+		if (keep.has(extra.id)) continue;
+		if (extra.seq < here.seq - 1) recyclePiece(world, extra);
 	}
 	while (world.pieces.length > ROAD_POOL) {
-		const hitNow = projectPoint(world, world.x, world.z);
-		const farthest = world.pieces
-			.filter((p) => p.id !== hitNow?.piece.id && !p.exits.includes(hitNow?.piece.id ?? ''))
-			.sort((a, b) => {
-				const da = Math.hypot(a.endX - world.x, a.endZ - world.z);
-				const db = Math.hypot(b.endX - world.x, b.endZ - world.z);
-				return db - da;
-			})[0];
-		if (!farthest) break;
-		recyclePiece(world, farthest);
+		const drop = world.pieces.filter((p) => !keep.has(p.id)).sort((a, b) => a.seq - b.seq)[0];
+		if (!drop) break;
+		recyclePiece(world, drop);
 	}
 }
 
@@ -417,7 +485,10 @@ export function haulPools(world: HaulWorld) {
 	};
 }
 
-export function createHaul(seed = 1, opts?: { biome?: Biome; x?: number; z?: number; yaw?: number }): HaulWorld {
+export function createHaul(
+	seed = 1,
+	opts?: { biome?: Biome; x?: number; z?: number; yaw?: number }
+): HaulWorld {
 	const rng = mulberry32(seed);
 	const world: HaulWorld = {
 		seed,

@@ -6,7 +6,9 @@ import {
 	TREE_POOL,
 	autoFollowHaul,
 	createHaul,
+	haulJointGaps,
 	haulPools,
+	haulSpineDepth,
 	minPieceRadius,
 	pieceConnected,
 	recoverHaul,
@@ -114,6 +116,29 @@ describe('cargo haul sim', () => {
 		expect(world.onRoad).toBe(true);
 		expect(world.recoverCount).toBeGreaterThan(0);
 		expect(world.odometer).toBeGreaterThanOrEqual(80);
+	});
+
+	it('keeps a connected spine ahead and fork joints coincident', () => {
+		const world = createHaul(7);
+		simulateHaulMeters(world, 2800);
+		for (let i = 0; i < 90; i++) {
+			autoFollowHaul(world, 'main');
+			stepHaul(world, 32);
+		}
+		expect(world.pieces.length).toBeLessThanOrEqual(ROAD_POOL);
+		expect(haulSpineDepth(world)).toBeGreaterThanOrEqual(2);
+		const gaps = haulJointGaps(world);
+		expect(gaps.length).toBeGreaterThan(0);
+		expect(Math.max(...gaps)).toBeLessThan(0.05);
+		const here = world.pieces.find((p) => p.id === world.pieceId);
+		expect(here).toBeTruthy();
+		if (here?.parentId) {
+			const parent = world.pieces.find((p) => p.id === here.parentId);
+			if (parent && parent.exits.length >= 2) {
+				const liveKids = parent.exits.filter((id) => world.pieces.some((p) => p.id === id));
+				expect(liveKids.length).toBe(parent.exits.length);
+			}
+		}
 	});
 
 	it('recovers off-road without resetting the odometer', () => {
