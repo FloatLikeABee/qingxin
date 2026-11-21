@@ -105,8 +105,8 @@ test('play mounts without a session', async ({ page }) => {
 
 test('coming soon game cannot start a session', async ({ page }) => {
 	await boot(page);
-	await page.goto('/modules/games/tide-breath', { waitUntil: 'networkidle' });
-	await expect(page.getByRole('heading', { name: '潮汐呼吸' })).toBeVisible();
+	await page.goto('/modules/games/cloud-walk', { waitUntil: 'networkidle' });
+	await expect(page.getByRole('heading', { name: '云上散步' })).toBeVisible();
 	await expect(page.getByRole('button', { name: '即将到来' })).toBeDisabled();
 	await expect(page.locator('canvas:not([data-qx-dust])')).toHaveCount(0);
 });

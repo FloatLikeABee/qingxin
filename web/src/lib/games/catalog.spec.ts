@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { aliasTarget, featuredGame, GAMES, GAME_CATEGORIES, getGame } from './catalog';
 
 describe('games registry', () => {
-	it('lists three playable games including 窗前庭园 and 晴空出击', () => {
+	it('lists playable games including 窗前庭园, 晴空出击, and 潮汐呼吸', () => {
 		const playable = GAMES.filter((game) => game.status === 'playable');
 		expect(playable.map((game) => game.id).sort()).toEqual(
-			['convenient-store', 'sky-sortie', 'window-garden'].sort()
+			['convenient-store', 'sky-sortie', 'tide-breath', 'window-garden'].sort()
 		);
 		expect(getGame('convenient-store')).toMatchObject({
 			title: '便利店经理',
@@ -36,9 +36,18 @@ describe('games registry', () => {
 		expect(GAME_CATEGORIES).toContain('飞行');
 	});
 
-	it('keeps the remaining 即将到来 slots', () => {
+	it('keeps 云上散步 and 记忆货架 as honest 即将到来 slots', () => {
 		const coming = GAMES.filter((game) => game.status === 'coming');
-		expect(coming.map((game) => game.id)).toEqual(['tide-breath', 'cloud-walk', 'memory-shelf']);
+		expect(coming.map((game) => game.id)).toEqual(['cloud-walk', 'memory-shelf']);
+		expect(getGame('tide-breath')).toMatchObject({
+			title: '潮汐呼吸',
+			englishTitle: 'Tide Breath',
+			status: 'playable',
+			playCta: '开始入海',
+			category: '节奏'
+		});
+		expect(getGame('cloud-walk')?.status).toBe('coming');
+		expect(getGame('memory-shelf')?.status).toBe('coming');
 		expect(
 			GAMES.every((game) => game.id && game.summary && game.tags.length > 0 && game.playCta)
 		).toBe(true);

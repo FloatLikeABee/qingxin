@@ -93,12 +93,14 @@ export const GAMES: GameInfo[] = [
 	{
 		id: 'tide-breath',
 		title: '潮汐呼吸',
-		summary: '跟着海面一起起落，把呼吸放慢。',
-		about: '节奏还没写进拍号。先占一个位置。',
+		englishTitle: 'Tide Breath',
+		summary: '夜海里按住升起、松开送浪，引发光的海物去捡星光。',
+		about:
+			'一片会呼吸的夜海。按住，潮面升起；松开，发光的波纹送出去。点海面或用方向键引导水母、灯鱼和蝠鲼去捡散落的星光，星光会唤醒海底的珊瑚园。没有计时，也不必憋气。这是一则海的散步，不是呼吸治疗。',
 		category: '节奏',
-		tags: ['呼吸', '海'],
-		status: 'coming',
-		playCta: '即将到来',
+		tags: ['呼吸', '海', '星光'],
+		status: 'playable',
+		playCta: '开始入海',
 		cover: {
 			sky: '#7DD3FC',
 			ground: '#14B8A6',
@@ -109,8 +111,8 @@ export const GAMES: GameInfo[] = [
 	{
 		id: 'cloud-walk',
 		title: '云上散步',
-		summary: '没有任务。沿一条淡路走走停停。',
-		about: '休闲散步，路还没铺完。',
+		summary: '浮岛、风道和云还在铺。现在还进不去。',
+		about: '设计已定：在浮岛间散步、乘风、踩云，收集天气碎片。玩法还没接上，先占这个位置。',
 		category: '休闲',
 		tags: ['散步', '云'],
 		status: 'coming',
@@ -125,8 +127,8 @@ export const GAMES: GameInfo[] = [
 	{
 		id: 'memory-shelf',
 		title: '记忆货架',
-		summary: '货架闪一下，凭记忆把缺的补上。',
-		about: '益智补货，规则还在写。',
+		summary: '魔法书房还在布置。现在还进不去。',
+		about: '设计已定：拿起物件端详、记住货架的改动、解开更绕的架子，再装饰收藏室。玩法还没接上。',
 		category: '益智',
 		tags: ['记忆', '货架'],
 		status: 'coming',
