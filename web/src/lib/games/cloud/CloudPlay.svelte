@@ -7,14 +7,23 @@
 	import type { CloudScene } from './render';
 	import {
 		FRAG_KINDS,
-		jumpSky,
+		recallHome,
 		restartSky,
 		setSkyKey,
 		setSkySteer,
+		skyControlFromKeyboard,
 		stepSky,
-		type SkyKeys,
+		type BiomeId,
 		type SkyWorld
 	} from './sim';
+
+	const BIOME_LABEL: Record<BiomeId, string> = {
+		garden: '云圃',
+		alien: '异星',
+		city: '倒城',
+		water: '水色',
+		underworld: '潜界'
+	};
 
 	let { title }: { title: string } = $props();
 
@@ -32,7 +41,7 @@
 	function paint(canvas: HTMLCanvasElement | null = canvasEl) {
 		if (!canvas) return;
 		canvas.dataset.island = String(world.island);
-		canvas.dataset.airborne = world.airborne || world.inWind ? '1' : '0';
+		canvas.dataset.airborne = '1';
 		canvas.dataset.bounce = world.didBounce ? '1' : '0';
 		canvas.dataset.wind = world.didWind ? '1' : '0';
 		canvas.dataset.sky = world.skyMode;
@@ -42,6 +51,16 @@
 		canvas.dataset.detail = world.lowDetail ? 'low' : 'high';
 		canvas.dataset.audio = audioOn ? '1' : '0';
 		canvas.dataset.discovered = String(world.creatures.filter((c) => c.discovered).length);
+		canvas.dataset.y = String(Math.round(world.y * 10) / 10);
+		canvas.dataset.x = String(Math.round(world.x * 10) / 10);
+		canvas.dataset.z = String(Math.round(world.z * 10) / 10);
+		canvas.dataset.biome = world.biome;
+		canvas.dataset.bound = world.bound ? '1' : '0';
+		canvas.dataset.r = String(Math.round(Math.hypot(world.x, world.z)));
+		canvas.dataset.lookx = String(Math.round(world.lookX * 100) / 100);
+		canvas.dataset.lookz = String(Math.round(world.lookZ * 100) / 100);
+		canvas.dataset.rise = world.keys.rise ? '1' : '0';
+		canvas.dataset.dive = world.keys.dive ? '1' : '0';
 	}
 
 	function togglePause() {
@@ -99,56 +118,38 @@
 		const onDown = (event: PointerEvent) => {
 			if (event.pointerType === 'mouse' && event.button !== 0) return;
 			if (world.paused) return;
-			const hit = scene?.hitWalk(event.clientX, event.clientY);
-			if (hit) setSkySteer(world, hit.x, hit.z);
+			const hit = scene?.hitFly(event.clientX, event.clientY);
+			if (hit) setSkySteer(world, hit.x, hit.y, hit.z);
 			stage.setPointerCapture(event.pointerId);
 			paint();
 		};
 		const onMove = (event: PointerEvent) => {
 			if (world.paused || event.buttons === 0) return;
-			const hit = scene?.hitWalk(event.clientX, event.clientY);
-			if (hit) setSkySteer(world, hit.x, hit.z);
+			const hit = scene?.hitFly(event.clientX, event.clientY);
+			if (hit) setSkySteer(world, hit.x, hit.y, hit.z);
 		};
 		const onUp = () => {
 			save();
 		};
-		const bindKey = (event: KeyboardEvent, down: boolean) => {
-			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
-				return;
-			const map: Record<string, keyof SkyKeys> = {
-				ArrowUp: 'up',
-				ArrowDown: 'down',
-				ArrowLeft: 'left',
-				ArrowRight: 'right',
-				KeyW: 'up',
-				KeyS: 'down',
-				KeyA: 'left',
-				KeyD: 'right',
-				w: 'up',
-				s: 'down',
-				a: 'left',
-				d: 'right'
-			};
-			const dir = map[event.code] ?? map[event.key];
-			if (dir) {
-				event.preventDefault();
-				setSkyKey(world, dir, down);
-			}
-		};
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
 				return;
-			if (event.code === 'Space') {
+			const control = skyControlFromKeyboard(event);
+			if (control.move) {
 				event.preventDefault();
-				if (!event.repeat && !world.paused) jumpSky(world);
+				const vertical = control.move === 'rise' || control.move === 'dive';
+				if (!vertical || !world.paused) setSkyKey(world, control.move, true);
 			}
-			bindKey(event, true);
-			if (event.key === 'p' || event.key === 'P') togglePause();
+			if (control.pause) togglePause();
 			paint();
 		};
 		const onKeyUp = (event: KeyboardEvent) => {
-			if (event.code === 'Space') event.preventDefault();
-			bindKey(event, false);
+			const control = skyControlFromKeyboard(event);
+			if (control.move) {
+				event.preventDefault();
+				setSkyKey(world, control.move, false);
+			}
+			paint();
 		};
 
 		void (async () => {
@@ -184,13 +185,11 @@
 		})();
 
 		const onVis = () => {
-			if (document.hidden) {
-				world.paused = true;
-				paint();
-			}
+			paint();
 		};
-		window.addEventListener('keydown', onKeyDown);
-		window.addEventListener('keyup', onKeyUp);
+		window.addEventListener('keydown', onKeyDown, true);
+		window.addEventListener('keyup', onKeyUp, true);
+		stage.focus({ preventScroll: true });
 		stage.addEventListener('pointerdown', onDown);
 		stage.addEventListener('pointermove', onMove);
 		stage.addEventListener('pointerup', onUp);
@@ -203,8 +202,8 @@
 			cancelAnimationFrame(raf);
 			clearInterval(interval);
 			resizeObserver?.disconnect();
-			window.removeEventListener('keydown', onKeyDown);
-			window.removeEventListener('keyup', onKeyUp);
+			window.removeEventListener('keydown', onKeyDown, true);
+			window.removeEventListener('keyup', onKeyUp, true);
 			stage.removeEventListener('pointerdown', onDown);
 			stage.removeEventListener('pointermove', onMove);
 			stage.removeEventListener('pointerup', onUp);
@@ -233,7 +232,7 @@
 				>
 			</li>
 			<li><b>{world.garden.length}</b><span>云圃</span></li>
-			<li><b>{world.visited.length}</b><span>岛屿</span></li>
+			<li><b>{BIOME_LABEL[world.biome]}</b><span>所在</span></li>
 		</ul>
 		<div class="top-actions">
 			<Button variant="secondary" class="px-4" onclick={togglePause}>
@@ -245,23 +244,54 @@
 		</div>
 	</header>
 
-	<div bind:this={stageEl} class="stage" data-play="cloud">
+	<div bind:this={stageEl} class="stage" data-play="cloud" tabindex="-1">
 		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="云上散步天空"></canvas>
 		{#if sceneFailed}
-			<p class="fail">这台设备画不出天空。方向键仍可在岛间走动。</p>
+			<p class="fail">这台设备画不出天空。方向键仍可飞升潜入。</p>
 		{/if}
-		<button type="button" class="sr-only" onclick={() => jumpSky(world)}>跳</button>
 	</div>
 
 	{#if !world.dockCollapsed}
 		<section class="dock qx-glass" aria-label="云上操作">
 			<p class="notice" aria-live="polite">{world.notice}</p>
 			<p class="need">
-				方向键或 WASD 走路，空格或点「跳一下」弹起。点地面走过去。风会送你，云会弹起来。没有分数。
+				方向键或 WASD 相对镜头游走。按住空格或「飞升」向上，按住 Shift
+				或「潜入」向下。点空中飞过去。没有门，也没有分数。
 			</p>
 			<div class="actions">
-				<Button class="min-h-12 px-5" variant="secondary" onclick={() => jumpSky(world)}>
-					跳一下
+				<Button
+					class="min-h-12 min-w-12 px-5"
+					variant="secondary"
+					onpointerdown={() => setSkyKey(world, 'rise', true)}
+					onpointerup={() => {
+						setSkyKey(world, 'rise', false);
+						stageEl?.focus();
+					}}
+					onpointerleave={() => setSkyKey(world, 'rise', false)}
+				>
+					飞升
+				</Button>
+				<Button
+					class="min-h-12 min-w-12 px-5"
+					variant="secondary"
+					onpointerdown={() => setSkyKey(world, 'dive', true)}
+					onpointerup={() => {
+						setSkyKey(world, 'dive', false);
+						stageEl?.focus();
+					}}
+					onpointerleave={() => setSkyKey(world, 'dive', false)}
+				>
+					潜入
+				</Button>
+				<Button
+					class="min-h-12 px-5"
+					variant="secondary"
+					onclick={() => {
+						recallHome(world);
+						stageEl?.focus();
+					}}
+				>
+					回家
 				</Button>
 				<Button class="min-h-12 px-5" variant="secondary" onclick={toggleDetail}>
 					{world.lowDetail ? '高细腻' : '低细腻'}
@@ -332,6 +362,7 @@
 		flex: 1;
 		min-height: 0;
 		touch-action: none;
+		outline: none;
 	}
 
 	.fail {
@@ -382,6 +413,13 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	@media (pointer: coarse) {
+		.actions :global(button) {
+			min-width: 44px;
+			min-height: 44px;
+		}
 	}
 
 	@media (max-width: 430px) {

@@ -1,6 +1,7 @@
 export const FRAG_KINDS = ['sun', 'rain', 'breeze', 'night'] as const;
 export type FragKind = (typeof FRAG_KINDS)[number];
 export type SkyMode = 'dawn' | FragKind;
+export type BiomeId = 'garden' | 'alien' | 'city' | 'water' | 'underworld';
 
 export type Island = {
 	id: number;
@@ -50,6 +51,8 @@ export type SkyKeys = {
 	down: boolean;
 	left: boolean;
 	right: boolean;
+	rise: boolean;
+	dive: boolean;
 };
 
 export type SkyWorld = {
@@ -60,11 +63,17 @@ export type SkyWorld = {
 	vy: number;
 	vz: number;
 	yaw: number;
+	lookX: number;
+	lookZ: number;
 	onGround: boolean;
 	inWind: boolean;
 	airborne: boolean;
 	island: number;
+	biome: BiomeId;
+	bound: boolean;
+	boundTimer: number;
 	visited: number[];
+	biomes: BiomeId[];
 	didWind: boolean;
 	didBounce: boolean;
 	bounceCool: number;
@@ -80,7 +89,7 @@ export type SkyWorld = {
 	garden: GardenPlant[];
 	creatures: SkyCreature[];
 	keys: SkyKeys;
-	steer: { x: number; z: number } | null;
+	steer: { x: number; y: number; z: number } | null;
 	paused: boolean;
 	lowDetail: boolean;
 	reducedMotion: boolean;
@@ -89,6 +98,15 @@ export type SkyWorld = {
 	t: number;
 	over: boolean;
 };
+
+export const WORLD_R = 42;
+export const Y_MIN = -14;
+export const Y_MAX = 18;
+export const HOME = { x: 0, y: 1, z: 0 };
+export const WELL = { x: 0.2, y: 0, z: -0.55, r: 2.2 };
+export const FLY = 0.0042;
+export const DIVE = 0.0028;
+export const RECALL_MS = 1600;
 
 export const WIND_TUBE = {
 	ax: 2.75,
@@ -112,92 +130,130 @@ const CLOUDS: CloudPad[] = [
 	{ id: 'c2', x: 18.9, z: 1.0, y: 1.12, r: 1.48 }
 ];
 
-const WIND = WIND_TUBE;
-
-const PLOTS: Record<FragKind, { x: number; z: number }> = {
+export const GARDEN_PLOTS: Record<FragKind, { x: number; z: number }> = {
 	sun: { x: -1.45, z: -1.65 },
 	rain: { x: 0.25, z: -2.05 },
 	breeze: { x: 1.55, z: -1.45 },
 	night: { x: 0.05, z: -0.72 }
 };
 
-const WALK = 0.00355;
-const AIR = 0.00135;
-const WIND_SPEED = 0.0076;
-const GRAVITY = 0.000028;
-const JUMP = 0.0118;
-const BOUNCE_VY = 0.0106;
-const BOUNCE_VX = 0.0074;
 const COLLECT_R = 1.18;
 const DT_CAP = 48;
+const ISLAND_FROM_BIOME: Record<BiomeId, number> = {
+	garden: 0,
+	alien: 1,
+	city: 3,
+	water: 0,
+	underworld: 0
+};
+
+export function chaseOffset(biome: BiomeId): { dist: number; height: number; lift: number } {
+	if (biome === 'water') return { dist: 4.6, height: 0.82, lift: 0.18 };
+	if (biome === 'underworld') return { dist: 5.8, height: 1.42, lift: 0.14 };
+	return { dist: 10, height: 5.2, lift: 0.45 };
+}
+
+export function skyControlFromKeyboard(event: { code: string; key: string; shiftKey?: boolean }): {
+	move?: keyof SkyKeys;
+	pause?: boolean;
+} {
+	if (event.code === 'Space') return { move: 'rise' };
+	if (event.code === 'ShiftLeft' || event.code === 'ShiftRight' || event.key === 'Shift') {
+		return { move: 'dive' };
+	}
+	const map: Record<string, keyof SkyKeys> = {
+		ArrowUp: 'up',
+		ArrowDown: 'down',
+		ArrowLeft: 'left',
+		ArrowRight: 'right',
+		KeyW: 'up',
+		KeyS: 'down',
+		KeyA: 'left',
+		KeyD: 'right',
+		w: 'up',
+		s: 'down',
+		a: 'left',
+		d: 'right'
+	};
+	const dir = map[event.code] ?? map[event.key];
+	if (dir) return { move: dir };
+	if ((event.key === 'p' || event.key === 'P') && !event.shiftKey) return { pause: true };
+	return {};
+}
+
+export function biomeAt(x: number, y: number, z: number): BiomeId {
+	if (y < -6) return 'underworld';
+	const well = Math.hypot(x - WELL.x, z - WELL.z);
+	if (y < 0.15 && well < 9) return 'water';
+	if (x >= 8 && x <= 30 && z >= -10 && z <= 14 && y >= -0.5 && y <= 9) return 'alien';
+	if (x >= -10 && x <= 20 && z >= -30 && z <= -6 && y >= 2 && y <= 16) return 'city';
+	return 'garden';
+}
+
+export function mapVisitedToBiomes(ids: number[]): BiomeId[] {
+	const out = new Set<BiomeId>(['garden']);
+	for (const id of ids) {
+		if (id === 1 || id === 2) out.add('alien');
+		else if (id === 3) out.add('city');
+		else out.add('garden');
+	}
+	return [...out];
+}
 
 function hypot2(dx: number, dz: number) {
 	return Math.hypot(dx, dz);
 }
 
-function nearestIsland(world: SkyWorld): Island | null {
-	let best: Island | null = null;
-	let bestD = Infinity;
-	for (const isle of world.islands) {
-		const d = hypot2(world.x - isle.x, world.z - isle.z);
-		if (d <= isle.r + 0.12 && d < bestD) {
-			best = isle;
-			bestD = d;
-		}
-	}
-	return best;
-}
-
-function onIslandPad(world: SkyWorld, isle: Island) {
-	return (
-		hypot2(world.x - isle.x, world.z - isle.z) <= isle.r &&
-		world.y <= isle.y + 0.55 &&
-		world.y >= isle.y - 0.22
-	);
-}
-
 function windT(x: number, y: number, z: number) {
-	const dx = WIND.bx - WIND.ax;
-	const dy = WIND.by - WIND.ay;
-	const dz = WIND.bz - WIND.az;
+	const dx = WIND_TUBE.bx - WIND_TUBE.ax;
+	const dy = WIND_TUBE.by - WIND_TUBE.ay;
+	const dz = WIND_TUBE.bz - WIND_TUBE.az;
 	const len2 = dx * dx + dy * dy + dz * dz;
-	const t = ((x - WIND.ax) * dx + (y - WIND.ay) * dy + (z - WIND.az) * dz) / len2;
+	const t = ((x - WIND_TUBE.ax) * dx + (y - WIND_TUBE.ay) * dy + (z - WIND_TUBE.az) * dz) / len2;
 	return Math.min(1, Math.max(0, t));
 }
 
 function inWindTube(x: number, y: number, z: number) {
 	const t = windT(x, y, z);
-	const px = WIND.ax + (WIND.bx - WIND.ax) * t;
-	const py = WIND.ay + (WIND.by - WIND.ay) * t;
-	const pz = WIND.az + (WIND.bz - WIND.az) * t;
-	return Math.hypot(x - px, y - py, z - pz) <= WIND.r;
+	const px = WIND_TUBE.ax + (WIND_TUBE.bx - WIND_TUBE.ax) * t;
+	const py = WIND_TUBE.ay + (WIND_TUBE.by - WIND_TUBE.ay) * t;
+	const pz = WIND_TUBE.az + (WIND_TUBE.bz - WIND_TUBE.az) * t;
+	return Math.hypot(x - px, y - py, z - pz) <= WIND_TUBE.r;
 }
 
 function growGarden(world: SkyWorld, kind: FragKind) {
 	if (world.garden.some((p) => p.kind === kind)) return;
-	const plot = PLOTS[kind];
+	const plot = GARDEN_PLOTS[kind];
 	world.garden = [...world.garden, { kind, x: plot.x, z: plot.z, grown: 0.08 }];
 }
 
-function markVisit(world: SkyWorld, id: number) {
-	if (world.visited.includes(id)) return;
-	world.visited = [...world.visited, id];
+function markBiome(world: SkyWorld, biome: BiomeId) {
+	if (!world.biomes.includes(biome)) world.biomes = [...world.biomes, biome];
+	const id = ISLAND_FROM_BIOME[biome];
+	if (!world.visited.includes(id)) world.visited = [...world.visited, id];
 }
 
 export function createSky(): SkyWorld {
+	const yaw = 1.18;
 	return {
-		x: 0,
-		y: 0,
-		z: 0,
+		x: HOME.x,
+		y: HOME.y,
+		z: HOME.z,
 		vx: 0,
 		vy: 0,
 		vz: 0,
-		yaw: 1.18,
-		onGround: true,
+		yaw,
+		lookX: Math.sin(yaw),
+		lookZ: Math.cos(yaw),
+		onGround: false,
 		inWind: false,
-		airborne: false,
+		airborne: true,
 		island: 0,
+		biome: 'garden',
+		bound: false,
+		boundTimer: 0,
 		visited: [0],
+		biomes: ['garden'],
 		didWind: false,
 		didBounce: false,
 		bounceCool: 0,
@@ -210,24 +266,24 @@ export function createSky(): SkyWorld {
 		islands: CLOUD_ISLANDS.map((i) => ({ ...i })),
 		clouds: CLOUDS.map((c) => ({ ...c })),
 		fragments: [
-			{ id: 1, kind: 'sun', x: 12.15, y: 1.42, z: 0.48, collected: false },
-			{ id: 2, kind: 'rain', x: 22.35, y: 0.72, z: 1.15, collected: false },
-			{ id: 3, kind: 'breeze', x: 3.55, y: 0.98, z: -11.15, collected: false },
-			{ id: 4, kind: 'night', x: 5.55, y: 0.98, z: -13.05, collected: false }
+			{ id: 1, kind: 'sun', x: 12.15, y: 2.4, z: 0.48, collected: false },
+			{ id: 2, kind: 'rain', x: 22.35, y: 1.8, z: 1.15, collected: false },
+			{ id: 3, kind: 'breeze', x: 8.2, y: 8.4, z: -18.2, collected: false },
+			{ id: 4, kind: 'night', x: 0.8, y: -9.2, z: -1.2, collected: false }
 		],
 		garden: [],
 		creatures: [
-			{ id: 1, kind: 'puff', x: 4.4, z: -11.4, heading: 0.4, speed: 0.55, discovered: false },
-			{ id: 2, kind: 'kite', x: 5.6, z: -12.6, heading: 2.1, speed: 0.72, discovered: false },
+			{ id: 1, kind: 'puff', x: 1.4, z: -2.2, heading: 0.4, speed: 0.55, discovered: false },
+			{ id: 2, kind: 'kite', x: 6.2, z: -8.6, heading: 2.1, speed: 0.72, discovered: false },
 			{ id: 3, kind: 'lamb', x: 3.5, z: -12.8, heading: 4.0, speed: 0.42, discovered: false }
 		],
-		keys: { up: false, down: false, left: false, right: false },
+		keys: { up: false, down: false, left: false, right: false, rise: false, dive: false },
 		steer: null,
 		paused: false,
 		lowDetail: false,
 		reducedMotion: false,
 		soundOn: false,
-		notice: '风会把你送到下一座岛。',
+		notice: '按住飞升或潜入。云界连成一片，没有门。',
 		t: 0,
 		over: false
 	};
@@ -237,19 +293,34 @@ export function setSkyKey(world: SkyWorld, key: keyof SkyKeys, down: boolean) {
 	world.keys[key] = down;
 }
 
-export function setSkySteer(world: SkyWorld, x: number, z: number | null) {
-	if (z === null) {
+export function setSkyLook(world: SkyWorld, x: number, z: number) {
+	const len = Math.hypot(x, z) || 1;
+	world.lookX = x / len;
+	world.lookZ = z / len;
+}
+
+export function setSkySteer(world: SkyWorld, x: number, y: number | null, z?: number) {
+	if (y === null || z == null) {
 		world.steer = null;
 		return;
 	}
-	world.steer = { x, z };
+	world.steer = { x, y, z };
 }
 
-export function jumpSky(world: SkyWorld) {
-	if (world.paused || !world.onGround) return;
-	world.vy = JUMP;
-	world.onGround = false;
-	world.airborne = true;
+export function recallHome(world: SkyWorld) {
+	world.x = HOME.x;
+	world.y = HOME.y;
+	world.z = HOME.z;
+	world.vx = 0;
+	world.vy = 0;
+	world.vz = 0;
+	world.steer = null;
+	world.keys = { up: false, down: false, left: false, right: false, rise: false, dive: false };
+	world.bound = false;
+	world.boundTimer = 0;
+	world.biome = 'garden';
+	world.island = 0;
+	world.notice = '云界的边把你轻轻送回家。';
 }
 
 export function collectNear(world: SkyWorld) {
@@ -266,45 +337,65 @@ export function collectNear(world: SkyWorld) {
 					? '雨丝让云圃发芽。'
 					: frag.kind === 'breeze'
 						? '微风绕过新叶子。'
-						: '夜色在云圃里亮起来。';
+						: '夜色在潜界里亮起来。';
 	}
 }
 
-function wishDir(world: SkyWorld) {
+function wish(world: SkyWorld) {
 	let wx = 0;
+	let wy = 0;
 	let wz = 0;
-	if (world.keys.right) wx += 1;
-	if (world.keys.left) wx -= 1;
-	if (world.keys.down) wz += 1;
-	if (world.keys.up) wz -= 1;
+	const lx = world.lookX;
+	const lz = world.lookZ;
+	const rx = lz;
+	const rz = -lx;
+	if (world.keys.up) {
+		wx += lx;
+		wz += lz;
+	}
+	if (world.keys.down) {
+		wx -= lx;
+		wz -= lz;
+	}
+	if (world.keys.right) {
+		wx += rx;
+		wz += rz;
+	}
+	if (world.keys.left) {
+		wx -= rx;
+		wz -= rz;
+	}
+	if (world.keys.rise) wy += 1;
+	if (world.keys.dive) wy -= 1;
 	if (world.steer) {
 		const dx = world.steer.x - world.x;
+		const dy = world.steer.y - world.y;
 		const dz = world.steer.z - world.z;
-		if (Math.hypot(dx, dz) > 0.28) {
+		if (Math.hypot(dx, dy, dz) > 0.35) {
 			wx += dx;
+			wy += dy;
 			wz += dz;
 		} else {
 			world.steer = null;
 		}
 	}
-	const len = Math.hypot(wx, wz);
-	if (len < 0.001) return { x: 0, z: 0 };
-	return { x: wx / len, z: wz / len };
+	const len = Math.hypot(wx, wy, wz);
+	if (len < 0.001) return { x: 0, y: 0, z: 0 };
+	return { x: wx / len, y: wy / len, z: wz / len };
 }
 
 function moveCreatures(world: SkyWorld, dt: number) {
-	const home = world.islands[3];
 	for (const c of world.creatures) {
 		c.heading += (Math.sin(world.t * 0.0004 + c.id) * 0.0018 + 0.0004) * dt;
 		c.x += Math.cos(c.heading) * c.speed * 0.0011 * dt;
 		c.z += Math.sin(c.heading) * c.speed * 0.0011 * dt;
-		const d = hypot2(c.x - home.x, c.z - home.z);
-		if (d > home.r - 0.55) {
+		const dHome = hypot2(c.x, c.z);
+		if (dHome > 22) {
 			c.heading += Math.PI * 0.55;
-			c.x = home.x + ((c.x - home.x) / d) * (home.r - 0.7);
-			c.z = home.z + ((c.z - home.z) / d) * (home.r - 0.7);
+			c.x *= 0.92;
+			c.z *= 0.92;
 		}
-		if (!c.discovered && hypot2(world.x - c.x, world.z - c.z) < 2.35 && world.island === 3) {
+		if (!c.discovered && Math.hypot(world.x - c.x, world.y - 1, world.z - c.z) < 2.6) {
 			c.discovered = true;
 			world.notice =
 				c.kind === 'puff'
@@ -316,100 +407,66 @@ function moveCreatures(world: SkyWorld, dt: number) {
 	}
 }
 
+function applyBound(world: SkyWorld, dt: number) {
+	const r = hypot2(world.x, world.z);
+	world.bound = r >= 38 || world.y > 16.2 || world.y < -12.4;
+	if (r > 38) {
+		const t = Math.min(1, (r - 38) / 4);
+		const push = t * 0.005 * dt;
+		const nx = world.x / (r || 1);
+		const nz = world.z / (r || 1);
+		world.x -= nx * push;
+		world.z -= nz * push;
+	}
+	if (world.y > 17) world.y -= (world.y - 17) * 0.08;
+	if (world.y < -13) world.y += (-13 - world.y) * 0.08;
+	const nr = hypot2(world.x, world.z);
+	if (nr > WORLD_R) {
+		const scale = WORLD_R / nr;
+		world.x *= scale;
+		world.z *= scale;
+	}
+	world.y = Math.min(Y_MAX, Math.max(Y_MIN, world.y));
+	const rim = hypot2(world.x, world.z) >= 40 || world.y >= Y_MAX - 0.05 || world.y <= Y_MIN + 0.05;
+	if (rim) world.boundTimer += dt;
+	else world.boundTimer = 0;
+	if (world.boundTimer >= RECALL_MS) recallHome(world);
+}
+
 function tick(world: SkyWorld, dt: number) {
 	world.t += dt;
-	world.bounceCool = Math.max(0, world.bounceCool - dt);
+	world.over = false;
 	for (const plant of world.garden) {
 		plant.grown = Math.min(1, plant.grown + dt * 0.00055);
 	}
 
-	const wish = wishDir(world);
+	const dir = wish(world);
+	const wet = world.biome === 'water' || world.biome === 'underworld';
+	const speed = wet ? DIVE : FLY;
 	const tubeT = windT(world.x, world.y + 0.4, world.z);
 	const inTube = inWindTube(world.x, world.y + 0.4, world.z) && tubeT < 0.94;
 	world.inWind = inTube;
-	if (inTube) {
+	if (inTube && !world.keys.rise && !world.keys.dive && !dir.x && !dir.z) {
 		world.didWind = true;
-		const dx = WIND.bx - WIND.ax;
-		const dy = WIND.by - WIND.ay;
-		const dz = WIND.bz - WIND.az;
+		const dx = WIND_TUBE.bx - WIND_TUBE.ax;
+		const dy = WIND_TUBE.by - WIND_TUBE.ay;
+		const dz = WIND_TUBE.bz - WIND_TUBE.az;
 		const len = Math.hypot(dx, dy, dz) || 1;
-		world.vx = (dx / len) * WIND_SPEED;
-		world.vy = (dy / len) * WIND_SPEED;
-		world.vz = (dz / len) * WIND_SPEED;
-		world.x += world.vx * dt;
-		world.y += world.vy * dt;
-		world.z += world.vz * dt;
-		world.onGround = false;
-		world.airborne = true;
+		world.x += (dx / len) * 0.0076 * dt;
+		world.y += (dy / len) * 0.0076 * dt;
+		world.z += (dz / len) * 0.0076 * dt;
 	} else {
-		const speed = world.onGround ? WALK : AIR;
-		world.vx = wish.x * speed + world.bounceVx;
-		world.vz = wish.z * speed + world.bounceVz;
-		world.x += world.vx * dt;
-		world.z += world.vz * dt;
-		if (!world.onGround) {
-			world.vy -= GRAVITY * dt;
-			world.y += world.vy * dt;
-		}
-		const decay = world.onGround ? Math.pow(0.9, dt / 16) : Math.pow(0.997, dt);
-		world.bounceVx *= decay;
-		world.bounceVz *= decay;
-		if (Math.abs(world.bounceVx) < 0.00005) world.bounceVx = 0;
-		if (Math.abs(world.bounceVz) < 0.00005) world.bounceVz = 0;
+		world.x += dir.x * speed * dt;
+		world.y += dir.y * speed * dt;
+		world.z += dir.z * speed * dt;
 	}
-
-	if (wish.x || wish.z) world.yaw = Math.atan2(wish.x, wish.z);
-
-	let landed = false;
-	const isle = nearestIsland(world);
-	if (isle && !inTube && world.y <= isle.y + 0.62 && world.vy <= 0.002) {
-		if (hypot2(world.x - isle.x, world.z - isle.z) <= isle.r) {
-			world.y = isle.y;
-			world.vy = 0;
-			world.onGround = true;
-			world.airborne = false;
-			world.island = isle.id;
-			markVisit(world, isle.id);
-			landed = true;
-		}
-	}
-
-	if (!landed && !world.inWind && world.bounceCool <= 0 && world.vy <= 0.003) {
-		for (const cloud of world.clouds) {
-			const d = hypot2(world.x - cloud.x, world.z - cloud.z);
-			if (d > cloud.r) continue;
-			if (world.y < cloud.y - 0.2 || world.y > cloud.y + 1.35) continue;
-			world.didBounce = true;
-			world.bounceCool = 420;
-			world.vy = BOUNCE_VY;
-			world.bounceVx += BOUNCE_VX;
-			world.bounceVz += (1.2 - world.z) * 0.0008;
-			world.y = cloud.y + 0.05;
-			world.onGround = false;
-			world.airborne = true;
-			world.notice = '踩到云了。';
-			break;
-		}
-	}
-
-	if (!landed && !world.inWind && world.y < -1.2) {
-		const home = world.islands[world.island] ?? world.islands[0];
-		world.x = home.x;
-		world.y = home.y;
-		world.z = home.z;
-		world.vx = 0;
-		world.vy = 0;
-		world.vz = 0;
-		world.onGround = true;
-		world.airborne = false;
-		world.notice = '云接住了你。';
-	}
-
-	if (isle && onIslandPad(world, isle)) {
-		world.island = isle.id;
-		markVisit(world, isle.id);
-	}
-
+	if (dir.x || dir.z) world.yaw = Math.atan2(dir.x, dir.z);
+	world.airborne = true;
+	world.onGround = false;
+	world.biome = biomeAt(world.x, world.y, world.z);
+	world.island = ISLAND_FROM_BIOME[world.biome];
+	markBiome(world, world.biome);
+	applyBound(world, dt);
 	collectNear(world);
 	moveCreatures(world, dt);
 }
@@ -429,24 +486,6 @@ export function moveWalker(world: SkyWorld, x: number, z: number) {
 	world.z = z;
 }
 
-export function enterWind(world: SkyWorld) {
-	world.x = WIND.ax + 0.2;
-	world.y = WIND.ay;
-	world.z = WIND.az;
-	world.onGround = false;
-}
-
-export function bounceCloud(world: SkyWorld) {
-	const cloud = world.clouds[0];
-	world.x = cloud.x;
-	world.y = cloud.y + 0.2;
-	world.z = cloud.z;
-	world.vy = 0;
-	world.onGround = false;
-	world.bounceCool = 0;
-	tick(world, 16);
-}
-
 export function collectFragment(world: SkyWorld, kind: FragKind) {
 	const frag = world.fragments.find((f) => f.kind === kind);
 	if (!frag) return;
@@ -454,6 +493,9 @@ export function collectFragment(world: SkyWorld, kind: FragKind) {
 	world.y = frag.y;
 	world.z = frag.z;
 	collectNear(world);
+	world.biome = biomeAt(world.x, world.y, world.z);
+	world.island = ISLAND_FROM_BIOME[world.biome];
+	markBiome(world, world.biome);
 }
 
 export function restartSky(world: SkyWorld) {

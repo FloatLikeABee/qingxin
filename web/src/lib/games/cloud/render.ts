@@ -1,11 +1,22 @@
 import * as THREE from 'three';
-import { WIND_TUBE, type FragKind, type Island, type SkyMode, type SkyWorld } from './sim';
+import {
+	FRAG_KINDS,
+	GARDEN_PLOTS,
+	WELL,
+	WIND_TUBE,
+	chaseOffset,
+	type FragKind,
+	type Island,
+	type SkyMode,
+	type SkyWorld
+} from './sim';
 
 export interface CloudScene {
 	sync(world: SkyWorld, opts?: { reducedMotion?: boolean }): void;
 	render(now: number): void;
 	resize(): void;
 	dispose(): void;
+	hitFly(clientX: number, clientY: number): { x: number; y: number; z: number } | null;
 	hitWalk(clientX: number, clientY: number): { x: number; z: number } | null;
 }
 
@@ -196,6 +207,7 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	const box = keepGeo(new THREE.BoxGeometry(1, 1, 1));
 	const cap = keepGeo(new THREE.CircleGeometry(1, 48));
 	const octa = keepGeo(new THREE.OctahedronGeometry(1, 0));
+	const torus = keepGeo(new THREE.TorusGeometry(1, 0.018, 8, 64));
 
 	const skyUniforms = {
 		uTop: { value: col(PALETTES.dawn.top) },
@@ -374,13 +386,15 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	}
 
 	const looks = ['home', 'sun', 'rain', 'wild'] as const;
+	let homeIsle: CloudGroup | null = null;
 	for (const isle of [
 		{ id: 0, name: 'home', x: 0, z: 0, y: 0, r: 3.6 },
 		{ id: 1, name: 'sun terrace', x: 12, z: 0.4, y: 1.15, r: 2.6 },
 		{ id: 2, name: 'rain meadow', x: 22.5, z: 1.2, y: 0.45, r: 3.1 },
 		{ id: 3, name: 'creature isle', x: 4.5, z: -12, y: 0.7, r: 3.4 }
 	] satisfies Island[]) {
-		islandGroup(isle, looks[isle.id] ?? 'home');
+		const g = islandGroup(isle, looks[isle.id] ?? 'home');
+		if (isle.id === 0) homeIsle = g;
 	}
 
 	const farRoot = new THREE.Group();
@@ -410,6 +424,489 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		g.add(top);
 		farRoot.add(g);
 	}
+
+	const well = new THREE.Group();
+	well.position.set(WELL.x, 0.02, WELL.z);
+	const wellRing = new THREE.Mesh(
+		torus,
+		keepMat(
+			mat(0xcbd5e1, {
+				metalness: 0.45,
+				roughness: 0.28,
+				emissive: 0x93c5fd,
+				emissiveIntensity: 0.35
+			})
+		)
+	);
+	wellRing.scale.set(WELL.r, WELL.r, WELL.r);
+	wellRing.rotation.x = Math.PI / 2;
+	well.add(addWalk(wellRing));
+	const wellMirror = new THREE.Mesh(
+		cap,
+		keepMat(
+			mat(0x0ea5e9, {
+				transparent: true,
+				opacity: 0.55,
+				metalness: 0.7,
+				roughness: 0.08,
+				emissive: 0x38bdf8,
+				emissiveIntensity: 0.4
+			})
+		)
+	);
+	wellMirror.rotation.x = -Math.PI / 2;
+	wellMirror.scale.setScalar(WELL.r * 0.92);
+	wellMirror.userData.skipOcclude = true;
+	well.add(wellMirror);
+	scene.add(well);
+	const gardenDisk = new THREE.Mesh(cap, keepMat(mat(0x6fbf6a, { roughness: 0.82 })));
+	gardenDisk.rotation.x = -Math.PI / 2;
+	gardenDisk.position.y = -0.02;
+	gardenDisk.scale.setScalar(8);
+	gardenDisk.receiveShadow = true;
+	scene.add(addWalk(gardenDisk));
+	for (const kind of FRAG_KINDS) {
+		const plot = GARDEN_PLOTS[kind];
+		const ring = new THREE.Mesh(
+			torus,
+			keepMat(
+				mat(0xd6d3d1, {
+					roughness: 0.4,
+					metalness: 0.18,
+					emissive: 0xfde68a,
+					emissiveIntensity: 0.12
+				})
+			)
+		);
+		ring.position.set(plot.x, 0.06, plot.z);
+		ring.scale.set(0.55, 0.55, 0.55);
+		ring.rotation.x = Math.PI / 2;
+		scene.add(addWalk(ring));
+		const soil = new THREE.Mesh(cap, keepMat(mat(0x7c5a3a, { roughness: 0.9 })));
+		soil.rotation.x = -Math.PI / 2;
+		soil.position.set(plot.x, 0.04, plot.z);
+		soil.scale.setScalar(0.48);
+		scene.add(soil);
+	}
+
+	const alienRoot = new THREE.Group();
+	alienRoot.name = 'alien';
+	const alienHi = new THREE.Group();
+	alienRoot.add(alienHi);
+	const crystalCols = [0xf472b6, 0x22d3ee, 0xa78bfa];
+	for (let i = 0; i < 3; i++) {
+		const shard = new THREE.Mesh(
+			octa,
+			keepMat(
+				mat(crystalCols[i]!, {
+					emissive: crystalCols[i],
+					emissiveIntensity: 0.7,
+					roughness: 0.18
+				})
+			)
+		);
+		shard.position.set(12 + i * 5.4, 2.1 + i * 0.55, -2 + i * 3.2);
+		shard.scale.set(0.85, 2.2 + i * 0.35, 0.85);
+		shard.rotation.set(0.2, i * 0.7, 0.15);
+		shard.castShadow = true;
+		alienRoot.add(addWalk(shard));
+	}
+	for (let i = 0; i < 5; i++) {
+		const mesa = new THREE.Group();
+		const top = new THREE.Mesh(
+			cyl,
+			keepMat(mat(i % 2 ? 0x7c3aed : 0x4c1d95, { roughness: 0.62, metalness: 0.12 }))
+		);
+		top.scale.set(1.8 - i * 0.12, 0.42, 1.8 - i * 0.12);
+		top.position.y = 0.35;
+		top.castShadow = true;
+		mesa.add(addWalk(top));
+		const stack = new THREE.Mesh(box, keepMat(mat(0xc4b5fd, { roughness: 0.5 })));
+		stack.scale.set(0.9, 0.55 + i * 0.18, 0.7);
+		stack.position.set(0.2, 0.85, 0);
+		stack.rotation.y = i * 0.4;
+		mesa.add(addWalk(stack));
+		mesa.position.set(14 + (i % 3) * 4.6, 0.05, -7 + Math.floor(i / 3) * 8.4);
+		alienHi.add(mesa);
+	}
+	for (let i = 0; i < 6; i++) {
+		const coral = new THREE.Mesh(
+			keepGeo(new THREE.TorusGeometry(0.55 + (i % 3) * 0.12, 0.08, 8, 18)),
+			keepMat(
+				mat(i % 2 ? 0xfb7185 : 0x67e8f9, {
+					emissive: i % 2 ? 0xbe185d : 0x0e7490,
+					emissiveIntensity: 0.45
+				})
+			)
+		);
+		coral.position.set(9.4 + i * 2.8, 1.1 + (i % 2) * 0.8, 6.2 - (i % 3) * 2.4);
+		coral.rotation.set(0.6, i, 0.3);
+		alienHi.add(addWalk(coral));
+	}
+	const planet = new THREE.Mesh(
+		sphere,
+		keepMat(mat(0x38bdf8, { emissive: 0x0369a1, emissiveIntensity: 0.35, roughness: 0.4 }))
+	);
+	planet.position.set(24.5, 5.8, 2.4);
+	planet.scale.setScalar(1.35);
+	alienHi.add(addWalk(planet));
+	const planetRing = new THREE.Mesh(
+		keepGeo(new THREE.TorusGeometry(2.2, 0.08, 8, 40)),
+		keepMat(mat(0xfde68a, { emissive: 0xf59e0b, emissiveIntensity: 0.55 }))
+	);
+	planetRing.position.copy(planet.position);
+	planetRing.rotation.x = 0.9;
+	alienHi.add(planetRing);
+	scene.add(alienRoot);
+
+	const cityRoot = new THREE.Group();
+	cityRoot.name = 'city';
+	const cityHi = new THREE.Group();
+	cityRoot.add(cityHi);
+	const windowDummy = new THREE.Object3D();
+	const windowMesh = new THREE.InstancedMesh(
+		box,
+		keepMat(mat(0xfde68a, { emissive: 0xf59e0b, emissiveIntensity: 0.7 })),
+		96
+	);
+	let w = 0;
+	const plates: Array<{ x: number; y: number; z: number }> = [];
+	for (let i = 0; i < 18; i++) {
+		const plate = new THREE.Mesh(
+			box,
+			keepMat(mat(i % 2 ? 0x1e293b : 0x334155, { roughness: 0.48, metalness: 0.22 }))
+		);
+		const px = -6 + (i % 6) * 4.2;
+		const pz = -10 - Math.floor(i / 6) * 5.5;
+		const py = 3.2 + (i % 5) * 1.6;
+		plate.position.set(px, py, pz);
+		plate.scale.set(3.4, 0.18, 2.4);
+		plate.rotation.z = ((i % 3) - 1) * 0.12;
+		plate.castShadow = true;
+		cityRoot.add(addWalk(plate));
+		plates.push({ x: px, y: py, z: pz });
+		const hang = new THREE.Mesh(box, keepMat(mat(0x64748b, { metalness: 0.3, roughness: 0.4 })));
+		hang.position.set(px, py - 1.15, pz);
+		hang.scale.set(1.4, 2.1, 1.1);
+		hang.rotation.x = Math.PI;
+		cityHi.add(addWalk(hang));
+		for (let k = 0; k < 4 && w < 96; k++) {
+			windowDummy.position.set(
+				px - 1.1 + (k % 2) * 2.2,
+				py - 0.55 - Math.floor(k / 2) * 0.7,
+				pz + 0.58
+			);
+			windowDummy.scale.set(0.28, 0.38, 0.08);
+			windowDummy.updateMatrix();
+			windowMesh.setMatrixAt(w, windowDummy.matrix);
+			w += 1;
+		}
+	}
+	const ribbon = new THREE.Mesh(
+		keepGeo(new THREE.TorusGeometry(4.5, 0.12, 6, 48)),
+		keepMat(mat(0x7dd3fc, { emissive: 0x38bdf8, emissiveIntensity: 0.4 }))
+	);
+	ribbon.position.set(2, 9.2, -16);
+	ribbon.rotation.x = 0.7;
+	cityRoot.add(addWalk(ribbon));
+	for (let i = 0; i < 36; i++) {
+		const t = (i / 36) * Math.PI * 2;
+		const twist = t / 2;
+		const r = 4.6;
+		const strip = new THREE.Mesh(
+			box,
+			keepMat(mat(0xe0f2fe, { emissive: 0x7dd3fc, emissiveIntensity: 0.35 }))
+		);
+		strip.position.set(2 + Math.cos(t) * r, 9.2 + Math.sin(twist) * 0.85, -16 + Math.sin(t) * r);
+		strip.scale.set(0.55, 0.08, 0.18);
+		strip.lookAt(2, 9.2, -16);
+		cityHi.add(strip);
+	}
+	if (plates[0] && plates[7]) {
+		const a = plates[0];
+		const b = plates[7];
+		const steps = 7;
+		for (let i = 0; i < steps; i++) {
+			const u = i / (steps - 1);
+			const step = new THREE.Mesh(box, keepMat(mat(0xcbd5e1, { metalness: 0.25 })));
+			step.position.set(a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u + 0.22, a.z + (b.z - a.z) * u);
+			step.scale.set(0.7, 0.12, 0.55);
+			cityHi.add(addWalk(step));
+		}
+		const kite = new THREE.Mesh(
+			octa,
+			keepMat(mat(0xfb7185, { emissive: 0xe11d48, emissiveIntensity: 0.45 }))
+		);
+		kite.position.set((a.x + b.x) / 2, Math.max(a.y, b.y) + 1.4, (a.z + b.z) / 2);
+		kite.scale.set(0.55, 0.85, 0.12);
+		cityHi.add(kite);
+	}
+	const teaSet = new THREE.Group();
+	teaSet.position.set(-2.4, 11.28, -12);
+	const tea = new THREE.Mesh(cyl, keepMat(mat(0xf5d0c8, { roughness: 0.35 })));
+	tea.scale.set(1.15, 0.08, 1.15);
+	teaSet.add(addWalk(tea));
+	const pot = new THREE.Mesh(sphereLo, keepMat(mat(0xf8fafc, { roughness: 0.28 })));
+	pot.position.set(-0.18, 0.28, 0);
+	pot.scale.set(0.22, 0.18, 0.22);
+	teaSet.add(pot);
+	const spout = new THREE.Mesh(cone, keepMat(mat(0xe2e8f0)));
+	spout.position.set(0.12, 0.28, 0);
+	spout.rotation.z = -1.2;
+	spout.scale.set(0.06, 0.22, 0.06);
+	teaSet.add(spout);
+	for (let i = 0; i < 2; i++) {
+		const cup = new THREE.Mesh(cyl, keepMat(mat(0xfde68a, { roughness: 0.4 })));
+		cup.position.set(0.42, 0.12, i === 0 ? 0.28 : -0.28);
+		cup.scale.set(0.1, 0.08, 0.1);
+		teaSet.add(cup);
+	}
+	cityHi.add(teaSet);
+	const tree = new THREE.Group();
+	const canopy = new THREE.Mesh(
+		icoHi,
+		keepMat(mat(0x86efac, { emissive: 0x22c55e, emissiveIntensity: 0.28 }))
+	);
+	canopy.position.y = -1.1;
+	canopy.scale.set(1.5, 1.1, 1.5);
+	tree.add(canopy);
+	const trunk = new THREE.Mesh(cyl, keepMat(mat(0x92400e)));
+	trunk.scale.set(0.12, 1.8, 0.12);
+	trunk.position.y = 0.2;
+	tree.add(trunk);
+	tree.position.set(8, 6.4, -22);
+	tree.rotation.x = Math.PI;
+	cityHi.add(tree);
+	cityRoot.add(windowMesh);
+	scene.add(cityRoot);
+
+	const diveRoot = new THREE.Group();
+	diveRoot.name = 'dive';
+	const diveHi = new THREE.Group();
+	diveRoot.add(diveHi);
+	const collar = new THREE.Mesh(
+		keepGeo(new THREE.CylinderGeometry(WELL.r * 0.98, WELL.r * 1.08, 1.15, 20, 1, true)),
+		keepMat(mat(0xcbd5e1, { roughness: 0.55, metalness: 0.22, side: THREE.DoubleSide }))
+	);
+	collar.position.set(WELL.x, -0.55, WELL.z);
+	collar.userData.skipOcclude = true;
+	diveRoot.add(collar);
+	const waterSurface = new THREE.Mesh(
+		cap,
+		keepMat(
+			mat(0x67e8f9, {
+				transparent: true,
+				opacity: 0.48,
+				metalness: 0.62,
+				roughness: 0.08,
+				emissive: 0x22d3ee,
+				emissiveIntensity: 0.55,
+				side: THREE.DoubleSide,
+				depthWrite: false
+			})
+		)
+	);
+	waterSurface.rotation.x = -Math.PI / 2;
+	waterSurface.position.set(WELL.x, -0.08, WELL.z);
+	waterSurface.scale.setScalar(9);
+	waterSurface.userData.skipOcclude = true;
+	diveRoot.add(waterSurface);
+	const caustic = new THREE.Mesh(
+		cap,
+		keepMat(
+			mat(0xa5f3fc, {
+				transparent: true,
+				opacity: 0.22,
+				emissive: 0x67e8f9,
+				emissiveIntensity: 0.7,
+				side: THREE.DoubleSide,
+				depthWrite: false
+			})
+		)
+	);
+	caustic.rotation.x = -Math.PI / 2;
+	caustic.position.set(WELL.x, -0.22, WELL.z);
+	caustic.scale.setScalar(6.4);
+	diveRoot.add(caustic);
+	const waterVolume = new THREE.Mesh(
+		keepGeo(new THREE.CylinderGeometry(8.6, 8.6, 5.7, 24, 1, true)),
+		keepMat(
+			mat(0x0e7490, {
+				transparent: true,
+				opacity: 0.14,
+				side: THREE.DoubleSide,
+				depthWrite: false,
+				emissive: 0x155e75,
+				emissiveIntensity: 0.18
+			})
+		)
+	);
+	waterVolume.position.set(WELL.x, -3.05, WELL.z);
+	waterVolume.userData.skipOcclude = true;
+	diveRoot.add(waterVolume);
+	for (let i = 0; i < 7; i++) {
+		const kelp = new THREE.Mesh(
+			cone,
+			keepMat(mat(0x166534, { emissive: 0x14532d, emissiveIntensity: 0.2, roughness: 0.7 }))
+		);
+		const a = (i / 7) * Math.PI * 2 + 0.2;
+		kelp.position.set(Math.cos(a) * 3.6, -3.1, Math.sin(a) * 3.6 - 0.4);
+		kelp.scale.set(0.22 + (i % 3) * 0.06, 2.6 + (i % 2) * 0.7, 0.22);
+		kelp.rotation.z = i % 2 ? 0.18 : -0.16;
+		diveRoot.add(kelp);
+	}
+	const bubbleGeo = keepGeo(new THREE.BufferGeometry());
+	const bubbleN = 48;
+	const bubblePos = new Float32Array(bubbleN * 3);
+	for (let i = 0; i < bubbleN; i++) {
+		const a = (i / bubbleN) * Math.PI * 2;
+		bubblePos[i * 3] = WELL.x + Math.cos(a) * (1.2 + (i % 5) * 0.7);
+		bubblePos[i * 3 + 1] = -0.6 - (i % 8) * 0.55;
+		bubblePos[i * 3 + 2] = WELL.z + Math.sin(a) * (1.2 + (i % 4) * 0.6);
+	}
+	bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePos, 3));
+	const bubbles = new THREE.Points(
+		bubbleGeo,
+		keepMat(
+			new THREE.PointsMaterial({
+				color: 0xecfeff,
+				size: 0.11,
+				transparent: true,
+				opacity: 0.75,
+				depthWrite: false
+			})
+		)
+	);
+	diveRoot.add(bubbles);
+	const cavern = new THREE.Mesh(
+		keepGeo(new THREE.SphereGeometry(7.4, 24, 16)),
+		keepMat(
+			mat(0x1e293b, {
+				roughness: 0.92,
+				side: THREE.BackSide,
+				emissive: 0x111827,
+				emissiveIntensity: 0.22
+			})
+		)
+	);
+	cavern.position.set(WELL.x, -10.6, WELL.z);
+	cavern.userData.skipOcclude = true;
+	diveRoot.add(cavern);
+	for (let i = 0; i < 4; i++) {
+		const lantern = new THREE.Mesh(
+			sphereLo,
+			keepMat(mat(0xfde68a, { emissive: 0xfacc15, emissiveIntensity: 1.35 }))
+		);
+		const a = (i / 4) * Math.PI * 2 + 0.35;
+		lantern.position.set(WELL.x + Math.cos(a) * 2.9, -8.2, WELL.z + Math.sin(a) * 2.9);
+		lantern.scale.setScalar(0.28);
+		diveRoot.add(lantern);
+		const glow = new THREE.PointLight(0xfacc15, 2.6, 6.4, 2);
+		glow.position.copy(lantern.position);
+		diveRoot.add(glow);
+		const root = new THREE.Mesh(
+			cyl,
+			keepMat(mat(0x3f6212, { emissive: 0x4d7c0f, emissiveIntensity: 0.32 }))
+		);
+		root.position.set(WELL.x + Math.cos(a + 0.4) * 2.2, -7.15, WELL.z + Math.sin(a + 0.4) * 2.2);
+		root.rotation.z = i % 2 ? 0.5 : -0.46;
+		root.scale.set(0.14, 2.4, 0.14);
+		diveRoot.add(root);
+	}
+	for (let i = 0; i < 8; i++) {
+		const lantern = new THREE.Mesh(
+			sphereLo,
+			keepMat(mat(0xfdba74, { emissive: 0xfb923c, emissiveIntensity: 0.95 }))
+		);
+		const a = (i / 8) * Math.PI * 2 + 0.5;
+		lantern.position.set(Math.cos(a) * 4.6, -10.2 - (i % 3) * 0.4, Math.sin(a) * 4.6);
+		lantern.scale.setScalar(0.14);
+		diveHi.add(lantern);
+		const extraRoot = new THREE.Mesh(
+			cyl,
+			keepMat(mat(0x3f6212, { emissive: 0x4d7c0f, emissiveIntensity: 0.24 }))
+		);
+		extraRoot.position.set(Math.cos(a + 0.18) * 3.8, -11.1, Math.sin(a + 0.18) * 3.8);
+		extraRoot.rotation.z = i % 2 ? 0.46 : -0.4;
+		extraRoot.scale.set(0.12, 2.4, 0.12);
+		diveHi.add(extraRoot);
+	}
+	const shelf = new THREE.Mesh(
+		icoHi,
+		keepMat(mat(0x334155, { roughness: 0.88, emissive: 0x1e293b, emissiveIntensity: 0.15 }))
+	);
+	shelf.position.set(2.2, -10.6, 1.6);
+	shelf.scale.set(1.8, 1.1, 1.5);
+	diveRoot.add(addWalk(shelf));
+	const hutDown = new THREE.Group();
+	const wall = new THREE.Mesh(box, keepMat(mat(0xf3e6d0)));
+	wall.scale.set(1.1, 0.85, 0.9);
+	hutDown.add(wall);
+	const roof = new THREE.Mesh(cone, keepMat(mat(0xd97a5a)));
+	roof.position.y = 0.7;
+	roof.scale.set(1.05, 0.7, 1.05);
+	hutDown.add(roof);
+	hutDown.position.set(1.9, -9.35, 0.85);
+	hutDown.rotation.x = Math.PI;
+	diveRoot.add(hutDown);
+	const street = new THREE.Group();
+	street.position.set(1.35, -9.85, 0.55);
+	street.rotation.x = Math.PI;
+	const pavement = new THREE.Mesh(
+		box,
+		keepMat(mat(0x334155, { roughness: 0.7, emissive: 0x1e293b, emissiveIntensity: 0.2 }))
+	);
+	pavement.scale.set(4.6, 0.14, 1.7);
+	street.add(addWalk(pavement));
+	for (let i = 0; i < 4; i++) {
+		const lamp = new THREE.Group();
+		const post = new THREE.Mesh(cyl, keepMat(mat(0x475569)));
+		post.scale.set(0.07, 1.05, 0.07);
+		post.position.y = 0.52;
+		lamp.add(post);
+		const bulb = new THREE.Mesh(
+			sphereLo,
+			keepMat(mat(0xfde68a, { emissive: 0xf59e0b, emissiveIntensity: 1.2 }))
+		);
+		bulb.position.y = 1.08;
+		bulb.scale.setScalar(0.15);
+		lamp.add(bulb);
+		lamp.position.set(-1.6 + i * 1.1, 0.08, i % 2 ? 0.45 : -0.45);
+		street.add(lamp);
+	}
+	diveRoot.add(street);
+	diveRoot.visible = false;
+	scene.add(diveRoot);
+
+	const aurora = new THREE.Mesh(
+		keepGeo(new THREE.TorusGeometry(40, 0.55, 10, 80)),
+		keepMat(
+			mat(0xa78bfa, {
+				transparent: true,
+				opacity: 0.55,
+				emissive: 0xc4b5fd,
+				emissiveIntensity: 0.85,
+				side: THREE.DoubleSide,
+				depthWrite: false
+			})
+		)
+	);
+	aurora.rotation.x = Math.PI / 2;
+	aurora.position.y = 6;
+	scene.add(aurora);
+	const boundVeil = new THREE.Mesh(
+		keepGeo(new THREE.CylinderGeometry(41.2, 41.2, 28, 48, 1, true)),
+		keepMat(
+			mat(0xc4b5fd, {
+				transparent: true,
+				opacity: 0.08,
+				side: THREE.DoubleSide,
+				depthWrite: false
+			})
+		)
+	);
+	boundVeil.position.y = 2;
+	scene.add(boundVeil);
 
 	const cloudMat = keepMat(
 		mat(0xf8fafc, {
@@ -506,27 +1003,75 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	windGroup.add(streaks);
 	scene.add(windGroup);
 
-	const walker = new THREE.Group();
-	const body = new THREE.Mesh(sphere, keepMat(mat(0xf8fafc)));
-	body.scale.set(0.28, 0.38, 0.26);
-	body.position.y = 0.62;
-	body.castShadow = true;
-	walker.add(body);
-	const head = new THREE.Mesh(sphere, keepMat(mat(0xffe4d6)));
-	head.scale.setScalar(0.2);
-	head.position.y = 1.02;
-	head.castShadow = true;
-	walker.add(head);
-	const scarf = new THREE.Mesh(box, keepMat(mat(0xfb7185, { roughness: 0.45 })));
-	scarf.name = 'scarf';
-	scarf.scale.set(0.08, 0.36, 0.04);
-	scarf.position.set(0.12, 0.72, -0.12);
-	walker.add(scarf);
-	const pack = new THREE.Mesh(box, keepMat(mat(0x7dd3fc)));
-	pack.scale.set(0.18, 0.22, 0.08);
-	pack.position.set(0, 0.66, 0.16);
-	walker.add(pack);
-	scene.add(walker);
+	const ghost = new THREE.Group();
+	ghost.name = 'ghost';
+	const veil = new THREE.Mesh(
+		icoHi,
+		keepMat(
+			mat(0xe8f4ff, {
+				transparent: true,
+				opacity: 0.38,
+				emissive: 0xc4b5fd,
+				emissiveIntensity: 0.55,
+				roughness: 0.18,
+				metalness: 0.12,
+				depthWrite: false
+			})
+		)
+	);
+	veil.scale.set(0.38, 0.55, 0.36);
+	veil.position.y = 0.28;
+	ghost.add(veil);
+	const core = new THREE.Mesh(
+		sphereLo,
+		keepMat(
+			new THREE.MeshBasicMaterial({
+				color: 0xc4b5fd,
+				transparent: true,
+				opacity: 0.7,
+				blending: THREE.AdditiveBlending,
+				depthWrite: false
+			})
+		)
+	);
+	core.name = 'core';
+	core.scale.setScalar(0.16);
+	core.position.y = 0.3;
+	ghost.add(core);
+	const glow = new THREE.PointLight(0xc4b5fd, 4.5, 4.2, 2);
+	glow.position.y = 0.3;
+	ghost.add(glow);
+	const wisps = new THREE.Group();
+	wisps.name = 'wisps';
+	for (let i = 0; i < 4; i++) {
+		const ribbon = new THREE.Mesh(
+			cone,
+			keepMat(
+				mat(0xe9d5ff, {
+					transparent: true,
+					opacity: 0.45,
+					emissive: 0xa78bfa,
+					emissiveIntensity: 0.6,
+					depthWrite: false
+				})
+			)
+		);
+		ribbon.name = `wisp-${i}`;
+		ribbon.scale.set(0.05, 0.34, 0.05);
+		ribbon.position.set(Math.cos(i) * 0.12, -0.08, Math.sin(i) * 0.12);
+		wisps.add(ribbon);
+	}
+	ghost.add(wisps);
+	const blob = new THREE.Mesh(
+		cap,
+		keepMat(mat(0x1e1b4b, { transparent: true, opacity: 0.22, depthWrite: false }))
+	);
+	blob.rotation.x = -Math.PI / 2;
+	blob.position.y = -0.02;
+	blob.scale.setScalar(0.45);
+	blob.name = 'blob';
+	ghost.add(blob);
+	scene.add(ghost);
 
 	const fragMeshes: CloudMesh[] = [];
 	const fragGlow: InstanceType<typeof THREE.PointLight>[] = [];
@@ -669,6 +1214,7 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	let reduceMotion = false;
 	let lowDetail = false;
 	let skyMode: SkyMode = 'dawn';
+	let lastAir: SkyWorld['biome'] | '' = '';
 
 	function applyPalette(mode: SkyMode) {
 		const p = PALETTES[mode];
@@ -686,7 +1232,68 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		renderer.toneMappingExposure = p.exposure;
 		renderer.setClearColor(p.fog, 1);
 		stars.visible = mode === 'night' || mode === 'dawn';
+		sun.intensity = 1.55;
+		hemi.intensity = 0.72;
+		sky.visible = true;
+		aurora.visible = true;
 		skyMode = mode;
+	}
+
+	function applyAir(world: SkyWorld) {
+		const fog = scene.fog as InstanceType<typeof THREE.FogExp2>;
+		if (world.biome === 'water') {
+			sky.visible = true;
+			skyUniforms.uTop.value.set(0x0e7490);
+			skyUniforms.uMid.value.set(0x155e75);
+			skyUniforms.uHor.value.set(0xa5f3fc);
+			skyUniforms.uSunColor.value.set(0xecfeff);
+			fog.density = 0.028;
+			fog.color.set(0x0e7490);
+			renderer.setClearColor(0x155e75, 1);
+			hemi.color.set(0x67e8f9);
+			hemi.groundColor.set(0x164e63);
+			hemi.intensity = 0.48;
+			sun.color.set(0x7dd3fc);
+			sun.intensity = 0.28;
+			fill.color.set(0x22d3ee);
+			rim.intensity = 4;
+			renderer.toneMappingExposure = 0.74;
+			aurora.visible = false;
+			cloudField.visible = false;
+			stars.visible = false;
+			farRoot.visible = false;
+			if (homeIsle) homeIsle.visible = false;
+			return;
+		}
+		if (world.biome === 'underworld') {
+			sky.visible = false;
+			fog.density = 0.032;
+			fog.color.set(0x0f172a);
+			renderer.setClearColor(0x0b1024, 1);
+			hemi.color.set(0x475569);
+			hemi.groundColor.set(0x020617);
+			hemi.intensity = 0.22;
+			sun.color.set(0x1e293b);
+			sun.intensity = 0.05;
+			fill.color.set(0xfacc15);
+			rim.intensity = 2;
+			renderer.toneMappingExposure = 0.58;
+			aurora.visible = false;
+			cloudField.visible = false;
+			stars.visible = false;
+			farRoot.visible = false;
+			if (homeIsle) homeIsle.visible = false;
+			return;
+		}
+		aurora.visible = true;
+		cloudField.visible = true;
+		farRoot.visible = !lowDetail;
+		if (homeIsle) homeIsle.visible = true;
+		sun.intensity = 1.55;
+		hemi.intensity = 0.72;
+		rim.intensity = 16;
+		sky.visible = true;
+		fog.density = 0.011;
 	}
 
 	function applyDetail(world: SkyWorld) {
@@ -696,6 +1303,12 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		renderer.shadowMap.enabled = !lowDetail;
 		sun.castShadow = !lowDetail;
 		farRoot.visible = !lowDetail;
+		cityRoot.visible = true;
+		alienRoot.visible = true;
+		alienHi.visible = !lowDetail;
+		cityHi.visible = !lowDetail;
+		diveHi.visible = !lowDetail;
+		windowMesh.visible = !lowDetail;
 		cloudField.visible = true;
 		cloudField.children.forEach((child: InstanceType<typeof THREE.Object3D>, i: number) => {
 			child.visible = !lowDetail || i % 3 === 0;
@@ -769,32 +1382,77 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	}
 
 	function follow(world: SkyWorld) {
-		const dist = 8.2;
-		const height = 4.9;
+		const chase = chaseOffset(world.biome);
+		const wet = world.biome === 'water' || world.biome === 'underworld';
+		let dist = chase.dist;
+		const height = chase.height;
+		camTarget.set(world.x, world.y + chase.lift, world.z);
 		camPos.set(
 			world.x - Math.sin(world.yaw || 0.15) * dist,
 			world.y + height,
 			world.z - Math.cos(world.yaw || 0.15) * dist
 		);
-		camTarget.set(world.x, world.y + 1.05, world.z);
-		if (reduceMotion) {
-			camera.position.copy(camPos);
-		} else {
-			camera.position.lerp(camPos, 0.085);
+		const origin = new THREE.Vector3(world.x, world.y + 0.4, world.z);
+		const dir = camPos.clone().sub(origin);
+		const span = dir.length() || 1;
+		if (!wet) {
+			raycaster.set(origin, dir.normalize());
+			const blocks = raycaster
+				.intersectObjects(walkMeshes, false)
+				.filter((hit: { object: CloudMesh }) => !hit.object.userData.skipOcclude);
+			if (blocks[0] && blocks[0].distance < span - 0.2) {
+				dist = Math.max(2.4, blocks[0].distance - 0.45);
+				camPos.copy(origin).add(dir.multiplyScalar(dist));
+				const mat = (blocks[0].object as CloudMesh).material as {
+					transparent?: boolean;
+					opacity?: number;
+				};
+				if (mat && blocks[0].distance < 1.2) {
+					mat.transparent = true;
+					mat.opacity = 0.35;
+				}
+			}
 		}
+		const nextFov = wet ? 58 : 46;
+		if (Math.abs(camera.fov - nextFov) > 0.2) {
+			camera.fov = nextFov;
+			camera.updateProjectionMatrix();
+		}
+		if (wet || reduceMotion || camera.position.distanceTo(camPos) > 14)
+			camera.position.copy(camPos);
+		else camera.position.lerp(camPos, 0.085);
 		camera.lookAt(camTarget);
+		world.lookX = camTarget.x - camera.position.x;
+		world.lookZ = camTarget.z - camera.position.z;
+		const lookLen = Math.hypot(world.lookX, world.lookZ) || 1;
+		world.lookX /= lookLen;
+		world.lookZ /= lookLen;
 	}
 
 	function sync(world: SkyWorld, opts?: { reducedMotion?: boolean }) {
 		if (opts?.reducedMotion != null) reduceMotion = opts.reducedMotion;
 		applyDetail(world);
-		if (world.skyMode !== skyMode) applyPalette(world.skyMode);
-		walker.position.set(world.x, world.y + 0.08, world.z);
-		walker.rotation.y = world.yaw;
-		const scarfMesh = walker.getObjectByName('scarf');
-		if (scarfMesh) {
-			scarfMesh.rotation.z = reduceMotion ? 0.2 : Math.sin(world.t / 180) * 0.35;
+		const wet = world.biome === 'water' || world.biome === 'underworld';
+		if (!wet && (world.skyMode !== skyMode || lastAir === 'water' || lastAir === 'underworld')) {
+			applyPalette(world.skyMode);
 		}
+		applyAir(world);
+		lastAir = world.biome;
+		ghost.position.set(world.x, world.y, world.z);
+		ghost.rotation.y = world.yaw;
+		ghost.rotation.x = Math.max(
+			-0.45,
+			Math.min(0.45, (world.keys.rise ? -0.2 : 0) + (world.keys.dive ? 0.25 : 0))
+		);
+		const veilMat = veil.material as InstanceType<typeof THREE.MeshStandardMaterial>;
+		veilMat.emissiveIntensity = wet ? 1.15 : 0.55;
+		veilMat.opacity = wet ? 0.7 : 0.38;
+		(core.material as InstanceType<typeof THREE.MeshBasicMaterial>).opacity = wet ? 0.95 : 0.7;
+		glow.intensity = wet ? 7.4 : 4.5;
+		ghost.scale.setScalar(wet ? 1.28 : 1);
+		wisps.visible = !lowDetail && !reduceMotion;
+		blob.visible = !lowDetail;
+		diveRoot.visible = world.biome === 'water' || world.biome === 'underworld';
 		ensureFrags(world);
 		ensurePlants(world);
 		ensureCreatures(world);
@@ -810,7 +1468,21 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	function render(now: number) {
 		const t = now / 1000;
 		if (!reduceMotion) {
+			for (let i = 0; i < 4; i++) {
+				const ribbon = wisps.getObjectByName(`wisp-${i}`);
+				if (ribbon) {
+					ribbon.rotation.x = Math.sin(t * 2.4 + i) * 0.5;
+					ribbon.position.y = -0.08 - Math.abs(Math.sin(t * 1.8 + i)) * 0.12;
+				}
+			}
 			cloudField.rotation.y = t * 0.012;
+			const bpos = bubbleGeo.getAttribute('position');
+			for (let i = 0; i < bubbleN; i++) {
+				let y = bpos.getY(i) + 0.0045;
+				if (y > -0.15) y = -4.6 - (i % 5) * 0.2;
+				bpos.setY(i, y);
+			}
+			bpos.needsUpdate = true;
 			const pos = streakGeo.getAttribute('position');
 			for (let i = 0; i < streakCount; i++) {
 				let u = (((i / streakCount + t * 0.18) % 1) + 1) % 1;
@@ -843,13 +1515,18 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		return true;
 	}
 
-	function hitWalk(clientX: number, clientY: number) {
+	function hitFly(clientX: number, clientY: number) {
 		if (!setPointer(clientX, clientY)) return null;
 		const hits = raycaster.intersectObjects(walkMeshes, false);
-		if (hits[0]) return { x: hits[0].point.x, z: hits[0].point.z };
-		const point = raycaster.ray.intersectPlane(walkPlane, hit);
-		if (!point) return null;
-		return { x: point.x, z: point.z };
+		if (hits[0]) return { x: hits[0].point.x, y: hits[0].point.y, z: hits[0].point.z };
+		const dir = raycaster.ray.direction.clone().normalize();
+		const point = camera.position.clone().add(dir.multiplyScalar(14));
+		return { x: point.x, y: point.y, z: point.z };
+	}
+
+	function hitWalk(clientX: number, clientY: number) {
+		const fly = hitFly(clientX, clientY);
+		return fly ? { x: fly.x, z: fly.z } : null;
 	}
 
 	function resize() {
@@ -874,5 +1551,5 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 
 	applyPalette('dawn');
 	resize();
-	return { sync, render, resize, dispose, hitWalk };
+	return { sync, render, resize, dispose, hitFly, hitWalk };
 }
