@@ -111,12 +111,14 @@ export const GAMES: GameInfo[] = [
 	{
 		id: 'cloud-walk',
 		title: '云上散步',
-		summary: '浮岛、风道和云还在铺。现在还进不去。',
-		about: '设计已定：在浮岛间散步、乘风、踩云，收集天气碎片。玩法还没接上，先占这个位置。',
+		englishTitle: 'Cloud Walk',
+		summary: '在浮岛间散步、乘风、踩云，收集天气碎片，养成自己的云圃。',
+		about:
+			'一片很大的天空。走上浮岛，风会把你送到下一座岛，踩到云会弹起来。四处走走会遇见小云物。捡到阳光、雨丝、微风和夜色碎片，天色会跟着变，家里的云圃也会长出一株。没有计时，也没有分数。这是一则在云上的散步。',
 		category: '休闲',
-		tags: ['散步', '云'],
-		status: 'coming',
-		playCta: '即将到来',
+		tags: ['散步', '云', '天气'],
+		status: 'playable',
+		playCta: '开始散步',
 		cover: {
 			sky: '#DBEAFE',
 			ground: '#F8FAFC',
