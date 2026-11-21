@@ -98,8 +98,13 @@ describe('games registry', () => {
 			englishTitle: 'Memory Shelf',
 			status: 'playable',
 			playCta: '开始整理',
-			category: '益智'
+			category: '益智',
+			tags: ['书房', '书柜', '闹鬼']
 		});
+		expect(getGame('memory-shelf')?.summary).toMatch(/闹鬼/);
+		expect(getGame('memory-shelf')?.about).toMatch(/对不起！/);
+		expect(getGame('memory-shelf')?.about).toMatch(/没有计时，也没有分数/);
+		expect(getGame('memory-shelf')?.about).not.toMatch(/布帘|收藏室/);
 		expect(
 			GAMES.every((game) => game.id && game.summary && game.tags.length > 0 && game.playCta)
 		).toBe(true);

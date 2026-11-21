@@ -1,32 +1,33 @@
 import * as THREE from 'three';
-import { PROP_INFO, type PropKind, type StudyWorld } from './sim';
+import {
+	ROWS,
+	SLOTS,
+	findItem,
+	hauntProgress,
+	isHaunting,
+	slotWorld,
+	type ShelfItem,
+	type ShelfWorld
+} from './sim';
 
 export interface ShelfScene {
-	sync(world: StudyWorld, opts?: { reducedMotion?: boolean }): void;
+	sync(world: ShelfWorld, opts?: { reducedMotion?: boolean }): void;
 	render(now: number): void;
 	resize(): void;
 	dispose(): void;
 	hit(
 		clientX: number,
-		clientY: number
-	): { kind?: PropKind; slot?: number; table?: { x: number; z: number } } | null;
+		clientY: number,
+		ignoreId?: string | null
+	): { id?: string; row?: number; slot?: number } | null;
+	project(id: string): { x: number; y: number } | null;
+	projectGhost(): { x: number; y: number } | null;
 }
 
 type G = InstanceType<typeof THREE.Group>;
 type M = InstanceType<typeof THREE.Mesh>;
 type Geo = InstanceType<typeof THREE.BufferGeometry>;
 type Renderer = InstanceType<typeof THREE.WebGLRenderer>;
-
-const STUDY_CAM = new THREE.Vector3(0.12, 1.62, 3.45);
-const STUDY_LOOK = new THREE.Vector3(0, 1.22, -2.05);
-const ROOM_CAM = new THREE.Vector3(8.55, 1.55, 2.55);
-const ROOM_LOOK = new THREE.Vector3(8.5, 1.15, -0.35);
-const TABLE = { x: 8.5, y: 0.74, z: 0 };
-
-export function slotWorld(i: number, n: number) {
-	const span = 0.62;
-	return { x: (i - (n - 1) / 2) * span, y: 1.22, z: -2.02 };
-}
 
 function mat(color: number, extras: Record<string, unknown> = {}) {
 	return new THREE.MeshStandardMaterial({
@@ -46,7 +47,22 @@ function canvasTex(w: number, h: number, paint: (ctx: CanvasRenderingContext2D) 
 	const tex = new THREE.CanvasTexture(c);
 	tex.colorSpace = THREE.SRGBColorSpace;
 	tex.anisotropy = 4;
+	tex.needsUpdate = true;
 	return tex;
+}
+
+function shown(obj: InstanceType<typeof THREE.Object3D>) {
+	let node: InstanceType<typeof THREE.Object3D> | null = obj;
+	while (node) {
+		if (!node.visible) return false;
+		node = node.parent;
+	}
+	return true;
+}
+
+function inLod(item: ShelfItem, lowDetail: boolean) {
+	if (!lowDetail) return true;
+	return item.row > 0 && item.slot > 0 && item.slot < SLOTS - 1;
 }
 
 export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
@@ -70,13 +86,13 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 	renderer.toneMappingExposure = 1.12;
 	renderer.shadowMap.enabled = true;
 	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-	renderer.setClearColor(0x1a120c, 1);
+	renderer.setClearColor(0x1c120c, 1);
 
 	const scene = new THREE.Scene();
-	scene.fog = new THREE.FogExp2(0x2a1c14, 0.045);
-	const camera = new THREE.PerspectiveCamera(42, 1, 0.08, 60);
-	camera.position.copy(STUDY_CAM);
-	camera.lookAt(STUDY_LOOK);
+	scene.fog = new THREE.FogExp2(0x24160f, 0.032);
+	const camera = new THREE.PerspectiveCamera(44, 1, 0.08, 40);
+	camera.position.set(0.12, 1.52, 3.35);
+	camera.lookAt(0, 1.38, -1.7);
 
 	const geos: Geo[] = [];
 	const mats: Array<{ dispose: () => void }> = [];
@@ -90,843 +106,644 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 	};
 
 	const box = keepGeo(new THREE.BoxGeometry(1, 1, 1));
-	const sphere = keepGeo(new THREE.SphereGeometry(1, 28, 20));
-	const sphereLo = keepGeo(new THREE.SphereGeometry(1, 12, 10));
+	const sphere = keepGeo(new THREE.SphereGeometry(1, 24, 18));
+	const sphereLo = keepGeo(new THREE.SphereGeometry(1, 12, 8));
 	const cyl = keepGeo(new THREE.CylinderGeometry(1, 1, 1, 16));
 	const cone = keepGeo(new THREE.ConeGeometry(1, 1, 12));
-	const torus = keepGeo(new THREE.TorusGeometry(1, 0.12, 8, 24));
-	const plane = keepGeo(new THREE.PlaneGeometry(1, 1));
-	const ico = keepGeo(new THREE.IcosahedronGeometry(1, 0));
+	const ico = keepGeo(new THREE.IcosahedronGeometry(1, 1));
+	const torus = keepGeo(new THREE.TorusGeometry(1, 0.22, 10, 20));
+
 	const paper = keepMat(
 		new THREE.MeshStandardMaterial({
 			map: canvasTex(256, 256, (ctx) => {
-				ctx.fillStyle = '#e7d3b0';
+				ctx.fillStyle = '#e4d0ae';
 				ctx.fillRect(0, 0, 256, 256);
 				for (let i = 0; i < 12; i++) {
-					ctx.fillStyle = i % 2 ? '#d9c19a' : '#ecd9b6';
+					ctx.fillStyle = i % 2 ? '#d7c094' : '#efe0c4';
 					ctx.fillRect(i * 22, 0, 10, 256);
 				}
-				ctx.fillStyle = 'rgba(120,80,40,0.08)';
-				for (let i = 0; i < 40; i++) ctx.fillRect(Math.random() * 256, Math.random() * 256, 8, 2);
 			}),
-			roughness: 0.92
+			roughness: 0.9
 		})
 	);
-	const wood = keepMat(mat(0x6b3f24, { roughness: 0.78 }));
-	const woodDark = keepMat(mat(0x3d2416, { roughness: 0.82 }));
-	const brass = keepMat(mat(0xc9a227, { metalness: 0.72, roughness: 0.32 }));
+	const floorMap = keepMat(
+		new THREE.MeshStandardMaterial({
+			map: canvasTex(512, 512, (ctx) => {
+				ctx.fillStyle = '#5a341c';
+				ctx.fillRect(0, 0, 512, 512);
+				for (let i = 0; i < 10; i++) {
+					ctx.fillStyle = i % 2 ? '#6b3f22' : '#4c2c16';
+					ctx.fillRect(i * 52, 0, 48, 512);
+					ctx.fillStyle = '#3a2112';
+					ctx.fillRect(i * 52 + 48, 0, 4, 512);
+				}
+			}),
+			roughness: 0.88
+		})
+	);
+	const wood = keepMat(mat(0x6d4124, { roughness: 0.72 }));
+	const woodDark = keepMat(mat(0x3a2316, { roughness: 0.84 }));
+	const brass = keepMat(mat(0xc9a227, { metalness: 0.72, roughness: 0.28 }));
+	const cloth = keepMat(mat(0x7a1f2b, { roughness: 0.86 }));
 
-	const hemi = new THREE.HemisphereLight(0xffe2c4, 0x3a2418, 0.55);
+	const hemi = new THREE.HemisphereLight(0xffe2c4, 0x3a2418, 0.7);
 	scene.add(hemi);
-	const sun = new THREE.DirectionalLight(0xffd7a8, 1.35);
-	sun.position.set(-4.5, 5.2, 2.2);
+	const sun = new THREE.DirectionalLight(0xffd7a8, 1.32);
+	sun.position.set(-3.8, 4.6, 3.2);
 	sun.castShadow = true;
 	sun.shadow.mapSize.set(1024, 1024);
 	sun.shadow.camera.near = 1;
-	sun.shadow.camera.far = 22;
-	sun.shadow.camera.left = -8;
-	sun.shadow.camera.right = 10;
-	sun.shadow.camera.top = 6;
-	sun.shadow.camera.bottom = -4;
+	sun.shadow.camera.far = 18;
+	sun.shadow.camera.left = -6;
+	sun.shadow.camera.right = 6;
+	sun.shadow.camera.top = 5;
+	sun.shadow.camera.bottom = -3;
 	scene.add(sun);
-	const lamp = new THREE.PointLight(0xffb066, 22, 12, 1.6);
-	lamp.position.set(-1.6, 2.15, 0.4);
+	const lamp = new THREE.PointLight(0xffb066, 18, 11, 1.65);
+	lamp.position.set(-1.85, 2.05, 0.55);
 	scene.add(lamp);
-	const hearth = new THREE.PointLight(0xff7a3a, 16, 9, 1.8);
-	hearth.position.set(2.4, 0.8, 0.2);
-	scene.add(hearth);
-	const roomLamp = new THREE.PointLight(0xc4d4ff, 18, 10, 1.5);
-	roomLamp.position.set(8.5, 2.4, 0.6);
-	scene.add(roomLamp);
+	const ghostLight = new THREE.PointLight(0xc4b5fd, 0, 3.2, 2);
+	scene.add(ghostLight);
 
-	function mesh(geo: Geo, material: InstanceType<typeof THREE.Material>, extra?: Partial<M>) {
+	function mesh(geo: Geo, material: InstanceType<typeof THREE.Material>) {
 		const m = new THREE.Mesh(geo, material);
 		m.castShadow = true;
 		m.receiveShadow = true;
-		if (extra) Object.assign(m, extra);
 		return m;
 	}
 
-	const floor = mesh(box, keepMat(mat(0x5a341c, { roughness: 0.86 })));
-	floor.scale.set(18, 0.12, 10);
-	floor.position.set(3.5, -0.06, 0.4);
+	const floor = mesh(box, floorMap);
+	floor.scale.set(10, 0.1, 7);
+	floor.position.set(0, -0.05, 0.4);
 	scene.add(floor);
-
-	const rug = mesh(
-		keepGeo(new THREE.CircleGeometry(1.7, 32)),
-		keepMat(mat(0x7a1f1f, { roughness: 0.9 }))
-	);
-	rug.rotation.x = -Math.PI / 2;
-	rug.position.set(0, 0.02, 0.4);
+	const rug = mesh(cyl, cloth);
+	rug.scale.set(1.55, 0.02, 1.15);
+	rug.position.set(0.1, 0.02, 0.55);
 	scene.add(rug);
-
 	const back = mesh(box, paper);
-	back.scale.set(6.4, 3.4, 0.12);
-	back.position.set(0, 1.7, -2.55);
+	back.scale.set(6.2, 3.5, 0.1);
+	back.position.set(0, 1.7, -2.35);
 	scene.add(back);
-
 	const left = mesh(box, paper);
-	left.scale.set(0.12, 3.4, 6.2);
-	left.position.set(-3.15, 1.7, 0.2);
+	left.scale.set(0.1, 3.5, 5.2);
+	left.position.set(-3.05, 1.7, 0.2);
 	scene.add(left);
 
-	const ceil = mesh(box, woodDark);
-	ceil.scale.set(18, 0.16, 10);
-	ceil.position.set(3.5, 3.35, 0.4);
-	scene.add(ceil);
+	const windowG = new THREE.Group();
+	const winFrame = mesh(box, woodDark);
+	winFrame.scale.set(0.12, 1.9, 1.25);
+	windowG.add(winFrame);
+	const glass = mesh(box, keepMat(mat(0xffd19a, { emissive: 0xffc07a, emissiveIntensity: 0.78 })));
+	glass.scale.set(0.04, 1.55, 1.0);
+	glass.position.x = 0.06;
+	windowG.add(glass);
+	windowG.position.set(-2.96, 1.72, -0.15);
+	scene.add(windowG);
+	const curtain = mesh(box, keepMat(mat(0x7b2d3b, { roughness: 0.7 })));
+	curtain.scale.set(0.08, 2.3, 0.45);
+	curtain.position.set(-2.88, 1.55, -0.85);
+	scene.add(curtain);
 
-	const beam = mesh(box, wood);
-	beam.scale.set(6.6, 0.16, 0.22);
-	beam.position.set(0, 3.18, -0.4);
-	scene.add(beam);
-
-	function windowPane() {
-		const g = new THREE.Group();
-		const frame = mesh(box, woodDark);
-		frame.scale.set(1.35, 1.9, 0.1);
-		g.add(frame);
-		const glass = mesh(
-			plane,
-			keepMat(
-				mat(0xffd19a, {
-					emissive: 0xffc07a,
-					emissiveIntensity: 0.55,
-					transparent: true,
-					opacity: 0.92
-				})
-			)
-		);
-		glass.position.z = 0.06;
-		glass.scale.set(1.1, 1.6, 1);
-		g.add(glass);
-		const barH = mesh(box, wood);
-		barH.scale.set(1.2, 0.06, 0.08);
-		g.add(barH);
-		const barV = mesh(box, wood);
-		barV.scale.set(0.06, 1.7, 0.08);
-		g.add(barV);
-		g.position.set(-3.05, 1.75, -0.35);
-		g.rotation.y = Math.PI / 2;
-		scene.add(g);
-		const curtain = mesh(plane, keepMat(mat(0x7b2d3b, { roughness: 0.7, side: THREE.DoubleSide })));
-		curtain.position.set(-2.85, 1.7, -1.35);
-		curtain.scale.set(0.7, 2.5, 1);
-		scene.add(curtain);
-		const curtain2 = curtain.clone();
-		curtain2.position.z = 0.65;
-		scene.add(curtain2);
+	const caseG = new THREE.Group();
+	caseG.name = 'case';
+	const caseBack = mesh(box, wood);
+	caseBack.scale.set(2.92, 2.62, 0.1);
+	caseBack.position.set(0, 1.32, -1.96);
+	caseG.add(caseBack);
+	const caseLeft = mesh(box, wood);
+	caseLeft.scale.set(0.12, 2.62, 0.52);
+	caseLeft.position.set(-1.46, 1.32, -1.72);
+	caseG.add(caseLeft);
+	const caseRight = caseLeft.clone();
+	caseRight.position.x = 1.46;
+	caseG.add(caseRight);
+	const crown = mesh(box, woodDark);
+	crown.scale.set(3.08, 0.14, 0.58);
+	crown.position.set(0, 2.7, -1.7);
+	caseG.add(crown);
+	const inlay = mesh(box, brass);
+	inlay.scale.set(2.4, 0.03, 0.08);
+	inlay.position.set(0, 2.7, -1.4);
+	caseG.add(inlay);
+	const plinth = mesh(box, woodDark);
+	plinth.scale.set(3.02, 0.18, 0.56);
+	plinth.position.set(0, 0.09, -1.7);
+	caseG.add(plinth);
+	for (let i = 0; i < ROWS; i++) {
+		const board = mesh(box, woodDark);
+		board.scale.set(2.82, 0.07, 0.5);
+		board.position.set(0, 0.28 + i * 0.58, -1.72);
+		caseG.add(board);
+		const lip = mesh(box, brass);
+		lip.scale.set(2.7, 0.012, 0.03);
+		lip.position.set(0, 0.32 + i * 0.58, -1.48);
+		caseG.add(lip);
 	}
-	windowPane();
-
-	function bookcase() {
-		const g = new THREE.Group();
-		const backP = mesh(box, wood);
-		backP.scale.set(2.6, 2.55, 0.08);
-		backP.position.set(0, 1.28, -2.44);
-		g.add(backP);
-		for (const y of [0.42, 1.12, 1.82, 2.48]) {
-			const board = mesh(box, woodDark);
-			board.scale.set(2.5, 0.08, 0.52);
-			board.position.set(0, y, -2.18);
-			g.add(board);
-		}
-		const leftP = mesh(box, wood);
-		leftP.scale.set(0.1, 2.55, 0.52);
-		leftP.position.set(-1.3, 1.28, -2.18);
-		g.add(leftP);
-		const rightP = leftP.clone();
-		rightP.position.x = 1.3;
-		g.add(rightP);
-		const crown = mesh(box, wood);
-		crown.scale.set(2.7, 0.1, 0.56);
-		crown.position.set(0, 2.58, -2.18);
-		g.add(crown);
-		scene.add(g);
+	for (const x of [-1.42, 1.42]) {
+		const knob = mesh(sphereLo, brass);
+		knob.scale.setScalar(0.048);
+		knob.position.set(x, 1.92, -1.44);
+		caseG.add(knob);
 	}
-	bookcase();
+	scene.add(caseG);
 
-	const slotMeshes: M[] = [];
-	for (let i = 0; i < 6; i++) {
-		const plate = mesh(
-			box,
-			keepMat(mat(0x8a5a32, { emissive: 0x5a3418, emissiveIntensity: 0.08 }))
-		);
-		plate.scale.set(0.5, 0.03, 0.36);
-		plate.userData.slot = i;
-		scene.add(plate);
-		slotMeshes.push(plate);
-	}
-
-	function decoBook(x: number, y: number, z: number, color: number, h = 0.22) {
-		const b = mesh(box, keepMat(mat(color, { roughness: 0.7 })));
-		b.scale.set(0.1, h, 0.17);
-		b.position.set(x, y, z);
-		b.rotation.y = (Math.random() - 0.5) * 0.1;
-		scene.add(b);
-	}
-	for (let i = 0; i < 9; i++) {
-		const h = 0.2 + (i % 3) * 0.04;
-		decoBook(
-			-0.95 + i * 0.22,
-			1.82 + 0.04 + h / 2,
-			-2.06,
-			[0x7f1d1d, 0x1e3a5f, 0x3f6212, 0x44403c][i % 4]!,
-			h
-		);
-	}
-	for (let i = 0; i < 7; i++) {
-		decoBook(-0.85 + i * 0.24, 0.42 + 0.13, -2.06, [0x4c1d95, 0x9a3412, 0x164e63][i % 3]!, 0.18);
-	}
-
-	const desk = mesh(box, wood);
-	desk.scale.set(1.8, 0.08, 0.7);
-	desk.position.set(0.2, 0.74, 1.15);
-	scene.add(desk);
-	const leg = mesh(cyl, woodDark);
-	leg.scale.set(0.04, 0.74, 0.04);
-	leg.position.set(-0.55, 0.37, 1.35);
-	scene.add(leg);
-	const leg2 = leg.clone();
-	leg2.position.x = 0.9;
-	scene.add(leg2);
-
-	const blotter = mesh(box, keepMat(mat(0x3f2a1a)));
-	blotter.scale.set(0.7, 0.02, 0.42);
-	blotter.position.set(0.15, 0.8, 1.12);
-	scene.add(blotter);
-
-	const candle = mesh(cyl, keepMat(mat(0xf5e6c8)));
-	candle.scale.set(0.03, 0.16, 0.03);
-	candle.position.set(0.72, 0.9, 1.05);
-	scene.add(candle);
-	const flame = new THREE.PointLight(0xffcc66, 4, 2.4, 2);
-	flame.position.set(0.72, 1.02, 1.05);
-	scene.add(flame);
-
-	const picture = mesh(
-		box,
-		keepMat(
-			new THREE.MeshStandardMaterial({
-				map: canvasTex(128, 160, (ctx) => {
-					ctx.fillStyle = '#2b2118';
-					ctx.fillRect(0, 0, 128, 160);
-					ctx.fillStyle = '#c4a574';
-					ctx.fillRect(10, 10, 108, 140);
-					ctx.fillStyle = '#6d4c2f';
-					ctx.beginPath();
-					ctx.arc(64, 78, 28, 0, Math.PI * 2);
-					ctx.fill();
-					ctx.fillStyle = '#3f6b4a';
-					ctx.fillRect(18, 108, 92, 32);
-				})
-			})
-		)
+	const extras = new THREE.Group();
+	const sideTable = mesh(box, wood);
+	sideTable.scale.set(0.55, 0.08, 0.55);
+	sideTable.position.set(-1.95, 0.62, 0.35);
+	extras.add(sideTable);
+	const lampBase = mesh(cyl, brass);
+	lampBase.scale.set(0.06, 0.28, 0.06);
+	lampBase.position.set(-1.95, 0.82, 0.35);
+	extras.add(lampBase);
+	const shade = mesh(
+		cyl,
+		keepMat(mat(0xf3d5a8, { roughness: 0.7, emissive: 0xffc07a, emissiveIntensity: 0.28 }))
 	);
-	picture.scale.set(0.55, 0.7, 0.04);
-	picture.position.set(2.05, 1.85, -2.46);
-	scene.add(picture);
+	shade.scale.set(0.16, 0.14, 0.16);
+	shade.position.set(-1.95, 1.08, 0.35);
+	extras.add(shade);
+	const stack = mesh(box, keepMat(mat(0x7c2d12)));
+	stack.scale.set(0.18, 0.06, 0.24);
+	stack.position.set(-1.78, 0.7, 0.5);
+	extras.add(stack);
+	const clockBody = mesh(box, woodDark);
+	clockBody.scale.set(0.22, 0.28, 0.1);
+	clockBody.position.set(1.95, 0.86, 0.18);
+	extras.add(clockBody);
+	const clockFace = mesh(cyl, keepMat(mat(0xf5e6c8)));
+	clockFace.scale.set(0.09, 0.03, 0.09);
+	clockFace.rotation.x = Math.PI / 2;
+	clockFace.position.set(1.95, 0.9, 0.24);
+	extras.add(clockFace);
+	const vase = mesh(cyl, keepMat(mat(0x365314)));
+	vase.scale.set(0.07, 0.16, 0.07);
+	vase.position.set(1.78, 0.78, 0.42);
+	extras.add(vase);
+	scene.add(extras);
 
-	const stove = mesh(box, keepMat(mat(0x2a211c, { metalness: 0.4, roughness: 0.5 })));
-	stove.scale.set(0.7, 1.1, 0.5);
-	stove.position.set(2.45, 0.55, -0.2);
-	scene.add(stove);
-	const glow = mesh(box, keepMat(mat(0xff6a22, { emissive: 0xff5410, emissiveIntensity: 0.9 })));
-	glow.scale.set(0.35, 0.22, 0.04);
-	glow.position.set(2.45, 0.42, 0.06);
-	scene.add(glow);
-
-	function spine(title: string, color: string) {
-		return canvasTex(64, 256, (ctx) => {
-			ctx.fillStyle = color;
-			ctx.fillRect(0, 0, 64, 256);
-			ctx.fillStyle = '#e8d5a3';
-			ctx.fillRect(8, 18, 48, 6);
-			ctx.fillRect(8, 232, 48, 6);
-			ctx.save();
-			ctx.translate(38, 210);
-			ctx.rotate(-Math.PI / 2);
-			ctx.font = '22px serif';
-			ctx.fillText(title, 0, 0);
-			ctx.restore();
-		});
+	const itemRoot = new THREE.Group();
+	scene.add(itemRoot);
+	const itemMap = new Map<string, G>();
+	const slotPads: M[] = [];
+	for (let row = 0; row < ROWS; row++) {
+		for (let slot = 0; slot < SLOTS; slot++) {
+			const pad = mesh(
+				box,
+				keepMat(mat(0x000000, { transparent: true, opacity: 0, depthWrite: false }))
+			);
+			const p = slotWorld(row, slot);
+			pad.position.set(p.x, p.y - 0.18, p.z);
+			pad.scale.set(0.34, 0.06, 0.36);
+			pad.userData.row = row;
+			pad.userData.slot = slot;
+			pad.castShadow = false;
+			slotPads.push(pad);
+			scene.add(pad);
+		}
 	}
 
-	function rig(kind: PropKind) {
+	function spineMap(title: string, tone: number) {
+		return keepMat(
+			new THREE.MeshStandardMaterial({
+				map: canvasTex(64, 256, (ctx) => {
+					const h = (Math.floor(tone * 11) * 31 + 8) % 360;
+					const l = 38 + Math.floor((tone * 9) % 10);
+					ctx.fillStyle = `hsl(${h} 58% ${l}%)`;
+					ctx.fillRect(0, 0, 64, 256);
+					ctx.fillStyle = `hsl(${h} 40% ${Math.max(16, l - 10)}%)`;
+					ctx.fillRect(0, 0, 9, 256);
+					ctx.fillRect(55, 0, 9, 256);
+					ctx.fillStyle = tone > 0.55 ? '#d4a017' : '#e8d5a3';
+					ctx.fillRect(12, 16, 40, 7);
+					ctx.fillRect(12, 230, 40, 7);
+					if (tone > 0.3) {
+						ctx.fillRect(14, 118, 36, 3);
+					}
+					ctx.save();
+					ctx.translate(42, 128);
+					ctx.rotate(-Math.PI / 2);
+					ctx.fillStyle = '#f7ecd2';
+					ctx.font = '700 22px serif';
+					ctx.textAlign = 'center';
+					ctx.fillText(title, 0, 0);
+					ctx.restore();
+				}),
+				roughness: 0.58
+			})
+		);
+	}
+
+	function bookMesh(item: ShelfItem) {
 		const g = new THREE.Group();
-		g.userData.kind = kind;
-		if (kind === 'globe') {
-			const ball = mesh(
-				sphere,
-				keepMat(
-					new THREE.MeshStandardMaterial({
-						map: canvasTex(256, 128, (ctx) => {
-							ctx.fillStyle = '#1d4f7a';
-							ctx.fillRect(0, 0, 256, 128);
-							ctx.fillStyle = '#3f7a46';
-							for (const [x, y, r] of [
-								[70, 50, 28],
-								[120, 40, 22],
-								[180, 70, 30],
-								[40, 90, 16]
-							] as const) {
-								ctx.beginPath();
-								ctx.arc(x, y, r, 0, Math.PI * 2);
-								ctx.fill();
-							}
-						}),
-						roughness: 0.45
-					})
-				)
-			);
-			ball.scale.setScalar(0.2);
-			ball.position.y = 0.26;
-			g.add(ball);
-			const ring = mesh(torus, brass);
-			ring.scale.set(0.18, 0.18, 0.18);
-			ring.rotation.x = Math.PI / 2.4;
-			ring.position.y = 0.22;
-			g.add(ring);
-			const stand = mesh(cone, brass);
-			stand.scale.set(0.08, 0.12, 0.08);
-			stand.position.y = 0.05;
-			g.add(stand);
-		} else if (kind === 'cup') {
-			const bowl = mesh(cyl, keepMat(mat(0xf3efe6, { roughness: 0.35 })));
-			bowl.scale.set(0.1, 0.1, 0.1);
-			bowl.position.y = 0.12;
-			g.add(bowl);
-			const handle = mesh(torus, keepMat(mat(0xf3efe6, { roughness: 0.35 })));
-			handle.scale.set(0.07, 0.07, 0.07);
-			handle.position.set(0.11, 0.13, 0);
-			handle.rotation.y = Math.PI / 2;
-			g.add(handle);
-			const saucer = mesh(keepGeo(new THREE.CircleGeometry(0.15, 20)), keepMat(mat(0xe7dcc8)));
-			saucer.rotation.x = -Math.PI / 2;
-			saucer.position.y = 0.02;
-			g.add(saucer);
-			const tea = mesh(keepGeo(new THREE.CircleGeometry(0.08, 16)), keepMat(mat(0x6b3a1f)));
-			tea.rotation.x = -Math.PI / 2;
-			tea.position.y = 0.175;
-			g.add(tea);
-		} else if (kind === 'moth') {
-			const body = mesh(sphereLo, keepMat(mat(0x4a3728)));
-			body.scale.set(0.055, 0.04, 0.11);
-			body.position.y = 0.12;
-			g.add(body);
-			const wingTex = keepMat(
-				new THREE.MeshStandardMaterial({
-					map: canvasTex(128, 96, (ctx) => {
-						ctx.fillStyle = '#c4a574';
-						ctx.fillRect(0, 0, 128, 96);
-						ctx.fillStyle = '#6b3a2a';
-						ctx.beginPath();
-						ctx.arc(40, 40, 16, 0, Math.PI * 2);
-						ctx.fill();
-						ctx.fillStyle = '#1f2937';
-						ctx.beginPath();
-						ctx.arc(88, 36, 10, 0, Math.PI * 2);
-						ctx.fill();
-					}),
-					side: THREE.DoubleSide,
-					roughness: 0.8
-				})
-			);
-			const wingL = mesh(plane, wingTex);
-			wingL.scale.set(0.24, 0.16, 1);
-			wingL.position.set(-0.1, 0.14, 0);
-			wingL.rotation.y = 0.4;
-			g.add(wingL);
-			const wingR = wingL.clone();
-			wingR.position.x = 0.08;
-			wingR.rotation.y = -0.4;
-			g.add(wingR);
-			const pin = mesh(cyl, brass);
-			pin.scale.set(0.008, 0.16, 0.008);
-			pin.position.y = 0.08;
-			g.add(pin);
-		} else if (kind === 'book') {
-			const cover = mesh(
-				box,
-				keepMat(new THREE.MeshStandardMaterial({ map: spine('星图', '#6b1d1d'), roughness: 0.7 }))
-			);
-			cover.scale.set(0.07, 0.28, 0.2);
-			cover.position.y = 0.16;
-			g.add(cover);
-			const pages = mesh(box, keepMat(mat(0xf5ecd6)));
-			pages.scale.set(0.04, 0.26, 0.18);
-			pages.position.set(0.015, 0.16, 0);
-			g.add(pages);
-		} else if (kind === 'bottle') {
-			const body = mesh(
-				cyl,
-				keepMat(
-					mat(0x2f6b4f, { transparent: true, opacity: 0.55, roughness: 0.2, metalness: 0.15 })
-				)
-			);
-			body.scale.set(0.055, 0.14, 0.055);
-			body.position.y = 0.12;
-			g.add(body);
-			const neck = mesh(cyl, keepMat(mat(0x2f6b4f, { transparent: true, opacity: 0.5 })));
-			neck.scale.set(0.022, 0.07, 0.022);
-			neck.position.y = 0.22;
-			g.add(neck);
-			const cork = mesh(cyl, keepMat(mat(0xb08968)));
-			cork.scale.set(0.02, 0.03, 0.02);
-			cork.position.y = 0.27;
-			g.add(cork);
-			const liquid = mesh(
-				cyl,
-				keepMat(mat(0x4ade80, { emissive: 0x166534, emissiveIntensity: 0.3 }))
-			);
-			liquid.scale.set(0.045, 0.07, 0.045);
-			liquid.position.y = 0.09;
-			g.add(liquid);
-		} else if (kind === 'lamp') {
-			const base = mesh(cyl, brass);
-			base.scale.set(0.07, 0.04, 0.07);
-			base.position.y = 0.03;
-			g.add(base);
-			const stem = mesh(cyl, brass);
-			stem.scale.set(0.015, 0.18, 0.015);
-			stem.position.y = 0.13;
-			g.add(stem);
-			const shade = mesh(
-				cone,
-				keepMat(mat(0xfde68a, { emissive: 0xfbbf24, emissiveIntensity: 0.35 }))
-			);
-			shade.scale.set(0.12, 0.1, 0.12);
-			shade.position.y = 0.26;
-			shade.rotation.x = Math.PI;
-			g.add(shade);
-			const bulb = new THREE.PointLight(0xffe0a0, 5, 2.8, 2);
-			bulb.position.y = 0.22;
-			g.add(bulb);
-		} else if (kind === 'plant') {
-			const pot = mesh(cyl, keepMat(mat(0x9a3412, { roughness: 0.8 })));
-			pot.scale.set(0.07, 0.08, 0.07);
-			pot.position.y = 0.05;
-			g.add(pot);
-			const dirt = mesh(keepGeo(new THREE.CircleGeometry(0.065, 12)), keepMat(mat(0x3f2a14)));
-			dirt.rotation.x = -Math.PI / 2;
-			dirt.position.y = 0.095;
-			g.add(dirt);
-			for (let i = 0; i < 5; i++) {
-				const leaf = mesh(ico, keepMat(mat(i % 2 ? 0x3f7a46 : 0x65a30d)));
-				const a = (i / 5) * Math.PI * 2;
-				leaf.position.set(Math.cos(a) * 0.06, 0.16 + (i % 2) * 0.05, Math.sin(a) * 0.05);
-				leaf.scale.set(0.05, 0.07, 0.03);
-				leaf.rotation.set(0.4, a, 0.3);
-				g.add(leaf);
-			}
-		} else {
-			const body = mesh(sphere, keepMat(mat(0x92400e, { roughness: 0.55 })));
-			body.scale.set(0.12, 0.05, 0.16);
-			body.position.y = 0.08;
-			g.add(body);
-			const neck = mesh(box, keepMat(mat(0x78350f)));
-			neck.scale.set(0.03, 0.04, 0.22);
-			neck.position.set(0, 0.1, -0.16);
-			g.add(neck);
-			const hole = mesh(torus, keepMat(mat(0x1c1917)));
-			hole.scale.set(0.04, 0.04, 0.04);
-			hole.position.set(0, 0.09, 0.04);
-			hole.rotation.x = Math.PI / 2;
-			g.add(hole);
-		}
-		g.traverse((obj: InstanceType<typeof THREE.Object3D>) => {
-			obj.userData.kind = kind;
-		});
+		const cover = mesh(box, spineMap(item.title, item.tone));
+		cover.scale.set(item.thick, item.tall, 0.32);
+		g.add(cover);
+		const pages = mesh(box, keepMat(mat(0xf3e6c8, { roughness: 0.92 })));
+		pages.scale.set(item.thick * 0.62, item.tall * 0.92, 0.3);
+		pages.position.z = 0.02;
+		g.add(pages);
+		const band = mesh(box, brass);
+		band.scale.set(item.thick + 0.01, 0.03, 0.33);
+		band.position.y = item.tall * 0.18;
+		g.add(band);
 		return g;
 	}
 
-	const studyProps = new Map<PropKind, G>();
-	const roomProps = new Map<PropKind, G>();
-	const pickables: InstanceType<typeof THREE.Object3D>[] = [];
-	for (const kind of Object.keys(PROP_INFO) as PropKind[]) {
-		const a = rig(kind);
-		const b = rig(kind);
-		studyProps.set(kind, a);
-		roomProps.set(kind, b);
-		scene.add(a);
-		scene.add(b);
-		a.traverse((o: InstanceType<typeof THREE.Object3D>) => pickables.push(o));
-		b.traverse((o: InstanceType<typeof THREE.Object3D>) => {
-			o.userData.room = true;
-			pickables.push(o);
-		});
-	}
-
-	function collectionAlcove() {
-		const night = keepMat(
-			new THREE.MeshStandardMaterial({
-				map: canvasTex(256, 256, (ctx) => {
-					ctx.fillStyle = '#0b1228';
-					ctx.fillRect(0, 0, 256, 256);
-					ctx.fillStyle = '#1a2748';
-					ctx.beginPath();
-					ctx.arc(196, 64, 42, 0, Math.PI * 2);
-					ctx.fill();
-					ctx.fillStyle = '#f4e7c3';
-					ctx.beginPath();
-					ctx.arc(188, 58, 22, 0, Math.PI * 2);
-					ctx.fill();
-					ctx.fillStyle = '#fff8e8';
-					for (let i = 0; i < 48; i++) {
-						ctx.globalAlpha = 0.45 + (i % 5) * 0.1;
-						ctx.fillRect((i * 37) % 256, (i * 53) % 256, 1.6, 1.6);
-					}
-					ctx.globalAlpha = 1;
-				}),
-				emissive: 0x93c5fd,
-				emissiveIntensity: 0.28,
-				roughness: 1
-			})
-		);
-		const velvet = keepMat(mat(0x3b1d4a, { roughness: 0.72 }));
-		const alcovePaper = keepMat(
-			new THREE.MeshStandardMaterial({
-				map: canvasTex(256, 256, (ctx) => {
-					ctx.fillStyle = '#3a241c';
-					ctx.fillRect(0, 0, 256, 256);
-					ctx.fillStyle = '#4a3124';
-					for (let i = 0; i < 10; i++) ctx.fillRect(i * 26, 0, 8, 256);
-					ctx.fillStyle = 'rgba(180,120,60,0.12)';
-					for (let i = 0; i < 18; i++) ctx.fillRect(12, i * 14, 232, 3);
-				}),
-				roughness: 0.9
-			})
-		);
-
-		const back = mesh(box, alcovePaper);
-		back.scale.set(4.4, 3.4, 0.12);
-		back.position.set(TABLE.x, 1.7, -2.55);
-		scene.add(back);
-		const right = mesh(box, alcovePaper);
-		right.scale.set(0.12, 3.4, 5.4);
-		right.position.set(10.65, 1.7, 0.05);
-		scene.add(right);
-		const door = mesh(box, alcovePaper);
-		door.scale.set(0.16, 3.2, 4.6);
-		door.position.set(6.35, 1.6, -0.15);
-		scene.add(door);
-		const jamb = mesh(box, wood);
-		jamb.scale.set(0.18, 3.2, 0.22);
-		jamb.position.set(6.28, 1.6, 2.05);
-		scene.add(jamb);
-
-		const rug = mesh(
-			keepGeo(new THREE.CircleGeometry(1.55, 36)),
-			keepMat(mat(0x4c1d4a, { roughness: 0.92 }))
-		);
-		rug.rotation.x = -Math.PI / 2;
-		rug.position.set(TABLE.x, 0.02, TABLE.z + 0.15);
-		scene.add(rug);
-		const rugRing = mesh(
-			keepGeo(new THREE.TorusGeometry(1.18, 0.05, 8, 36)),
-			keepMat(mat(0xc9a227, { metalness: 0.35, roughness: 0.45 }))
-		);
-		rugRing.rotation.x = Math.PI / 2;
-		rugRing.position.set(TABLE.x, 0.03, TABLE.z + 0.15);
-		scene.add(rugRing);
-
-		const table = mesh(keepGeo(new THREE.CylinderGeometry(1.12, 1.18, 0.09, 32)), wood);
-		table.position.set(TABLE.x, TABLE.y, TABLE.z);
-		table.userData.table = true;
-		scene.add(table);
-		pickables.push(table);
-		const cloth = mesh(
-			keepGeo(new THREE.CircleGeometry(1.08, 32)),
-			keepMat(mat(0x5b2a4a, { roughness: 0.78 }))
-		);
-		cloth.rotation.x = -Math.PI / 2;
-		cloth.position.set(TABLE.x, TABLE.y + 0.05, TABLE.z);
-		scene.add(cloth);
-		const pedestal = mesh(cyl, woodDark);
-		pedestal.scale.set(0.2, 0.7, 0.2);
-		pedestal.position.set(TABLE.x, 0.35, TABLE.z);
-		scene.add(pedestal);
-
-		const frame = mesh(box, woodDark);
-		frame.scale.set(1.55, 1.85, 0.1);
-		frame.position.set(TABLE.x, 2.05, -2.42);
-		scene.add(frame);
-		const glass = mesh(plane, night);
-		glass.position.set(TABLE.x, 2.05, -2.35);
-		glass.scale.set(1.32, 1.62, 1);
-		scene.add(glass);
-		const barH = mesh(box, wood);
-		barH.scale.set(1.4, 0.05, 0.08);
-		barH.position.set(TABLE.x, 2.05, -2.36);
-		scene.add(barH);
-		const barV = mesh(box, wood);
-		barV.scale.set(0.05, 1.7, 0.08);
-		barV.position.set(TABLE.x, 2.05, -2.36);
-		scene.add(barV);
-		const moonGlow = new THREE.PointLight(0xc4d4ff, 12, 8, 1.6);
-		moonGlow.position.set(TABLE.x, 2.15, -1.6);
-		scene.add(moonGlow);
-
-		const curtainL = mesh(plane, velvet);
-		curtainL.position.set(TABLE.x - 0.95, 1.85, -2.28);
-		curtainL.scale.set(0.55, 2.4, 1);
-		scene.add(curtainL);
-		const curtainR = curtainL.clone();
-		curtainR.position.x = TABLE.x + 0.95;
-		scene.add(curtainR);
-		const rail = mesh(cyl, brass);
-		rail.scale.set(0.025, 1.15, 0.025);
-		rail.rotation.z = Math.PI / 2;
-		rail.position.set(TABLE.x, 3.02, -2.3);
-		scene.add(rail);
-
-		const sideboard = mesh(box, wood);
-		sideboard.scale.set(1.35, 0.72, 0.38);
-		sideboard.position.set(10.05, 0.38, -1.7);
-		scene.add(sideboard);
-		for (let i = 0; i < 5; i++) {
-			decoBook(
-				9.55 + i * 0.14,
-				0.78 + 0.1,
-				-1.62,
-				[0x7f1d1d, 0x1e3a5f, 0x854d0e, 0x3f6212, 0x4c1d95][i]!,
-				0.2
+	function propMesh(item: ShelfItem) {
+		const g = new THREE.Group();
+		const kind = item.prop ?? 'cup';
+		const lean = mesh(box, keepMat(mat(item.tone > 0.5 ? 0x7f1d1d : 0x1e3a5f)));
+		lean.scale.set(0.08, 0.3, 0.2);
+		lean.position.set(-0.12, 0.15, 0.02);
+		lean.rotation.z = -0.12;
+		g.add(lean);
+		const stub = mesh(box, keepMat(mat(item.tone > 0.4 ? 0x365314 : 0x6b21a8)));
+		stub.scale.set(0.07, 0.26, 0.18);
+		stub.position.set(0.13, 0.13, 0.01);
+		g.add(stub);
+		if (kind === 'globe') {
+			const ball = mesh(sphere, keepMat(mat(0x3b82c4, { roughness: 0.38, metalness: 0.22 })));
+			ball.scale.setScalar(0.14);
+			ball.position.y = 0.18;
+			g.add(ball);
+			const ring = mesh(torus, brass);
+			ring.scale.set(0.15, 0.15, 0.15);
+			ring.rotation.x = 1.15;
+			ring.position.y = 0.16;
+			g.add(ring);
+			const stand = mesh(cyl, brass);
+			stand.scale.set(0.04, 0.1, 0.04);
+			stand.position.y = 0.05;
+			g.add(stand);
+		} else if (kind === 'cup') {
+			const body = mesh(cyl, keepMat(mat(0xf2d2c2, { roughness: 0.32 })));
+			body.scale.set(0.07, 0.08, 0.07);
+			body.position.y = 0.08;
+			g.add(body);
+			const handle = mesh(torus, keepMat(mat(0xf2d2c2, { roughness: 0.32 })));
+			handle.scale.set(0.05, 0.05, 0.05);
+			handle.position.set(0.08, 0.08, 0);
+			g.add(handle);
+		} else if (kind === 'clock') {
+			const body = mesh(box, woodDark);
+			body.scale.set(0.16, 0.2, 0.08);
+			body.position.y = 0.12;
+			g.add(body);
+			const face = mesh(cyl, keepMat(mat(0xf5e6c8, { metalness: 0.2 })));
+			face.scale.set(0.11, 0.04, 0.11);
+			face.rotation.x = Math.PI / 2;
+			face.position.y = 0.14;
+			g.add(face);
+		} else if (kind === 'cat') {
+			const body = mesh(sphereLo, keepMat(mat(0xe7e2da)));
+			body.scale.set(0.1, 0.12, 0.14);
+			body.position.y = 0.12;
+			g.add(body);
+			const ear = mesh(cone, keepMat(mat(0xe7e2da)));
+			ear.scale.set(0.04, 0.08, 0.04);
+			ear.position.set(-0.05, 0.24, 0);
+			g.add(ear);
+			const ear2 = ear.clone();
+			ear2.position.x = 0.05;
+			g.add(ear2);
+		} else if (kind === 'candle') {
+			const stick = mesh(cyl, brass);
+			stick.scale.set(0.035, 0.16, 0.035);
+			stick.position.y = 0.1;
+			g.add(stick);
+			const flame = mesh(
+				cone,
+				keepMat(mat(0xfbbf24, { emissive: 0xf59e0b, emissiveIntensity: 0.9 }))
 			);
+			flame.scale.set(0.028, 0.07, 0.028);
+			flame.position.y = 0.23;
+			g.add(flame);
+		} else if (kind === 'plant') {
+			const pot = mesh(cyl, keepMat(mat(0x9a3412)));
+			pot.scale.set(0.07, 0.08, 0.07);
+			pot.position.y = 0.06;
+			g.add(pot);
+			const leaf = mesh(sphereLo, keepMat(mat(0x3f7a45, { roughness: 0.7 })));
+			leaf.scale.set(0.1, 0.12, 0.08);
+			leaf.position.y = 0.18;
+			g.add(leaf);
+		} else if (kind === 'frame') {
+			const fr = mesh(box, wood);
+			fr.scale.set(0.16, 0.2, 0.03);
+			fr.position.y = 0.14;
+			g.add(fr);
+			const pic = mesh(
+				box,
+				keepMat(mat(0xf4e4c8, { emissive: 0xe8d5b5, emissiveIntensity: 0.18 }))
+			);
+			pic.scale.set(0.12, 0.15, 0.02);
+			pic.position.set(0, 0.14, 0.012);
+			g.add(pic);
+		} else if (kind === 'ink') {
+			const bottle = mesh(cyl, keepMat(mat(0x1e293b, { metalness: 0.3, roughness: 0.25 })));
+			bottle.scale.set(0.05, 0.1, 0.05);
+			bottle.position.y = 0.1;
+			g.add(bottle);
+			const cork = mesh(cyl, wood);
+			cork.scale.set(0.03, 0.03, 0.03);
+			cork.position.y = 0.17;
+			g.add(cork);
+		} else if (kind === 'teapot') {
+			const pot = mesh(sphereLo, keepMat(mat(0xd9c4a3, { roughness: 0.4 })));
+			pot.scale.set(0.11, 0.08, 0.11);
+			pot.position.y = 0.1;
+			g.add(pot);
+			const spout = mesh(cone, keepMat(mat(0xd9c4a3)));
+			spout.scale.set(0.03, 0.09, 0.03);
+			spout.rotation.z = -1.1;
+			spout.position.set(0.1, 0.1, 0);
+			g.add(spout);
+		} else {
+			const dome = mesh(
+				sphereLo,
+				keepMat(mat(0xc4d4e0, { transparent: true, opacity: 0.38, roughness: 0.12 }))
+			);
+			dome.scale.setScalar(0.13);
+			dome.position.y = 0.14;
+			g.add(dome);
+			const moth = mesh(ico, keepMat(mat(0x57534e)));
+			moth.scale.set(0.05, 0.02, 0.08);
+			moth.position.y = 0.1;
+			g.add(moth);
 		}
-		const vase = mesh(cyl, keepMat(mat(0x1e3a5f, { metalness: 0.2, roughness: 0.4 })));
-		vase.scale.set(0.05, 0.14, 0.05);
-		vase.position.set(10.35, 0.9, -1.62);
-		scene.add(vase);
-		const bloom = mesh(ico, keepMat(mat(0xc084fc, { emissive: 0x7e22ce, emissiveIntensity: 0.25 })));
-		bloom.scale.set(0.07, 0.07, 0.07);
-		bloom.position.set(10.35, 1.02, -1.62);
-		scene.add(bloom);
-
-		const chart = mesh(
-			box,
-			keepMat(
-				new THREE.MeshStandardMaterial({
-					map: canvasTex(160, 160, (ctx) => {
-						ctx.fillStyle = '#1c1520';
-						ctx.fillRect(0, 0, 160, 160);
-						ctx.strokeStyle = '#e8d5a3';
-						ctx.lineWidth = 8;
-						ctx.strokeRect(6, 6, 148, 148);
-						ctx.fillStyle = '#93c5fd';
-						ctx.beginPath();
-						ctx.arc(80, 72, 22, 0, Math.PI * 2);
-						ctx.fill();
-						ctx.fillStyle = '#fde68a';
-						for (const [x, y] of [
-							[36, 40],
-							[118, 48],
-							[52, 118],
-							[124, 110],
-							[80, 28]
-						] as const) {
-							ctx.fillRect(x, y, 3, 3);
-						}
-					}),
-					roughness: 0.7
-				})
-			)
-		);
-		chart.scale.set(0.62, 0.62, 0.04);
-		chart.position.set(10.52, 1.95, -0.4);
-		chart.rotation.y = -Math.PI / 2;
-		scene.add(chart);
-
-		const lantern = mesh(cyl, brass);
-		lantern.scale.set(0.08, 0.04, 0.08);
-		lantern.position.set(TABLE.x, 3.05, 0.2);
-		scene.add(lantern);
-		const shade = mesh(
-			cyl,
-			keepMat(mat(0xfde68a, { emissive: 0xfbbf24, emissiveIntensity: 0.45, transparent: true, opacity: 0.7 }))
-		);
-		shade.scale.set(0.14, 0.18, 0.14);
-		shade.position.set(TABLE.x, 2.86, 0.2);
-		scene.add(shade);
-		const hang = mesh(cyl, brass);
-		hang.scale.set(0.012, 0.28, 0.012);
-		hang.position.set(TABLE.x, 3.18, 0.2);
-		scene.add(hang);
-
-		const cornerPot = mesh(cyl, keepMat(mat(0x9a3412, { roughness: 0.8 })));
-		cornerPot.scale.set(0.12, 0.16, 0.12);
-		cornerPot.position.set(6.85, 0.1, -1.9);
-		scene.add(cornerPot);
-		for (let i = 0; i < 4; i++) {
-			const leaf = mesh(ico, keepMat(mat(i % 2 ? 0x3f7a46 : 0x65a30d)));
-			const a = (i / 4) * Math.PI * 2;
-			leaf.position.set(6.85 + Math.cos(a) * 0.08, 0.28 + (i % 2) * 0.06, -1.9 + Math.sin(a) * 0.08);
-			leaf.scale.set(0.08, 0.1, 0.04);
-			leaf.rotation.set(0.3, a, 0.2);
-			scene.add(leaf);
-		}
+		return g;
 	}
-	collectionAlcove();
 
+	function ensureItem(item: ShelfItem) {
+		let g = itemMap.get(item.id);
+		if (!g) {
+			g = item.kind === 'book' ? bookMesh(item) : propMesh(item);
+			g.name = item.id;
+			g.userData.id = item.id;
+			g.traverse((obj: InstanceType<typeof THREE.Object3D>) => {
+				obj.userData.id = item.id;
+			});
+			itemMap.set(item.id, g);
+			itemRoot.add(g);
+		}
+		return g;
+	}
+
+	const ghost = new THREE.Group();
+	ghost.name = 'haunt-ghost';
 	const veil = mesh(
-		plane,
+		ico,
 		keepMat(
-			mat(0x4a1c28, {
+			mat(0xe8f4ff, {
 				transparent: true,
-				opacity: 0.0,
-				side: THREE.DoubleSide,
-				depthWrite: false
+				opacity: 0.52,
+				emissive: 0xc4b5fd,
+				emissiveIntensity: 0.85,
+				depthWrite: false,
+				roughness: 0.32
 			})
 		)
 	);
-	veil.position.set(0, 1.45, -1.55);
-	veil.scale.set(2.6, 1.7, 1);
-	scene.add(veil);
+	veil.scale.set(0.34, 0.48, 0.3);
+	veil.position.y = 0.22;
+	ghost.add(veil);
+	const core = new THREE.Mesh(
+		sphere,
+		keepMat(
+			new THREE.MeshBasicMaterial({
+				color: 0xf8fafc,
+				transparent: true,
+				opacity: 0.9
+			})
+		)
+	);
+	core.scale.setScalar(0.16);
+	core.position.y = 0.3;
+	ghost.add(core);
+	const brow = mesh(box, keepMat(mat(0x1e1b4b)));
+	brow.scale.set(0.2, 0.025, 0.04);
+	brow.position.set(0, 0.42, 0.14);
+	ghost.add(brow);
+	for (const x of [-0.09, 0.09]) {
+		const eye = mesh(sphere, keepMat(mat(0xf8fafc)));
+		eye.scale.setScalar(0.08);
+		eye.position.set(x, 0.34, 0.18);
+		ghost.add(eye);
+		const pupil = mesh(sphere, keepMat(mat(0x1e1b4b)));
+		pupil.scale.setScalar(0.038);
+		pupil.position.set(x, 0.32, 0.25);
+		ghost.add(pupil);
+	}
+	const mouth = mesh(torus, keepMat(mat(0x6d28d9, { roughness: 0.35 })));
+	mouth.scale.set(0.08, 0.05, 0.05);
+	mouth.position.set(0, 0.18, 0.2);
+	mouth.rotation.x = 1.15;
+	ghost.add(mouth);
+	const tears: G[] = [];
+	for (const x of [-0.1, 0.1]) {
+		const tear = new THREE.Group();
+		const drop = mesh(
+			cone,
+			keepMat(
+				mat(0x7dd3fc, {
+					transparent: true,
+					opacity: 0.92,
+					emissive: 0x38bdf8,
+					emissiveIntensity: 0.7
+				})
+			)
+		);
+		drop.scale.set(0.045, 0.14, 0.045);
+		drop.rotation.x = Math.PI;
+		tear.add(drop);
+		const bead = mesh(
+			sphereLo,
+			keepMat(mat(0xbae6fd, { emissive: 0x7dd3fc, emissiveIntensity: 0.4 }))
+		);
+		bead.scale.setScalar(0.035);
+		bead.position.y = -0.08;
+		tear.add(bead);
+		tear.position.set(x, 0.22, 0.22);
+		ghost.add(tear);
+		tears.push(tear);
+	}
+	ghost.visible = false;
+	scene.add(ghost);
 
 	const raycaster = new THREE.Raycaster();
 	const pointer = new THREE.Vector2();
-	const camPos = STUDY_CAM.clone();
-	const look = STUDY_LOOK.clone();
-	let lastRoom: StudyWorld['room'] = 'study';
-
+	const ndc = new THREE.Vector3();
 	let reduceMotion = false;
 	let lowDetail = false;
 
-	function applyDetail(world: StudyWorld) {
-		const next = world.lowDetail || reduceMotion;
+	function applyDetail(world: ShelfWorld) {
+		const next = world.lowDetail;
 		if (next === lowDetail) return;
 		lowDetail = next;
 		renderer.shadowMap.enabled = !lowDetail;
 		sun.castShadow = !lowDetail;
-		candle.visible = !lowDetail;
-		flame.intensity = lowDetail ? 0 : 4;
+		lamp.intensity = lowDetail ? 9 : 18;
+		windowG.visible = !lowDetail;
+		extras.visible = !lowDetail;
+		curtain.visible = !lowDetail;
+		inlay.visible = !lowDetail;
 	}
 
-	function sync(world: StudyWorld, opts?: { reducedMotion?: boolean }) {
+	function poseItem(world: ShelfWorld, item: ShelfItem, g: G) {
+		const home = slotWorld(item.row, item.slot);
+		const held = world.heldId === item.id;
+		const hauntNow = held && isHaunting(world);
+		g.userData.row = item.row;
+		g.userData.slot = item.slot;
+		g.position.set(
+			home.x,
+			home.y + (held ? (hauntNow ? 0.1 : 0.08) : 0),
+			home.z + (held ? 0.42 : item.kind === 'book' ? 0.04 : 0)
+		);
+		g.scale.setScalar(held ? 1.08 : 1);
+		g.rotation.y = held ? 0.22 : item.kind === 'book' && item.slot % 5 === 1 ? 0.16 : 0;
+		g.rotation.z = held || item.kind !== 'book' ? 0 : (item.tone - 0.5) * 0.02;
+		g.visible = inLod(item, lowDetail) || item.id === world.hauntId || item.id === world.heldId;
+	}
+
+	function poseGhost(world: ShelfWorld) {
+		const haunt = findItem(world, world.hauntId);
+		if (!haunt || !isHaunting(world)) {
+			ghost.visible = false;
+			ghostLight.intensity = 0;
+			return;
+		}
+		ghost.visible = true;
+		const g = itemMap.get(haunt.id);
+		const base = g ? g.position : new THREE.Vector3();
+		const u = hauntProgress(world);
+		let yOff = 0.16;
+		let zOff = 0.32;
+		let scale = 1;
+		if (world.phase === 'emerge') {
+			yOff = 0.04 + u * 0.14;
+			zOff = 0.08 + u * 0.3;
+			scale = 0.28 + u * 0.78;
+		} else if (world.phase === 'retreat') {
+			yOff = 0.18 - u * 0.14;
+			zOff = 0.38 - u * 0.3;
+			scale = 1.06 - u * 0.9;
+		} else {
+			yOff = 0.18;
+			zOff = 0.38;
+			scale = 1.06;
+		}
+		ghost.position.set(base.x, Math.min(2.08, Math.max(0.62, base.y + yOff)), base.z + zOff);
+		ghost.scale.setScalar(Math.max(0.1, scale));
+		ghost.rotation.set(0, 0, 0);
+		const cry = world.phase === 'cry' || world.phase === 'sorry';
+		tears.forEach((tear, i) => {
+			tear.visible = cry;
+			const fall = cry ? (world.t * 0.0024 + i * 0.14) % 0.26 : 0;
+			tear.position.set(i === 0 ? -0.1 : 0.1, 0.12 - fall, 0.24);
+			tear.scale.setScalar(cry ? 1.2 : 0.2);
+		});
+		mouth.scale.set(0.08, cry ? 0.09 : world.phase === 'face' ? 0.04 : 0.05, 0.05);
+		brow.rotation.z = cry ? 0.18 : -0.08;
+		ghostLight.position.copy(ghost.position);
+		ghostLight.intensity = reduceMotion ? 1.6 : 2.8;
+	}
+
+	function sync(world: ShelfWorld, opts?: { reducedMotion?: boolean }) {
 		if (opts?.reducedMotion != null) reduceMotion = opts.reducedMotion;
 		applyDetail(world);
-		const n = world.slots.length;
-		for (let i = 0; i < slotMeshes.length; i++) {
-			const plate = slotMeshes[i]!;
-			if (i >= n) {
-				plate.visible = false;
-				continue;
-			}
-			const p = slotWorld(i, n);
-			plate.visible = world.room === 'study';
-			plate.position.set(p.x, p.y - 0.12, p.z);
-			const matl = plate.material as InstanceType<typeof THREE.MeshStandardMaterial>;
-			matl.emissiveIntensity = world.hintSlot === i || world.focus === i ? 0.45 : 0.08;
-		}
-		for (const [kind, group] of studyProps) {
-			const slot = world.slots.indexOf(kind);
-			const used = slot >= 0 || world.held === kind;
-			group.visible = world.room === 'study' && (used || world.inspecting === kind);
-			if (!group.visible) continue;
-			if (world.inspecting === kind) {
-				const cam = world.room === 'study' ? STUDY_CAM : ROOM_CAM;
-				group.position.set(cam.x + 0.15, 1.35, cam.z - 1.15);
-				group.rotation.set(world.inspectPitch, world.inspectYaw, 0);
-				group.scale.setScalar(1.35);
-			} else if (world.held === kind) {
-				group.position.set(0.15, 1.55, -1.15);
-				group.rotation.y = world.t / 400;
-				group.scale.setScalar(1.1);
-			} else if (slot >= 0) {
-				const p = slotWorld(slot, n);
-				group.position.set(p.x, p.y, p.z);
-				group.rotation.set(0, 0, 0);
-				group.scale.setScalar(1);
-			}
-		}
-		for (const [kind, group] of roomProps) {
-			const put = world.placements.find((p) => p.kind === kind);
-			group.visible = world.room === 'collection' && !!put;
-			if (!put || !group.visible) continue;
-			if (world.inspecting === kind) {
-				group.position.set(ROOM_CAM.x + 0.1, 1.32, ROOM_CAM.z - 1.2);
-				group.rotation.set(world.inspectPitch, world.inspectYaw, 0);
-				group.scale.setScalar(1.4);
-			} else {
-				group.position.set(TABLE.x + put.x, TABLE.y + 0.18, TABLE.z + put.z);
-				group.rotation.y = put.yaw;
-				group.scale.setScalar(1);
-			}
-		}
-		const veilMat = veil.material as InstanceType<typeof THREE.MeshStandardMaterial>;
-		if (world.phase === 'veil' && world.room === 'study') {
-			veil.visible = true;
-			veilMat.opacity = reduceMotion ? 0.82 : Math.min(0.88, world.veilT / 180);
-			veil.position.y = reduceMotion ? 1.45 : 2.2 - Math.min(1, world.veilT / 400) * 0.75;
-		} else {
-			veilMat.opacity = 0;
-			veil.visible = false;
-		}
-		const wantCam = world.room === 'collection' ? ROOM_CAM : STUDY_CAM;
-		const wantLook = world.room === 'collection' ? ROOM_LOOK : STUDY_LOOK;
-		if (reduceMotion || world.room !== lastRoom) {
-			camPos.copy(wantCam);
-			look.copy(wantLook);
-			camera.position.copy(wantCam);
-		} else {
-			camPos.lerp(wantCam, 0.08);
-			look.lerp(wantLook, 0.08);
-			camera.position.copy(camPos);
-		}
-		lastRoom = world.room;
-		camera.lookAt(look);
-		lamp.intensity = 20 + Math.sin(world.t / 260) * (reduceMotion ? 0 : 1.5);
+		for (const item of world.items) poseItem(world, item, ensureItem(item));
+		poseGhost(world);
 	}
 
-	function render(now: number) {
-		if (!reduceMotion) {
-			flame.intensity = 3.4 + Math.sin(now / 140) * 0.8;
-			hearth.intensity = 14 + Math.sin(now / 220) * 2;
-		}
-		renderer.render(scene, camera);
-	}
-
-	function setPointer(clientX: number, clientY: number) {
+	function hit(clientX: number, clientY: number, ignoreId?: string | null) {
 		const rect = canvas.getBoundingClientRect();
-		if (rect.width === 0 || rect.height === 0) return false;
+		if (rect.width < 1 || rect.height < 1) return null;
 		pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
 		pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 		raycaster.setFromCamera(pointer, camera);
-		return true;
-	}
-
-	function hit(clientX: number, clientY: number) {
-		if (!setPointer(clientX, clientY)) return null;
-		const hits = raycaster.intersectObjects([...pickables, ...slotMeshes], false);
-		for (const h of hits) {
-			const kind = h.object.userData.kind as PropKind | undefined;
-			if (kind && PROP_INFO[kind]) return { kind };
-			if (typeof h.object.userData.slot === 'number') return { slot: h.object.userData.slot };
-			if (h.object.userData.table) {
-				return { table: { x: h.point.x - TABLE.x, z: h.point.z - TABLE.z } };
+		const itemHits = raycaster
+			.intersectObjects(itemRoot.children, true)
+			.filter((h: { object: InstanceType<typeof THREE.Object3D> }) => {
+				if (!shown(h.object)) return false;
+				const id = String(h.object.userData.id ?? '');
+				return !ignoreId || id !== ignoreId;
+			});
+		if (itemHits[0]) {
+			const id = String(itemHits[0].object.userData.id ?? '');
+			if (id) {
+				const g = itemMap.get(id);
+				return {
+					id,
+					row: Number(g?.userData.row),
+					slot: Number(g?.userData.slot)
+				};
 			}
+		}
+		const pads = raycaster.intersectObjects(slotPads, false);
+		if (pads[0]) {
+			return {
+				row: Number(pads[0].object.userData.row),
+				slot: Number(pads[0].object.userData.slot)
+			};
 		}
 		return null;
 	}
 
+	function toCanvas(vec: InstanceType<typeof THREE.Vector3>) {
+		ndc.copy(vec);
+		ndc.project(camera);
+		const rect = canvas.getBoundingClientRect();
+		return {
+			x: ((ndc.x + 1) / 2) * rect.width,
+			y: ((-ndc.y + 1) / 2) * rect.height
+		};
+	}
+
+	function project(id: string) {
+		const g = itemMap.get(id);
+		if (!g) return null;
+		return toCanvas(g.position);
+	}
+
+	function projectGhost() {
+		if (!ghost.visible) return null;
+		return toCanvas(ghost.position);
+	}
+
+	function render(now: number) {
+		const t = now / 1000;
+		if (!reduceMotion && ghost.visible) {
+			veil.rotation.y = t * 1.35;
+			veil.position.y = 0.22 + Math.sin(t * 3.1) * 0.02;
+		}
+		renderer.render(scene, camera);
+	}
+
 	function resize() {
-		const parent = canvas.parentElement ?? canvas;
-		const w = Math.max(1, parent.clientWidth);
-		const h = Math.max(1, parent.clientHeight);
-		camera.aspect = w / h;
-		camera.updateProjectionMatrix();
-		const narrow = w < 500 || h < 700;
-		const cap = lowDetail || narrow ? 1 : 1.5;
-		renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap));
+		const w = canvas.clientWidth || 1;
+		const h = canvas.clientHeight || 1;
+		renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
 		renderer.setSize(w, h, false);
+		camera.aspect = w / h;
+		if (camera.aspect < 0.9) {
+			camera.fov = 50;
+			camera.position.set(0.08, 1.58, 4.35);
+		} else {
+			camera.fov = 42;
+			camera.position.set(0.12, 1.52, 3.28);
+		}
+		camera.lookAt(0, 1.38, -1.7);
+		camera.updateProjectionMatrix();
 	}
 
 	function dispose() {
 		renderer.dispose();
 		for (const g of geos) g.dispose();
 		for (const m of mats) m.dispose();
-		studyProps.clear();
-		roomProps.clear();
 	}
 
 	resize();
-	return { sync, render, resize, dispose, hit };
+	return { sync, render, resize, dispose, hit, project, projectGhost };
 }

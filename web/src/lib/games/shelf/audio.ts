@@ -58,23 +58,29 @@ export function setShelfMuted(muted: boolean) {
 	graph.master.gain.value = muted ? 0 : 0.15;
 }
 
-export function chimeShelf(ok: boolean) {
+function tone(freqFrom: number, freqTo: number, dur: number, peak: number) {
 	if (!graph || graph.master.gain.value === 0) return;
 	const { ctx, master } = graph;
 	const osc = ctx.createOscillator();
 	const gain = ctx.createGain();
 	osc.type = 'sine';
-	const a = ok ? 523 : 220;
-	const b = ok ? 784 : 196;
-	osc.frequency.setValueAtTime(a, ctx.currentTime);
-	osc.frequency.exponentialRampToValueAtTime(b, ctx.currentTime + 0.16);
+	osc.frequency.setValueAtTime(freqFrom, ctx.currentTime);
+	osc.frequency.exponentialRampToValueAtTime(freqTo, ctx.currentTime + dur);
 	gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-	gain.gain.exponentialRampToValueAtTime(ok ? 0.08 : 0.04, ctx.currentTime + 0.02);
-	gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.42);
+	gain.gain.exponentialRampToValueAtTime(peak, ctx.currentTime + 0.03);
+	gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
 	osc.connect(gain);
 	gain.connect(master);
 	osc.start();
-	osc.stop(ctx.currentTime + 0.45);
+	osc.stop(ctx.currentTime + dur + 0.02);
+}
+
+export function popShelf() {
+	tone(420, 880, 0.22, 0.05);
+}
+
+export function whimperShelf() {
+	tone(380, 220, 0.55, 0.06);
 }
 
 export function stopShelfAudio() {
