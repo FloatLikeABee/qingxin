@@ -79,6 +79,11 @@
 		<div class="haul-wheel b"></div>
 		<div class="haul-wheel c"></div>
 		<div class="haul-hill"></div>
+	{:else if cover.motif === 'orlamp'}
+		<div class="or-lamp"></div>
+		<div class="or-cone"></div>
+		<div class="or-table"></div>
+		<div class="or-drape"></div>
 	{:else}
 		<div class="mini-shelf s1"></div>
 		<div class="mini-shelf s2"></div>
@@ -515,6 +520,52 @@
 		height: 22%;
 		border-radius: 50% 50% 0 0;
 		background: color-mix(in srgb, var(--qx-accent-teal) 55%, var(--cover-ground));
+	}
+
+	.or-lamp {
+		position: absolute;
+		left: 38%;
+		top: 10%;
+		width: 24%;
+		height: 12%;
+		border-radius: 999px;
+		background: color-mix(in srgb, white 70%, var(--cover-accent));
+		box-shadow: 0 0.35rem 0 #94a3b8;
+	}
+
+	.or-cone {
+		position: absolute;
+		left: 28%;
+		top: 20%;
+		width: 44%;
+		height: 48%;
+		background: linear-gradient(
+			180deg,
+			color-mix(in srgb, var(--cover-accent) 55%, white),
+			transparent 80%
+		);
+		clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+		opacity: 0.7;
+	}
+
+	.or-table {
+		position: absolute;
+		left: 16%;
+		right: 16%;
+		bottom: 16%;
+		height: 22%;
+		border-radius: 0.4rem;
+		background: var(--cover-ground);
+	}
+
+	.or-drape {
+		position: absolute;
+		left: 22%;
+		right: 22%;
+		bottom: 28%;
+		height: 10%;
+		border-radius: 0.2rem;
+		background: color-mix(in srgb, var(--cover-ground) 70%, white);
 	}
 
 	.mini-shelf {

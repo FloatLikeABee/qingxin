@@ -3,7 +3,16 @@ export const GAME_CATEGORIES = ['全部', '经营', '休闲', '益智', '节奏'
 export type GameCategory = Exclude<(typeof GAME_CATEGORIES)[number], '全部'>;
 export type GameStatus = 'playable' | 'coming';
 export type CoverMotif =
-	'store' | 'garden' | 'jet' | 'wave' | 'cloud' | 'shelf' | 'office' | 'truck' | 'ledger';
+	| 'store'
+	| 'garden'
+	| 'jet'
+	| 'wave'
+	| 'cloud'
+	| 'shelf'
+	| 'office'
+	| 'truck'
+	| 'ledger'
+	| 'orlamp';
 
 export const GAME_ALIASES: Record<string, string> = {
 	'corner-florist': 'window-garden',
@@ -197,6 +206,24 @@ export const GAMES: GameInfo[] = [
 			ground: '#E2E8F0',
 			accent: '#3B82F6',
 			motif: 'office'
+		}
+	},
+	{
+		id: 'operation',
+		title: '手术',
+		englishTitle: 'Operation',
+		summary: '在四个虚构解剖区域里切开、止血、缝合。写实画面含血液，不是医学训练。',
+		about:
+			'内容警告：本游戏含写实手术画面、伤口与血液，仅供娱乐。这不是医学训练，也不能用于真实诊疗。数据与解剖均为虚构。先阅读警告并点「我已知晓，进入手术」，再从身体图选择前臂、膝、口腔或腹。其他部位显示未开放，并不是全身解剖。用刀、镊、吸引、冲洗、纱布、缝针等在术野里操作，走过准备、显露、操作、止血/冲洗、关闭。目录封面只有灯和铺单，没有伤口。',
+		category: '益智',
+		tags: ['手术', '器械', '止血'],
+		status: 'playable',
+		playCta: '进入手术台',
+		cover: {
+			sky: '#D7EEE4',
+			ground: '#1F6B4A',
+			accent: '#F4E27A',
+			motif: 'orlamp'
 		}
 	}
 ];

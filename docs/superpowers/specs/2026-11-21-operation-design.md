@@ -1,8 +1,8 @@
-# 手术 (proposal — visual lane R locked; do not implement yet)
+# 手术 (implementing — visual lane R locked; t275u approve-all)
 
 Independent medical-**operation game**. Not a quiz, not a static anatomy diagram, not clinical training, not a cartoon toy.
 
-**Status:** Ge locked **visual lane R** (realistic and graphic, including blood) on 2026-11-21. That does **not** approve implementation of 手术, 重卡, 年报, or any pending store/tide/cloud/shelf redesign. Do not add a catalog entry or play route until Ge approves **this amended loop**.
+**Status:** Ge locked **visual lane R** (realistic and graphic, including blood) on 2026-11-21. t275u `'approve all'` (Nov 21 22:59 Asia/Shanghai) authorizes this amended loop. Catalog id `operation` and play route are in scope for this batch.
 
 ## Player fantasy
 
