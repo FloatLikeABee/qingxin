@@ -19,13 +19,13 @@
 	} = $props();
 
 	const classes =
-		'flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition hover:bg-[var(--qx-surface)]';
+		'flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition hover:bg-[color-mix(in_oklab,var(--qx-card)_42%,transparent)]';
 </script>
 
 {#if href}
 	<a {href} class={classes}>
 		<span
-			class="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--qx-surface)] text-[var(--qx-primary)]"
+			class="qx-chip flex h-11 w-11 items-center justify-center rounded-2xl text-[var(--qx-primary)]"
 		>
 			<Icon name={icon as 'home'} />
 		</span>
@@ -44,7 +44,7 @@
 {:else}
 	<button type="button" class={classes} {onclick}>
 		<span
-			class="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--qx-surface)] text-[var(--qx-primary)]"
+			class="qx-chip flex h-11 w-11 items-center justify-center rounded-2xl text-[var(--qx-primary)]"
 		>
 			<Icon name={icon as 'home'} />
 		</span>

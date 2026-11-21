@@ -56,7 +56,7 @@
 					? kind === 'expense'
 						? 'bg-[var(--qx-expense)] text-white'
 						: 'bg-[var(--qx-income)] text-white'
-					: 'bg-[var(--qx-surface)]'}"
+					: 'qx-chip'}"
 				onclick={() => (entry = createEntry(kind === 'income' ? 'income' : 'expense'))}
 			>
 				{kind === 'expense' ? '支出' : '收入'}
@@ -88,8 +88,7 @@
 			{#each categories as category (category.id)}
 				<button
 					type="button"
-					class="min-h-14 rounded-2xl bg-[var(--qx-surface)] text-sm {entry.category?.id ===
-					category.id
+					class="qx-chip min-h-14 rounded-2xl text-sm {entry.category?.id === category.id
 						? 'ring-2 ring-[var(--qx-primary)]'
 						: ''}"
 					onclick={() => (entry = selectCategory(entry, category))}

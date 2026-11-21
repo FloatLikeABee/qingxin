@@ -112,7 +112,7 @@
 		</div>
 		<ul class="mt-4 space-y-3">
 			{#each store.recordsFor(pet.id) as item (item.id)}
-				<li class="rounded-2xl bg-[var(--qx-surface)] px-4 py-3">
+				<li class="qx-glass-field rounded-2xl px-4 py-3">
 					<p class="font-medium">{RECORD_LABEL[item.type]} · {item.date}</p>
 					{#if item.nextDueDate}
 						<p class="text-sm text-[var(--qx-muted)]">下次 {item.nextDueDate}</p>

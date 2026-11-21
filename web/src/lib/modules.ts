@@ -8,11 +8,11 @@ export interface ModuleInfo {
 
 export const MODULES: ModuleInfo[] = [
 	{
-		slug: 'create',
-		name: '内容创作',
-		summary: '写成可发出去的草稿，再用系统分享或复制发到小红书、微信、抖音。',
-		accent: '#38BDF8',
-		icon: 'pen'
+		slug: 'shangban',
+		name: '上班',
+		summary: '走进五层大厦，自己选岗位，做分拣、谈判、维修和经营决定。',
+		accent: '#3B82F6',
+		icon: 'briefcase'
 	},
 	{
 		slug: 'secrets',
@@ -43,18 +43,11 @@ export const MODULES: ModuleInfo[] = [
 		icon: 'heart'
 	},
 	{
-		slug: 'local',
-		name: '本地生活',
-		summary: '附近服务与社区信息，先看再决定。',
-		accent: '#F472B6',
-		icon: 'map'
-	},
-	{
-		slug: 'ai',
-		name: 'AI效率工具箱',
-		summary: '草稿、摘要、对照检查，效率留给你自己。',
-		accent: '#818CF8',
-		icon: 'spark'
+		slug: 'jimutai',
+		name: '积木台',
+		summary: '五块小积木，放到桌上拼在一起。没有输赢，拼完再给五块。',
+		accent: '#60A5FA',
+		icon: 'blocks'
 	},
 	{
 		slug: 'pet',
@@ -69,20 +62,6 @@ export const MODULES: ModuleInfo[] = [
 		summary: '睡眠、饮水与步数记录，不是诊断。',
 		accent: '#2DD4BF',
 		icon: 'pulse'
-	},
-	{
-		slug: 'study',
-		name: '学习打卡',
-		summary: '专注一块、打卡一天，看见自己的连续。',
-		accent: '#A78BFA',
-		icon: 'book'
-	},
-	{
-		slug: 'hustle',
-		name: '求职副业',
-		summary: '机会清单与进度板，信息展示，不是职场咨询。',
-		accent: '#FBBF24',
-		icon: 'briefcase'
 	},
 	{
 		slug: 'games',

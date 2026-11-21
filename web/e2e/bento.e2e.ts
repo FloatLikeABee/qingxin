@@ -45,6 +45,9 @@ test('password toggle reveals and hides the login field', async ({ page }) => {
 	});
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/login', { waitUntil: 'networkidle' });
+	await expect(page.locator('[data-qx-login-mode="mock"]')).toBeVisible();
+	await expect(page.getByText(/演示账号 demo@qingxin\.app/)).toBeVisible();
+	await expect(page.getByLabel('邮箱')).toHaveValue('demo@qingxin.app');
 	const field = page.locator('input[autocomplete="current-password"]');
 	await expect(field).toHaveAttribute('type', 'password');
 	await page.getByRole('button', { name: '显示密码' }).click();
@@ -79,7 +82,9 @@ test('module cards keep DOM focus order at 1280', async ({ page }) => {
 	for (let i = 1; i < hrefs.length; i++) {
 		await page.keyboard.press('Tab');
 		focused.push(
-			await page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute('href') ?? '')
+			await page.evaluate(
+				() => (document.activeElement as HTMLElement | null)?.getAttribute('href') ?? ''
+			)
 		);
 	}
 	expect(focused).toEqual(hrefs);

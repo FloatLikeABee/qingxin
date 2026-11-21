@@ -141,9 +141,10 @@
 					{#each modes as item (item.id)}
 						<button
 							type="button"
-							class="min-h-16 rounded-2xl px-3 py-3 text-left ring-1 transition {mode === item.id
-								? 'bg-[color-mix(in_srgb,var(--qx-primary)_14%,transparent)] ring-[var(--qx-primary)]'
-								: 'bg-[var(--qx-surface)] ring-transparent'}"
+							class="qx-chip min-h-16 rounded-2xl px-3 py-3 text-left ring-1 transition {mode ===
+							item.id
+								? 'ring-[var(--qx-primary)]'
+								: 'ring-transparent'}"
 							onclick={() => choose(item.id)}
 						>
 							<span class="block text-base font-medium">{item.label}</span>

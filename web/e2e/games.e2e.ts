@@ -103,12 +103,15 @@ test('play mounts without a session', async ({ page }) => {
 	await expect(page.getByText('客人还在店门口等着。')).toBeVisible();
 });
 
-test('coming soon game cannot start a session', async ({ page }) => {
+test('memory shelf opens from catalog into play chrome', async ({ page }) => {
 	await boot(page);
-	await page.goto('/modules/games/tide-breath', { waitUntil: 'networkidle' });
-	await expect(page.getByRole('heading', { name: '潮汐呼吸' })).toBeVisible();
-	await expect(page.getByRole('button', { name: '即将到来' })).toBeDisabled();
-	await expect(page.locator('canvas')).toHaveCount(0);
+	await page.goto('/modules/games/memory-shelf', { waitUntil: 'networkidle' });
+	await expect(page.getByRole('heading', { name: '记忆货架' })).toBeVisible();
+	await expect(page.getByRole('link', { name: '开始整理' })).toBeVisible();
+	await page.getByRole('link', { name: '开始整理' }).click();
+	await expect(page).toHaveURL(/\/modules\/games\/memory-shelf\/play/);
+	await expect(page.locator('canvas[aria-label="记忆货架书房"]')).toBeVisible();
+	await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 });
 
 test('garden opens from catalog into play chrome', async ({ page }) => {
@@ -119,7 +122,9 @@ test('garden opens from catalog into play chrome', async ({ page }) => {
 	await expect(garden.getByText('即将到来')).toHaveCount(0);
 	await garden.click();
 	await expect(page.getByRole('heading', { name: '窗前庭园', level: 1 })).toBeVisible();
-	await expect(page.getByText('番茄、黄瓜、茄子、辣椒、胡萝卜、萝卜、白菜、生菜、菠菜、小葱')).toBeVisible();
+	await expect(
+		page.getByText('番茄、黄瓜、茄子、辣椒、胡萝卜、萝卜、白菜、生菜、菠菜、小葱')
+	).toBeVisible();
 	await page.getByRole('link', { name: '开始种植' }).click();
 	await expect(page).toHaveURL(/\/modules\/games\/window-garden\/play/);
 	await expect(page.getByRole('link', { name: '← 返回目录' })).toBeVisible();
@@ -144,7 +149,18 @@ test('garden plants first, second, and last pots from scene taps and they grow i
 	await waitGarden(page);
 	await gardenPause(page, true);
 	await expect(page.locator('[data-seed-browser]')).toBeVisible();
-	for (const name of ['番茄', '黄瓜', '茄子', '辣椒', '胡萝卜', '萝卜', '白菜', '生菜', '菠菜', '小葱']) {
+	for (const name of [
+		'番茄',
+		'黄瓜',
+		'茄子',
+		'辣椒',
+		'胡萝卜',
+		'萝卜',
+		'白菜',
+		'生菜',
+		'菠菜',
+		'小葱'
+	]) {
 		await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
 	}
 	await plantOnPot(page, 0, '番茄');
@@ -161,7 +177,9 @@ test('garden plants first, second, and last pots from scene taps and they grow i
 	expect(grown.beds[1]?.stage).not.toBe('seed');
 	expect(grown.beds[11]?.stage).not.toBe('seed');
 	expect(page.locator('canvas')).toHaveAttribute('data-stages', /^(?!seed,seed).+/);
-	const stagesAfter20 = await page.locator('canvas[aria-label="窗前庭园"]').getAttribute('data-stages');
+	const stagesAfter20 = await page
+		.locator('canvas[aria-label="窗前庭园"]')
+		.getAttribute('data-stages');
 	expect(stagesAfter20?.split(',')[0]).not.toBe('seed');
 	expect(stagesAfter20?.split(',')[1]).not.toBe('seed');
 	expect(stagesAfter20?.split(',')[11]).not.toBe('seed');
@@ -173,7 +191,9 @@ test('garden plants first, second, and last pots from scene taps and they grow i
 	expect(ripe.beds[0]?.stage).toBe('ripe');
 	expect(ripe.beds[1]?.stage).toBe('ripe');
 	expect(ripe.beds[11]?.stage).toBe('ripe');
-	const stagesRipe = await page.locator('canvas[aria-label="窗前庭园"]').getAttribute('data-stages');
+	const stagesRipe = await page
+		.locator('canvas[aria-label="窗前庭园"]')
+		.getAttribute('data-stages');
 	expect(stagesRipe?.split(',')[1]).toBe('ripe');
 	await page.evaluate(() => sessionStorage.setItem('qingxin.keepGarden', '1'));
 	await page.reload({ waitUntil: 'networkidle' });
@@ -268,7 +288,7 @@ test('kit lives under 我的, not in tab bar', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/settings', { waitUntil: 'networkidle' });
 	await expect(page.getByRole('link', { name: /设计系统/ })).toBeVisible();
-	const nav = page.locator('nav.fixed');
+	const nav = page.locator('[data-qx-topbar]');
 	await expect(nav.getByText('组件')).toHaveCount(0);
 	await expect(nav.getByText('我的')).toBeVisible();
 });

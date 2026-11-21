@@ -15,14 +15,14 @@
 </script>
 
 <section
-	class="qx-study mx-auto min-w-0 max-w-5xl space-y-5 text-[length:var(--qx-font-size,1rem)] text-[var(--qx-text)]"
+	class="qx-study mx-auto max-w-5xl min-w-0 space-y-5 text-[length:var(--qx-font-size,1rem)] text-[var(--qx-text)]"
 >
 	<a href="/modules" class={LINK_CLASS}>← 返回模块中心</a>
 	<nav class="flex flex-wrap gap-2">
 		{#each links as link (link.href)}
 			<a
 				href={link.href}
-				class="inline-flex min-h-11 items-center rounded-2xl bg-[var(--qx-surface)] px-4 text-base"
+				class="qx-chip inline-flex min-h-11 items-center rounded-2xl px-4 text-base"
 			>
 				{link.label}
 			</a>

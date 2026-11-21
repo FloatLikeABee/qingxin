@@ -47,7 +47,7 @@
 
 <dialog
 	bind:this={dialog}
-	class="qx-modal w-[min(92vw,440px)] rounded-[28px] border-0 bg-[var(--qx-card)] p-0 text-[var(--qx-text)] shadow-2xl backdrop:bg-slate-950/45 backdrop:backdrop-blur-sm"
+	class="qx-modal qx-glass w-[min(92vw,440px)] rounded-[28px] border-0 p-0 text-[var(--qx-text)] backdrop:bg-slate-950/55 backdrop:backdrop-blur-sm"
 	closedby={dismissible ? 'any' : 'none'}
 	aria-labelledby="qx-modal-title"
 	onclose={() => (open = false)}
@@ -57,7 +57,12 @@
 		<div class="mb-4 flex items-start justify-between gap-3">
 			<h2 id="qx-modal-title" class="text-xl font-semibold">{title}</h2>
 			{#if dismissible}
-				<Button variant="ghost" class="min-h-11 w-11 px-0" onclick={() => (open = false)} aria-label="关闭">
+				<Button
+					variant="ghost"
+					class="min-h-11 w-11 px-0"
+					onclick={() => (open = false)}
+					aria-label="关闭"
+				>
 					<Icon name="close" />
 				</Button>
 			{/if}

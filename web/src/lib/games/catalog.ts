@@ -93,12 +93,14 @@ export const GAMES: GameInfo[] = [
 	{
 		id: 'tide-breath',
 		title: '潮汐呼吸',
-		summary: '跟着海面一起起落，把呼吸放慢。',
-		about: '节奏还没写进拍号。先占一个位置。',
+		englishTitle: 'Tide Breath',
+		summary: '夜海里按住升起、松开送浪，引发光的海物去捡星光。',
+		about:
+			'一片会呼吸的夜海。按住，潮面升起；松开，发光的波纹送出去。点海面或用方向键引导水母、灯鱼和蝠鲼去捡散落的星光，星光会唤醒海底的珊瑚园。没有计时，也不必憋气。这是一则海的散步，不是呼吸治疗。',
 		category: '节奏',
-		tags: ['呼吸', '海'],
-		status: 'coming',
-		playCta: '即将到来',
+		tags: ['呼吸', '海', '星光'],
+		status: 'playable',
+		playCta: '开始入海',
 		cover: {
 			sky: '#7DD3FC',
 			ground: '#14B8A6',
@@ -109,12 +111,14 @@ export const GAMES: GameInfo[] = [
 	{
 		id: 'cloud-walk',
 		title: '云上散步',
-		summary: '没有任务。沿一条淡路走走停停。',
-		about: '休闲散步，路还没铺完。',
+		englishTitle: 'Cloud Walk',
+		summary: '在浮岛间散步、乘风、踩云，收集天气碎片，养成自己的云圃。',
+		about:
+			'一片很大的天空。走上浮岛，风会把你送到下一座岛，踩到云会弹起来。四处走走会遇见小云物。捡到阳光、雨丝、微风和夜色碎片，天色会跟着变，家里的云圃也会长出一株。没有计时，也没有分数。这是一则在云上的散步。',
 		category: '休闲',
-		tags: ['散步', '云'],
-		status: 'coming',
-		playCta: '即将到来',
+		tags: ['散步', '云', '天气'],
+		status: 'playable',
+		playCta: '开始散步',
 		cover: {
 			sky: '#DBEAFE',
 			ground: '#F8FAFC',
@@ -125,12 +129,14 @@ export const GAMES: GameInfo[] = [
 	{
 		id: 'memory-shelf',
 		title: '记忆货架',
-		summary: '货架闪一下，凭记忆把缺的补上。',
-		about: '益智补货，规则还在写。',
+		englishTitle: 'Memory Shelf',
+		summary: '拿起物件端详，记住货架的改动，解开更绕的架子，再布置自己的收藏室。',
+		about:
+			'一间温暖的魔法书房。货架上的地球仪、茶杯、蛾标本都可以拿起来转着看。看清楚以后，布帘落下，东西会换位置。凭记忆把它们放回去。架子会越来越绕，解开的物件可以拿到收藏室里自由摆放。没有计时，也没有分数。放错了再拿起来就好。',
 		category: '益智',
-		tags: ['记忆', '货架'],
-		status: 'coming',
-		playCta: '即将到来',
+		tags: ['记忆', '货架', '书房'],
+		status: 'playable',
+		playCta: '开始整理',
 		cover: {
 			sky: '#FEF3C7',
 			ground: '#F1E6D0',

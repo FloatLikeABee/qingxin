@@ -49,12 +49,14 @@ test('secrets mailbox requires consent and shows a letter board', async ({ page 
 	await expect(page.getByRole('button', { name: /你写的/ })).toBeVisible();
 });
 
-test('primary nav dropped 组件 and added 内容', async ({ page }) => {
+test('primary nav dropped 组件 and added 上班', async ({ page }) => {
 	await boot(page);
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/');
-	const nav = page.locator('nav.fixed');
-	await expect(nav.getByText('内容')).toBeVisible();
+	const nav = page.locator('[data-qx-topbar]');
+	await expect(nav.getByText('模块中心')).toBeVisible();
+	await expect(nav.getByText('内容')).toHaveCount(0);
 	await expect(nav.getByText('组件')).toHaveCount(0);
-	await expect(page.getByRole('heading', { name: '秘密' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: '上班' }).first()).toBeVisible();
+	await expect(page.getByRole('heading', { name: '秘密' }).first()).toBeVisible();
 });

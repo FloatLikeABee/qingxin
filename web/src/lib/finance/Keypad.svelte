@@ -8,7 +8,7 @@
 	{#each keys as key (key)}
 		<button
 			type="button"
-			class="min-h-14 rounded-2xl bg-[var(--qx-surface)] text-xl font-semibold"
+			class="qx-chip min-h-14 rounded-2xl text-xl font-semibold"
 			onclick={() => onkey(key)}
 		>
 			{key === 'back' ? '⌫' : key}

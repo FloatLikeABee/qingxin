@@ -9,7 +9,7 @@
 </script>
 
 <div
-	class="grid gap-1 rounded-2xl bg-[var(--qx-surface)] p-1"
+	class="qx-glass grid gap-1 rounded-2xl p-1"
 	role="tablist"
 	style="grid-template-columns: repeat({Math.min(Math.max(tabs.length, 1), 5)}, minmax(0, 1fr))"
 >

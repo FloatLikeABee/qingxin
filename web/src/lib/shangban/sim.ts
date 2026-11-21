@@ -1,0 +1,403 @@
+import {
+	clockHour as hourFromTick,
+	clockLabel as labelFromTick,
+	DAY_TICKS as DAY_LENGTH,
+	TICK_MS as TICK_LENGTH,
+	type SimSpeed
+} from './day';
+import {
+	elevatorOf,
+	FLOORS,
+	nearStation,
+	pathfind,
+	stationsOn,
+	standFor,
+	stationById
+} from './floors';
+import { dropActiveJob, tickJob } from './jobs';
+import { appendLog, snapshotDay, type DayLog } from './logs';
+import { tickStaff, type NpcActivity } from './npc';
+import { ROLES, type Collar, type FloorId, type RoleId } from './roles';
+import { generateTask, JOB_STATION, liveQueue, type SortBox, type WorkState } from './tasks';
+
+export const TICK_MS = TICK_LENGTH;
+export const DAY_TICKS = DAY_LENGTH;
+export const MAX_NPCS = 12;
+export const NPC_COUNT = 10;
+export const MAX_LIVE_TASKS = 3;
+export const MAX_TASK_HISTORY = 20;
+export const MAX_PACKAGES = 8;
+export const ELEVATOR_TICKS = 8;
+export const BREAK_TICKS = 40;
+export const OFFER_TTL = 180;
+export const MAX_STEP_MS = 250;
+export const MAX_STEPS_PER_FRAME = 8;
+export const DEFAULT_SPAWN_EVERY = 24;
+
+export interface Player {
+	roleId: RoleId;
+	floor: FloorId;
+	x: number;
+	z: number;
+	facing: number;
+	pay: number;
+	reputation: number;
+	carrying: string | null;
+	breakUntil: number;
+	elevatorTo: FloorId | null;
+	elevatorWait: number;
+	path: { x: number; z: number }[];
+}
+
+export interface Npc {
+	id: number;
+	floor: FloorId;
+	x: number;
+	z: number;
+	homeX: number;
+	homeZ: number;
+	phase: 'work' | 'break' | 'walk';
+	activity: NpcActivity;
+	wait: number;
+	path: { x: number; z: number }[];
+	hue: number;
+	look: Collar;
+}
+
+export interface World {
+	tick: number;
+	day: number;
+	dayClosed: boolean;
+	dayPayStart: number;
+	dayEvents: string[];
+	logs: DayLog[];
+	speed: SimSpeed;
+	notice: string;
+	recovered: boolean;
+	seed: number;
+	paused: boolean;
+	hidden: boolean;
+	accMs: number;
+	player: Player;
+	company: WorkState['company'];
+	tasks: WorkState['tasks'];
+	packages: SortBox[];
+	npcs: Npc[];
+	nextId: number;
+	lastSpawnAt: number;
+	spawnEvery: number;
+	mishapAt: number;
+	pendingStart: boolean;
+	rng: () => number;
+}
+
+export interface WorldOptions {
+	seed?: number;
+	spawnEvery?: number;
+}
+
+function mulberry32(seed: number): () => number {
+	let t = seed >>> 0;
+	return () => {
+		t += 0x6d2b79f5;
+		let n = t;
+		n = Math.imul(n ^ (n >>> 15), n | 1);
+		n ^= n + Math.imul(n ^ (n >>> 7), n | 61);
+		return ((n ^ (n >>> 14)) >>> 0) / 4294967296;
+	};
+}
+
+function dept() {
+	return { workload: 36, staff: 4, budget: 40 };
+}
+
+export function clockLabel(tick: number): string {
+	return labelFromTick(tick);
+}
+
+export function clockHour(tick: number): number {
+	return hourFromTick(tick);
+}
+
+function trimHistory(world: World) {
+	if (world.tasks.length <= MAX_TASK_HISTORY) return;
+	const live = world.tasks.filter((task) => task.status === 'offered' || task.status === 'active');
+	const failed = world.tasks.filter((task) => task.status === 'failed').slice(-4);
+	const rest = world.tasks.filter(
+		(task) => task.status !== 'offered' && task.status !== 'active' && task.status !== 'failed'
+	);
+	const room = Math.max(0, MAX_TASK_HISTORY - live.length - failed.length);
+	world.tasks = [...live, ...failed, ...rest.slice(-room)];
+}
+
+export function createWorld(options: WorldOptions = {}): World {
+	const seed = options.seed ?? 1;
+	const rng = mulberry32(seed);
+	const elevator = elevatorOf(1);
+	const world: World = {
+		tick: 0,
+		day: 1,
+		dayClosed: false,
+		dayPayStart: 0,
+		dayEvents: [],
+		logs: [],
+		speed: 1,
+		accMs: 0,
+		paused: false,
+		hidden: false,
+		seed,
+		notice: '选岗位，走进工位做手头的活。随时换岗。',
+		recovered: false,
+		player: {
+			roleId: 'courier',
+			floor: 1,
+			x: elevator.x + 1,
+			z: elevator.z,
+			facing: 0,
+			pay: 0,
+			reputation: 10,
+			carrying: null,
+			breakUntil: 0,
+			elevatorTo: null,
+			elevatorWait: 0,
+			path: []
+		},
+		company: {
+			cash: 480,
+			reputation: 52,
+			morale: 55,
+			departments: { 1: dept(), 2: dept(), 3: dept(), 4: dept(), 5: dept() }
+		},
+		tasks: [],
+		packages: [],
+		npcs: [],
+		nextId: 1,
+		lastSpawnAt: -999,
+		spawnEvery: options.spawnEvery ?? DEFAULT_SPAWN_EVERY,
+		mishapAt: -999,
+		pendingStart: false,
+		rng
+	};
+	world.npcs = seedNpcs(world);
+	spawnOffers(world);
+	return world;
+}
+
+function seedNpcs(world: World): Npc[] {
+	const npcs: Npc[] = [];
+	const looks: Collar[] = ['blue', 'white', 'specialist-blue', 'specialist-white', 'manager'];
+	for (const floor of FLOORS) {
+		const spots = stationsOn(floor.id).filter((station) => station.kind !== 'elevator');
+		for (let n = 0; n < 2; n++) {
+			const station = spots[n % spots.length]!;
+			const stand = standFor(station);
+			npcs.push({
+				id: world.nextId++,
+				floor: floor.id,
+				x: stand.x,
+				z: stand.z,
+				homeX: stand.x,
+				homeZ: stand.z,
+				phase: 'work',
+				activity: floor.id === 1 ? 'deliver' : 'type',
+				wait: 8 + n * 6,
+				path: [],
+				hue: world.rng(),
+				look: looks[(floor.id + n) % looks.length]!
+			});
+		}
+	}
+	return npcs.slice(0, NPC_COUNT);
+}
+
+export function spawnOffers(world: World) {
+	const live = liveQueue(world);
+	if (live.length >= MAX_LIVE_TASKS) return;
+	if (world.tick - world.lastSpawnAt < world.spawnEvery && world.tasks.length > 0) return;
+	const task = generateTask(world.player.roleId, world.rng, world.tick, world.nextId++);
+	world.tasks.push(task);
+	world.lastSpawnAt = world.tick;
+	if (task.payload.kind === 'sort') {
+		world.packages = [...world.packages, ...task.payload.boxes].slice(-MAX_PACKAGES);
+	}
+	trimHistory(world);
+}
+
+export function setPaused(world: World, paused: boolean) {
+	if (world.dayClosed && !paused) return;
+	world.paused = paused;
+}
+
+export function setSpeed(world: World, speed: SimSpeed) {
+	world.speed = speed === 2 || speed === 3 ? speed : 1;
+}
+
+export function setRole(world: World, roleId: RoleId, opts: { dropActive?: boolean } = {}) {
+	if (world.player.roleId === roleId) return false;
+	const next = ROLES.find((role) => role.id === roleId);
+	if (!next) return false;
+	const active = world.tasks.find(
+		(task) => task.status === 'active' && task.roleId === world.player.roleId
+	);
+	if (active && !opts.dropActive) {
+		world.notice = '手头的活还没交。先做完，或确认放下这单。';
+		return false;
+	}
+	if (active && opts.dropActive) dropActiveJob(world);
+	for (const task of world.tasks) {
+		if (task.status === 'offered' && task.roleId === world.player.roleId) task.status = 'expired';
+	}
+	world.player.carrying = null;
+	world.packages = [];
+	world.player.roleId = roleId;
+	world.lastSpawnAt = world.tick - world.spawnEvery;
+	world.notice = `换成${next.name}。去${next.floor}楼工位。电梯在左侧。`;
+	spawnOffers(world);
+	return true;
+}
+
+export function startBreak(world: World) {
+	world.player.breakUntil = world.tick + BREAK_TICKS;
+	world.notice = '歇一会儿。工位上的活还在。';
+}
+
+export function callElevator(world: World, floor: FloorId): boolean {
+	if (world.player.elevatorTo != null) return false;
+	if (floor === world.player.floor) {
+		world.notice = '已经在这层。';
+		return false;
+	}
+	const shaft = elevatorOf(world.player.floor);
+	if (!nearStation(world.player.floor, world.player.x, world.player.z, shaft, 1.5)) {
+		world.notice = '先走进电梯。';
+		return false;
+	}
+	world.player.elevatorTo = floor;
+	world.player.elevatorWait = ELEVATOR_TICKS;
+	world.player.path = [];
+	world.notice = `去${floor}楼。`;
+	return true;
+}
+
+function tickElevator(world: World) {
+	if (world.player.elevatorTo == null) return;
+	world.player.elevatorWait -= 1;
+	if (world.player.elevatorWait > 0) return;
+	const dest = world.player.elevatorTo;
+	const shaft = elevatorOf(dest);
+	world.player.floor = dest;
+	world.player.x = shaft.x + 1;
+	world.player.z = shaft.z;
+	world.player.elevatorTo = null;
+	world.player.elevatorWait = 0;
+	world.player.path = [];
+	world.notice = `到${dest}楼。`;
+	if (world.pendingStart) {
+		const station = stationById(JOB_STATION[world.player.roleId]);
+		if (station && station.floor === dest) {
+			const stand = standFor(station);
+			world.player.path = pathfind(
+				dest,
+				{ x: Math.round(world.player.x), z: Math.round(world.player.z) },
+				stand
+			);
+		}
+	}
+}
+
+function tickNpcs(world: World) {
+	tickStaff(world);
+}
+
+function expireOffers(world: World) {
+	for (const task of world.tasks) {
+		if (task.status === 'offered' && world.tick > task.deadline) {
+			task.status = 'expired';
+		}
+	}
+}
+
+function maybeMishap(world: World) {
+	if (world.tick - world.mishapAt < 40) return;
+	for (const floor of FLOORS) {
+		const dept = world.company.departments[floor.id];
+		if (dept.workload < 85) continue;
+		dept.workload = Math.min(100, dept.workload + 4);
+		world.mishapAt = world.tick;
+		world.notice = `${floor.name}积压过高，出了点岔子。`;
+		return;
+	}
+}
+
+export function closeDay(world: World): boolean {
+	if (world.dayClosed) return false;
+	world.dayClosed = true;
+	world.paused = true;
+	world.tick = DAY_TICKS;
+	for (const task of world.tasks) {
+		if (task.status === 'offered') task.status = 'expired';
+	}
+	world.logs = appendLog(world.logs, snapshotDay(world));
+	world.player.breakUntil = 0;
+	world.notice = `第${world.day}天收工。看今日日志，再点下一天。`;
+	return true;
+}
+
+export function beginNextDay(world: World): boolean {
+	if (!world.dayClosed) return false;
+	world.day += 1;
+	world.tick = 0;
+	world.dayClosed = false;
+	world.paused = false;
+	world.dayPayStart = world.player.pay;
+	world.dayEvents = [];
+	world.lastSpawnAt = -999;
+	world.player.breakUntil = 0;
+	world.player.elevatorTo = null;
+	world.player.elevatorWait = 0;
+	world.pendingStart = false;
+	world.notice = `第${world.day}天。未完成的活还在。`;
+	spawnOffers(world);
+	return true;
+}
+
+export function tickWorld(world: World) {
+	if (world.paused || world.hidden || world.dayClosed) return;
+	if (world.tick >= DAY_TICKS) {
+		closeDay(world);
+		return;
+	}
+	world.tick += 1;
+	tickJob(world);
+	tickElevator(world);
+	tickNpcs(world);
+	expireOffers(world);
+	spawnOffers(world);
+	maybeMishap(world);
+	if (world.packages.length > MAX_PACKAGES) {
+		world.packages = world.packages.slice(-MAX_PACKAGES);
+	}
+	if (world.tick >= DAY_TICKS) closeDay(world);
+}
+
+export function frameElapsedMs(last: number, now: number): number {
+	return Math.min(MAX_STEP_MS, Math.max(0, now - last));
+}
+
+export function stepWorld(world: World, elapsedMs: number) {
+	if (world.paused || world.hidden || world.dayClosed) return;
+	const capped = Math.min(Math.max(0, elapsedMs), MAX_STEP_MS);
+	world.accMs += capped * world.speed;
+	let steps = 0;
+	const budget = MAX_STEPS_PER_FRAME * world.speed;
+	while (world.accMs >= TICK_MS && steps < budget) {
+		tickWorld(world);
+		world.accMs -= TICK_MS;
+		steps += 1;
+	}
+}
+
+export function restartWorld(world: World, seed = Date.now()): void {
+	const next = createWorld({ seed, spawnEvery: world.spawnEvery });
+	Object.assign(world, next);
+}

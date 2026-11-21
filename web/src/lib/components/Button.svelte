@@ -20,9 +20,9 @@
 	const styles: Record<Variant, string> = {
 		primary:
 			'bg-[var(--qx-primary)] text-white shadow-[0_12px_30px_-16px_var(--qx-primary)] hover:brightness-105',
-		secondary:
-			'bg-[var(--qx-card)] text-[var(--qx-text)] ring-1 ring-[var(--qx-line)] hover:bg-[var(--qx-surface)]',
-		ghost: 'bg-transparent text-[var(--qx-text)] hover:bg-[var(--qx-card)]',
+		secondary: 'qx-glass text-[var(--qx-text)] hover:brightness-110',
+		ghost:
+			'bg-transparent text-[var(--qx-text)] hover:bg-[color-mix(in_oklab,var(--qx-card)_40%,transparent)]',
 		danger: 'bg-[var(--qx-danger)] text-white hover:brightness-110'
 	};
 

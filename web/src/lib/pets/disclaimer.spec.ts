@@ -6,7 +6,8 @@ describe('pets disclaimer', () => {
 		expect(DISCLAIMER).toContain('非兽医建议');
 	});
 
-	it('points nearby services at the M4 local-life placeholder', () => {
-		expect(LOCAL_LIFE_HREF).toBe('/modules/local?category=pet');
+	it('does not send nearby services to the retired local-life map', () => {
+		expect(LOCAL_LIFE_HREF).toBe('/pets');
+		expect(LOCAL_LIFE_HREF).not.toContain('/modules/local');
 	});
 });

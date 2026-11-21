@@ -1,22 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { isTabActive, TABS } from './nav';
+import { isPlayView, isTopbarActive, TOPBAR } from './nav';
 
 describe('primary nav', () => {
-	it('keeps four zh-CN destinations and replaces 组件 with 内容', () => {
-		expect(TABS).toHaveLength(4);
-		expect(TABS.map((tab) => tab.label)).toEqual(['首页', '内容', '模块', '我的']);
-		expect(TABS.map((tab) => tab.href)).toEqual(['/', '/modules/create', '/modules', '/settings']);
-		expect(TABS.some((tab) => tab.label === '组件' || tab.href === '/kit')).toBe(false);
+	it('keeps three board top-bar destinations and leaves kit off chrome', () => {
+		expect(TOPBAR).toHaveLength(3);
+		expect(TOPBAR.map((tab) => tab.label)).toEqual(['首页', '模块中心', '我的']);
+		expect(TOPBAR.map((tab) => tab.href)).toEqual(['/', '/modules', '/settings']);
+		expect(TOPBAR.some((tab) => tab.label === '组件' || tab.href === '/kit')).toBe(false);
+		expect(TOPBAR.some((tab) => tab.label === '内容' || tab.label === '上班')).toBe(false);
 	});
 
-	it('marks nested content routes as the 内容 tab', () => {
-		expect(isTabActive('/modules/create', '/modules/create')).toBe(true);
-		expect(isTabActive('/modules', '/modules/create')).toBe(false);
-		expect(isTabActive('/modules/create', '/modules')).toBe(false);
-		expect(isTabActive('/modules/mood', '/modules')).toBe(true);
-		expect(isTabActive('/modules/games', '/modules')).toBe(true);
-		expect(isTabActive('/modules/games/convenient-store/play', '/modules')).toBe(true);
-		expect(isTabActive('/', '/')).toBe(true);
-		expect(isTabActive('/settings/extra', '/settings')).toBe(true);
+	it('treats 上班, 积木台, and catalog play as play views without shell atmosphere', () => {
+		expect(isPlayView('/modules/shangban')).toBe(true);
+		expect(isPlayView('/modules/jimutai')).toBe(true);
+		expect(isPlayView('/modules/games/window-garden/play')).toBe(true);
+		expect(isPlayView('/modules')).toBe(false);
+		expect(isPlayView('/')).toBe(false);
+	});
+
+	it('marks module routes on 模块中心 and leaves 上班 off the top bar', () => {
+		expect(isTopbarActive('/modules', '/modules')).toBe(true);
+		expect(isTopbarActive('/modules/mood', '/modules')).toBe(true);
+		expect(isTopbarActive('/modules/games', '/modules')).toBe(true);
+		expect(isTopbarActive('/modules/jimutai', '/modules')).toBe(true);
+		expect(isTopbarActive('/modules/shangban', '/modules')).toBe(true);
+		expect(isTopbarActive('/modules/shangban', '/')).toBe(false);
+		expect(isTopbarActive('/modules/games/convenient-store/play', '/modules')).toBe(true);
+		expect(isTopbarActive('/', '/')).toBe(true);
+		expect(isTopbarActive('/settings/extra', '/settings')).toBe(true);
+		expect(isTopbarActive('/kit', '/settings')).toBe(true);
 	});
 });

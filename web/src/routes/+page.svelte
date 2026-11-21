@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { getApi } from '#lib/api/client';
 	import Bento from '#lib/components/Bento.svelte';
 	import BentoItem from '#lib/components/BentoItem.svelte';
 	import Button from '#lib/components/Button.svelte';
@@ -8,36 +6,14 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Tag from '#lib/components/Tag.svelte';
-	import FunnelChart from '#lib/hustle/FunnelChart.svelte';
-	import { funnelStages, type Application } from '#lib/hustle/funnel';
-	import { statusTone } from '#lib/hustle/status';
-	import { todayTodos } from '#lib/hustle/todos';
-	import { INSPIRATION, PLATFORMS } from '#lib/create/catalog';
-	import { MODULES } from '#lib/modules';
+	import { SHAPES } from '#lib/jimutai/pieces';
+	import { FLOORS } from '#lib/shangban/floors';
+	import ModuleBoard from '#lib/shell/ModuleBoard.svelte';
 	import { LINK_CLASS } from '#lib/ui/affordance';
-	import { planBentoSpans } from '#lib/ui/bento';
 
 	const hour = new Date().getHours();
 	const greeting = hour < 12 ? '早安' : hour < 18 ? '下午好' : '夜安';
-	const featured = MODULES.filter((item) =>
-		['mood', 'finance', 'elder', 'local'].includes(item.slug)
-	);
-	const featuredSpans = planBentoSpans(4);
-	let applications = $state<Application[]>([]);
-	const stages = $derived(funnelStages(applications));
-	const todos = $derived(todayTodos(applications, new Date().toISOString().slice(0, 10)));
-
-	onMount(() => {
-		void (async () => {
-			const session = await getApi().getSession();
-			if (!session) return;
-			try {
-				applications = await getApi().listApplications();
-			} catch {
-				applications = [];
-			}
-		})();
-	});
+	const pieceNames = Object.values(SHAPES).map((item) => item.name);
 </script>
 
 <svelte:head>
@@ -64,33 +40,25 @@
 			<Card class="flex h-full flex-col">
 				<div class="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
 					<div>
-						<h2 class="text-lg font-semibold">求职概览</h2>
-						<p class="mt-1 text-sm text-[var(--qx-muted)]">今天的面试和待跟进投递。</p>
+						<h2 class="text-lg font-semibold">积木台</h2>
+						<p class="mt-1 text-sm text-[var(--qx-muted)]">
+							五块小积木，放到桌上拼在一起。没有输赢，拼完再给五块。
+						</p>
 					</div>
-					<Button href="/modules/hustle" variant="secondary" class="shrink-0 whitespace-nowrap"
-						>打开求职副业</Button
+					<Button href="/modules/jimutai" variant="secondary" class="shrink-0 whitespace-nowrap"
+						>去搭积木</Button
 					>
 				</div>
-				<div class="mt-4 flex flex-wrap gap-2">
-					{#each stages as stage (stage.status)}
-						<Tag tone={statusTone(stage.status)}>{stage.status} {stage.count}</Tag>
+				<div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+					{#each pieceNames as name (name)}
+						<a
+							href="/modules/jimutai"
+							class="qx-chip flex min-h-11 items-center rounded-2xl px-4 py-3 text-[var(--qx-text)]"
+						>
+							{name}
+						</a>
 					{/each}
 				</div>
-				<FunnelChart {stages} />
-				{#if todos.length === 0}
-					<p class="text-sm text-[var(--qx-muted)]">
-						今天还没有面试。把投递放进看板后会出现在这里。
-					</p>
-				{:else}
-					<ul class="mt-2 space-y-2">
-						{#each todos as item (item.id)}
-							<li class="rounded-2xl bg-[var(--qx-surface)] px-4 py-3">
-								<p class="font-medium">{item.title}</p>
-								<p class="text-sm text-[var(--qx-muted)]">{item.detail}</p>
-							</li>
-						{/each}
-					</ul>
-				{/if}
 			</Card>
 		</BentoItem>
 
@@ -98,34 +66,26 @@
 			<Card class="flex h-full flex-col">
 				<div class="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
 					<div>
-						<h2 class="text-lg font-semibold">内容创作</h2>
+						<h2 class="text-lg font-semibold">上班</h2>
 						<p class="mt-1 text-sm text-[var(--qx-muted)]">
-							选一个场景，把灵感写成可发出去的草稿。
+							五层大厦，自己选岗位。走路、坐电梯、做手头的活。
 						</p>
 					</div>
-					<Button href="/modules/create" variant="secondary" class="shrink-0 whitespace-nowrap"
-						>打开内容创作</Button
+					<Button href="/modules/shangban" variant="secondary" class="shrink-0 whitespace-nowrap"
+						>去上班</Button
 					>
 				</div>
 				<div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-					{#each PLATFORMS as item (item)}
+					{#each FLOORS as floor (floor.id)}
 						<a
-							href="/modules/create?platform={encodeURIComponent(item)}"
-							class="flex min-h-11 flex-col justify-center rounded-2xl bg-[var(--qx-surface)] px-4 py-3 text-[var(--qx-text)]"
+							href="/modules/shangban"
+							class="qx-chip flex min-h-11 flex-col justify-center rounded-2xl px-4 py-3 text-[var(--qx-text)]"
 						>
-							<p class="font-medium">{item}</p>
-							<p class="text-sm text-[var(--qx-muted)]">平台模板与预览</p>
+							<p class="font-medium">{floor.id}F {floor.name}</p>
+							<p class="text-sm text-[var(--qx-muted)]">进楼层做事</p>
 						</a>
 					{/each}
 				</div>
-				<ul class="mt-4 space-y-2">
-					{#each INSPIRATION as item (item.id)}
-						<li class="rounded-2xl bg-[var(--qx-surface)] px-4 py-3">
-							<p class="font-medium">{item.topic}</p>
-							<p class="text-sm text-[var(--qx-muted)]">{item.platform} · {item.hook}</p>
-						</li>
-					{/each}
-				</ul>
 			</Card>
 		</BentoItem>
 
@@ -146,37 +106,21 @@
 				</Card>
 			</a>
 		</BentoItem>
-
-		{#each featured as item, index (item.slug)}
-			<BentoItem span={featuredSpans[index] ?? 'unit'}>
-				<a href="/modules/{item.slug}" class="group block h-full">
-					<Card class="h-full transition motion-safe:group-hover:-translate-y-0.5">
-						<div
-							class="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl text-white"
-							style="background:{item.accent}"
-						>
-							<Icon name={item.icon} />
-						</div>
-						<h2 class="text-lg font-semibold">{item.name}</h2>
-						<p class="mt-1 text-base text-[var(--qx-muted)]">{item.summary}</p>
-						<span class="{LINK_CLASS} mt-3">打开 <Icon name="chevron" class="h-4 w-4" /></span>
-					</Card>
-				</a>
-			</BentoItem>
-		{/each}
-
-		<BentoItem span="full">
-			<Card>
-				<EmptyState
-					title="今天还没有新的记录"
-					body="离线时也会为你保存草稿，网络恢复后会静默同步。"
-					icon="cloud"
-				>
-					{#snippet action()}
-						<Button href="/modules">打开模块中心</Button>
-					{/snippet}
-				</EmptyState>
-			</Card>
-		</BentoItem>
 	</Bento>
+	<div class="mt-6">
+		<ModuleBoard />
+	</div>
+	<div class="mt-6">
+		<Card>
+			<EmptyState
+				title="今天还没有新的记录"
+				body="离线时也会为你保存草稿，网络恢复后会静默同步。"
+				icon="cloud"
+			>
+				{#snippet action()}
+					<Button href="/modules">打开模块中心</Button>
+				{/snippet}
+			</EmptyState>
+		</Card>
+	</div>
 </section>

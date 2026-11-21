@@ -60,7 +60,7 @@
 	{:else}
 		<ul class="mt-3 space-y-3">
 			{#each reports as row (row.id)}
-				<li class="rounded-2xl bg-[var(--qx-surface)] p-4">
+				<li class="qx-glass-field rounded-2xl p-4">
 					<p class="text-base font-medium">{row.title} · {row.reportDate}</p>
 					{#each row.metrics as metric, i (`${row.id}-${i}`)}
 						<p class="text-base text-[var(--qx-muted)]">
