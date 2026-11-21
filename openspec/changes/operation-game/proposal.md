@@ -1,6 +1,6 @@
-# Change: 手术 (proposal only)
+# Change: 手术 (implementing)
 
-Medical-operation **game** with body-part selection, tool phases, and **locked visual lane R** (realistic, graphic, blood). **Implementation is not approved.** Do not add catalog or play code in this change.
+Medical-operation **game** with body-part selection, tool phases, and **locked visual lane R** (realistic, graphic, blood). t275u `'approve all'` authorizes implementation of this amended loop.
 
 ## Why
 

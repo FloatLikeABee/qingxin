@@ -34,6 +34,7 @@ describe('games registry', () => {
 				'cloud-walk',
 				'convenient-store',
 				'memory-shelf',
+				'operation',
 				'shangban',
 				'sky-sortie',
 				'tide-breath',
@@ -136,6 +137,19 @@ describe('games registry', () => {
 		expect(getGame('annual-report')?.about).toMatch(/200 行/);
 		expect(getGame('annual-report')?.about).toMatch(/没有 XLOOKUP/);
 		expect(playHref(getGame('annual-report')!)).toBe('/modules/games/annual-report/play');
+		expect(getGame('operation')).toMatchObject({
+			title: '手术',
+			englishTitle: 'Operation',
+			category: '益智',
+			tags: ['手术', '器械', '止血'],
+			status: 'playable',
+			playCta: '进入手术台',
+			cover: { motif: 'orlamp' }
+		});
+		expect(getGame('operation')?.about).toMatch(/写实手术画面/);
+		expect(getGame('operation')?.about).toMatch(/不是医学训练/);
+		expect(getGame('operation')?.about).not.toMatch(/伤口喷溅封面/);
+		expect(playHref(getGame('operation')!)).toBe('/modules/games/operation/play');
 		expect(
 			GAMES.every((game) => game.id && game.summary && game.tags.length > 0 && game.playCta)
 		).toBe(true);

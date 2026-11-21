@@ -5,6 +5,7 @@
 	import CloudPlay from '#lib/games/cloud/CloudPlay.svelte';
 	import CargoPlay from '#lib/games/cargo/CargoPlay.svelte';
 	import ReportPlay from '#lib/games/report/ReportPlay.svelte';
+	import OpPlay from '#lib/games/op/OpPlay.svelte';
 	import ShelfPlay from '#lib/games/shelf/ShelfPlay.svelte';
 	import TidePlay from '#lib/games/tide/TidePlay.svelte';
 	import ShangbanPlay from '#lib/shangban/ShangbanPlay.svelte';
@@ -27,6 +28,8 @@
 	<CargoPlay title={data.game.title} />
 {:else if data.game.id === 'annual-report'}
 	<ReportPlay title={data.game.title} />
+{:else if data.game.id === 'operation'}
+	<OpPlay title={data.game.title} />
 {:else if data.game.id === 'shangban'}
 	<ShangbanPlay />
 {:else}
