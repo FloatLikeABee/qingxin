@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/env';
 	import { onMount } from 'svelte';
 	import Button from '#lib/components/Button.svelte';
 	import { LINK_CLASS } from '#lib/ui/affordance';
@@ -15,6 +16,7 @@
 	} from './engine';
 	import { readReportSave, writeReportSave } from './persist';
 	import { COMPANY, createSeedBook, DISCLAIMER, TIE_ADDR } from './seed';
+	import { fillTone, sheetStyle } from './sheetTheme';
 
 	let { title }: { title: string } = $props();
 
@@ -22,6 +24,7 @@
 	let draft = $state('');
 	let editing = $state(false);
 	let confirmReset = $state(false);
+	let darkSheet = $state(browser && document.documentElement.classList.contains('dark'));
 	let wrapEl = $state<HTMLDivElement | null>(null);
 	let headEl = $state<HTMLDivElement | null>(null);
 	let formulaEl = $state<HTMLInputElement | null>(null);
@@ -35,6 +38,7 @@
 	const assets = $derived(numeric(book, '资产负债表', `C${TIE_ADDR.assets}`));
 	const growth = $derived(numeric(book, '假设', 'C6'));
 	const gridWidth = $derived(`calc(2.1rem + 9.5rem + ${Math.max(sheet.cols - 1, 1)} * 5.4rem)`);
+	const sheetCss = $derived(sheetStyle(darkSheet ? 'dark' : 'light'));
 	let dragging = $state(false);
 
 	function save() {
@@ -243,12 +247,19 @@
 		evaluateBook(book);
 		draft = getSheet(book, book.active)?.cells[a1(book.selection.r0, book.selection.c0)]?.raw ?? '';
 		wrapEl?.focus();
+		const syncTheme = () => {
+			darkSheet = document.documentElement.classList.contains('dark');
+		};
+		syncTheme();
+		const themeWatch = new MutationObserver(syncTheme);
+		themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 		const interval = setInterval(save, 4000);
 		const stopDrag = () => (dragging = false);
 		window.addEventListener('pointerup', stopDrag);
 		window.addEventListener('pointercancel', stopDrag);
 		return () => {
 			clearInterval(interval);
+			themeWatch.disconnect();
 			window.removeEventListener('pointerup', stopDrag);
 			window.removeEventListener('pointercancel', stopDrag);
 			save();
@@ -260,7 +271,7 @@
 	<title>轻心 · {title}</title>
 </svelte:head>
 
-<div class="report-play">
+<div class="report-play" style={sheetCss} data-sheet-theme={darkSheet ? 'dark' : 'light'}>
 	<header class="top qx-glass" data-hud="top">
 		<a href="/modules/games" class="{LINK_CLASS} hud-back" data-hud="back">← 返回目录</a>
 		<p class="mark" data-hud="mark">{DISCLAIMER}</p>
@@ -290,6 +301,7 @@
 			id="formula-bar"
 			class="formula"
 			aria-label="公式栏"
+			placeholder="输入数字或 =公式"
 			bind:value={draft}
 			onfocus={() => (editing = true)}
 			onkeydown={(event) => onGridKey(event)}
@@ -342,7 +354,7 @@
 			data-cash={String(Math.round(cash * 100) / 100)}
 			data-assets={String(Math.round(assets * 100) / 100)}
 			data-growth={String(growth)}
-			data-kind={cellKind(book, book.active, activeAddr)}
+			data-active-kind={cellKind(book, book.active, activeAddr)}
 			tabindex="0"
 			role="grid"
 			aria-label={`${COMPANY}工作簿`}
@@ -366,6 +378,7 @@
 								{@const shown = displayCell(book, book.active, addr)}
 								{@const kind = cellKind(book, book.active, addr)}
 								{@const cell = sheet.cells[addr]}
+								{@const tone = fillTone(cell?.fill)}
 								<td
 									id={`cell-${addr}`}
 									role="gridcell"
@@ -378,7 +391,8 @@
 									class:error={kind === 'error'}
 									class:bold={cell?.bold}
 									class:neg={shown.startsWith('-')}
-									style:background={cell?.fill ?? ''}
+									class:hl={tone === 'hl'}
+									class:warn={tone === 'warn'}
 									onpointerdown={(event) => {
 										if (event.button !== 0) return;
 										dragging = true;
@@ -522,12 +536,33 @@
 		flex: 1 1 auto;
 		min-width: 0;
 		min-height: 44px;
-		border: 0;
-		border-radius: 0.7rem;
-		padding: 0.35rem 0.7rem;
-		background: color-mix(in srgb, white 70%, var(--qx-card));
-		color: var(--qx-text);
+		appearance: none;
+		border: 1px solid var(--sheet-line);
+		border-radius: 2px;
+		padding: 0.3rem 0.6rem;
+		background: var(--sheet-bar-bg);
+		color: var(--sheet-ink);
+		caret-color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
 		font: inherit;
+		font-variant-numeric: tabular-nums;
+		color-scheme: light;
+	}
+
+	.report-play[data-sheet-theme='dark'] .formula {
+		color-scheme: dark;
+	}
+
+	.formula::placeholder {
+		color: var(--sheet-muted);
+		-webkit-text-fill-color: var(--sheet-muted);
+		opacity: 1;
+	}
+
+	.formula::selection {
+		background: var(--sheet-select);
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
 	}
 
 	.tabs {
@@ -562,9 +597,23 @@
 		margin: 0 0.65rem;
 		display: flex;
 		flex-direction: column;
-		border-radius: 0 0.9rem 0.9rem 0.9rem;
-		background: color-mix(in srgb, #fffaf1 72%, var(--qx-card));
-		box-shadow: 0 16px 40px -28px rgb(15 23 42 / 0.55);
+		border-radius: 0;
+		border: 1px solid var(--sheet-line);
+		background: var(--sheet-paper);
+		box-shadow: none;
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
+		color-scheme: light;
+	}
+
+	.report-play[data-sheet-theme='dark'] .grid-shell {
+		color-scheme: dark;
+	}
+
+	.grid-shell ::selection {
+		background: var(--sheet-select);
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
 	}
 
 	.grid-head {
@@ -621,47 +670,61 @@
 
 	.grid th,
 	.grid td {
-		border-bottom: 1px solid color-mix(in srgb, var(--qx-line) 70%, transparent);
-		border-right: 1px solid color-mix(in srgb, var(--qx-line) 55%, transparent);
-		padding: 0.28rem 0.45rem;
+		border: 0;
+		border-bottom: 1px solid var(--sheet-line);
+		border-right: 1px solid var(--sheet-line);
+		border-radius: 0;
+		box-shadow: none;
+		backdrop-filter: none;
+		padding: 0.22rem 0.4rem;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		font-size: 0.82rem;
+		font-size: 0.8125rem;
+		line-height: 1.25;
 		user-select: none;
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
+		background: var(--sheet-paper);
 	}
 
 	.grid tbody tr:nth-child(even) td {
-		background: color-mix(in srgb, #f6ecda 55%, white);
+		background: var(--sheet-paper-alt);
 	}
 
-	.grid tbody tr:nth-child(even) td:nth-child(2) {
-		background: color-mix(in srgb, #f3e4cc 90%, var(--qx-card));
-	}
-
-	.grid thead th {
-		background: color-mix(in srgb, var(--qx-primary) 12%, #f7efe2);
+	.grid thead th,
+	.grid-head th {
+		background: var(--sheet-header);
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
 		font-size: 0.72rem;
+		font-weight: 700;
+		text-align: center;
 	}
 
 	.grid-head th:nth-child(2) {
 		position: sticky;
 		left: 2.1rem;
 		z-index: 3;
-		background: color-mix(in srgb, var(--qx-primary) 12%, #f7efe2);
+		background: var(--sheet-header);
+		text-align: center;
 	}
 
 	.gutter {
 		position: sticky;
 		left: 0;
 		z-index: 3;
-		background: color-mix(in srgb, var(--qx-primary) 10%, #f3e7d4);
+		background: var(--sheet-gutter);
 		text-align: center;
-		color: var(--qx-muted);
+		color: var(--sheet-gutter-ink);
+		-webkit-text-fill-color: var(--sheet-gutter-ink);
 	}
 
 	.grid thead .gutter {
 		z-index: 4;
+		background: var(--sheet-header);
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
 	}
 
 	.grid td:nth-child(2),
@@ -669,30 +732,67 @@
 		position: sticky;
 		left: 2.1rem;
 		z-index: 1;
-		background: color-mix(in srgb, #fff6ea 88%, var(--qx-card));
+		background: var(--sheet-gutter);
 		font-weight: 650;
+		text-align: left;
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
 	}
 
-	.grid td {
-		background: color-mix(in srgb, white 55%, transparent);
+	.grid tbody tr:nth-child(even) td:nth-child(2) {
+		background: var(--sheet-gutter);
+	}
+
+	.grid td:nth-child(n + 3),
+	.grid th:nth-child(n + 3) {
+		text-align: right;
+		font-variant-numeric: tabular-nums lining-nums;
 	}
 
 	.grid td.input {
 		font-weight: 700;
-		color: color-mix(in srgb, var(--qx-text) 92%, var(--qx-primary));
+		background: var(--sheet-input-bg);
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
 	}
 
 	.grid td.formula {
-		color: color-mix(in srgb, var(--qx-text) 78%, var(--qx-primary));
+		font-weight: 500;
+		background: var(--sheet-formula-bg);
+		color: var(--sheet-formula-ink);
+		-webkit-text-fill-color: var(--sheet-formula-ink);
+	}
+
+	.grid tbody tr:nth-child(even) td.input {
+		background: var(--sheet-input-bg);
+	}
+
+	.grid tbody tr:nth-child(even) td.formula {
+		background: var(--sheet-formula-bg);
 	}
 
 	.grid td.error {
-		color: var(--qx-accent-coral);
+		color: var(--sheet-error);
+		-webkit-text-fill-color: var(--sheet-error);
+		background: var(--sheet-error-bg);
 		font-weight: 700;
 	}
 
 	.grid td.neg {
-		color: var(--qx-accent-coral);
+		color: var(--sheet-error);
+		-webkit-text-fill-color: var(--sheet-error);
+	}
+
+	.grid td.hl {
+		background: var(--sheet-hl);
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
+	}
+
+	.grid td.warn {
+		background: var(--sheet-warn);
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
 	}
 
 	.grid td.bold {
@@ -700,10 +800,13 @@
 	}
 
 	.grid td.active {
-		outline: 2px solid var(--qx-primary);
+		outline: 2px solid var(--sheet-select-line);
 		outline-offset: -2px;
-		background: color-mix(in srgb, var(--qx-primary) 16%, white);
+		background: var(--sheet-select);
+		color: var(--sheet-ink);
+		-webkit-text-fill-color: var(--sheet-ink);
 		z-index: 2;
+		border-radius: 0;
 	}
 
 	.status {
