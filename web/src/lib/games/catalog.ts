@@ -129,12 +129,14 @@ export const GAMES: GameInfo[] = [
 	{
 		id: 'memory-shelf',
 		title: '记忆货架',
-		summary: '魔法书房还在布置。现在还进不去。',
-		about: '设计已定：拿起物件端详、记住货架的改动、解开更绕的架子，再装饰收藏室。玩法还没接上。',
+		englishTitle: 'Memory Shelf',
+		summary: '拿起物件端详，记住货架的改动，解开更绕的架子，再布置自己的收藏室。',
+		about:
+			'一间温暖的魔法书房。货架上的地球仪、茶杯、蛾标本都可以拿起来转着看。看清楚以后，布帘落下，东西会换位置。凭记忆把它们放回去。架子会越来越绕，解开的物件可以拿到收藏室里自由摆放。没有计时，也没有分数。放错了再拿起来就好。',
 		category: '益智',
-		tags: ['记忆', '货架'],
-		status: 'coming',
-		playCta: '即将到来',
+		tags: ['记忆', '货架', '书房'],
+		status: 'playable',
+		playCta: '开始整理',
 		cover: {
 			sky: '#FEF3C7',
 			ground: '#F1E6D0',

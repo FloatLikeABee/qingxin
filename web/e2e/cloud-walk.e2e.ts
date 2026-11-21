@@ -119,7 +119,7 @@ test.describe('云上散步', () => {
 		await page.screenshot({ path: 'screenshots/cloud-walk-play-390-dark.png' });
 	});
 
-	test('reduced motion still paints a sky and memory shelf stays coming', async ({ page }) => {
+	test('reduced motion still paints a sky and other games still boot', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await boot(page, 'light');
 		await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -128,7 +128,7 @@ test.describe('云上散步', () => {
 		await page.screenshot({ path: 'screenshots/cloud-walk-reduced-1280-light.png' });
 		await page.goto('/modules/games/tide-breath/play', { waitUntil: 'networkidle' });
 		await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
-		await page.goto('/modules/games/memory-shelf', { waitUntil: 'networkidle' });
-		await expect(page.getByRole('button', { name: '即将到来' })).toBeDisabled();
+		await page.goto('/modules/games/memory-shelf/play', { waitUntil: 'networkidle' });
+		await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 	});
 });

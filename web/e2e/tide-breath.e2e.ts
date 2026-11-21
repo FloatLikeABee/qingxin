@@ -105,7 +105,7 @@ test.describe('潮汐呼吸', () => {
 		await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 		await page.goto('/modules/games/cloud-walk/play', { waitUntil: 'networkidle' });
 		await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
-		await page.goto('/modules/games/memory-shelf', { waitUntil: 'networkidle' });
-		await expect(page.getByRole('button', { name: '即将到来' })).toBeDisabled();
+		await page.goto('/modules/games/memory-shelf/play', { waitUntil: 'networkidle' });
+		await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 	});
 });

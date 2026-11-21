@@ -3,6 +3,7 @@
 	import ShooterPlay from '#lib/games/shooter/ShooterPlay.svelte';
 	import StorePlay from '#lib/games/store/StorePlay.svelte';
 	import CloudPlay from '#lib/games/cloud/CloudPlay.svelte';
+	import ShelfPlay from '#lib/games/shelf/ShelfPlay.svelte';
 	import TidePlay from '#lib/games/tide/TidePlay.svelte';
 	import type { PageProps } from './$types';
 
@@ -17,6 +18,8 @@
 	<TidePlay title={data.game.title} />
 {:else if data.game.id === 'cloud-walk'}
 	<CloudPlay title={data.game.title} />
+{:else if data.game.id === 'memory-shelf'}
+	<ShelfPlay title={data.game.title} />
 {:else}
 	<StorePlay title={data.game.title} />
 {/if}

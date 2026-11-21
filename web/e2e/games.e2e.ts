@@ -103,12 +103,15 @@ test('play mounts without a session', async ({ page }) => {
 	await expect(page.getByText('客人还在店门口等着。')).toBeVisible();
 });
 
-test('coming soon game cannot start a session', async ({ page }) => {
+test('memory shelf opens from catalog into play chrome', async ({ page }) => {
 	await boot(page);
 	await page.goto('/modules/games/memory-shelf', { waitUntil: 'networkidle' });
 	await expect(page.getByRole('heading', { name: '记忆货架' })).toBeVisible();
-	await expect(page.getByRole('button', { name: '即将到来' })).toBeDisabled();
-	await expect(page.locator('canvas:not([data-qx-dust])')).toHaveCount(0);
+	await expect(page.getByRole('link', { name: '开始整理' })).toBeVisible();
+	await page.getByRole('link', { name: '开始整理' }).click();
+	await expect(page).toHaveURL(/\/modules\/games\/memory-shelf\/play/);
+	await expect(page.locator('canvas[aria-label="记忆货架书房"]')).toBeVisible();
+	await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 });
 
 test('garden opens from catalog into play chrome', async ({ page }) => {
