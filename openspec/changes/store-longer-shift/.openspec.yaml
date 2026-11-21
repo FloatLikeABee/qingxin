@@ -1,0 +1,4 @@
+schema: spec-driven
+change: store-longer-shift
+created: 2026-11-21
+goal: "Approved: 便利店经理 1800-tick / 3:00 shift; actions unchanged"

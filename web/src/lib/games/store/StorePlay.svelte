@@ -4,7 +4,16 @@
 	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { GOODS, SKUS, type SkuId } from './goods';
 	import { readStoreSave, writeDayResult, type StoreSave } from './persist';
-	import { createSim, orderCrate, restockShelf, restartSim, summarize, tick } from './sim';
+	import {
+		STORE_TICK_MS,
+		createSim,
+		formatShiftClock,
+		orderCrate,
+		restockShelf,
+		restartSim,
+		summarize,
+		tick
+	} from './sim';
 	import type { StoreScene } from './render';
 
 	let { title }: { title: string } = $props();
@@ -18,15 +27,10 @@
 	let sceneFailed = $state(false);
 
 	const remaining = $derived(Math.max(0, sim.dayTicks - sim.tick));
-	const clock = $derived(formatClock(remaining));
+	const clock = $derived(formatShiftClock(remaining));
 	const selectedShelf = $derived(sim.shelves.find((shelf) => shelf.id === selected));
 	const guests = $derived(sim.stats.customersHappy + sim.stats.customersUnhappy);
 	const summary = $derived(sim.over ? summarize(sim) : null);
-
-	function formatClock(ticks: number): string {
-		const sec = Math.max(0, Math.ceil(ticks / 10));
-		return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-	}
 
 	function yuan(n: number): string {
 		return `¥${n}`;
@@ -139,12 +143,18 @@
 				last = now;
 				if (!sim.paused && !sim.over && !document.hidden) {
 					acc += dt;
-					while (acc >= 0.1) {
+					const step = STORE_TICK_MS / 1000;
+					while (acc >= step) {
 						tick(sim);
-						acc -= 0.1;
+						acc -= step;
 					}
 				}
-				if (canvas) canvas.dataset.shoppers = String(sim.shoppers.length);
+				if (canvas) {
+					canvas.dataset.shoppers = String(sim.shoppers.length);
+					canvas.dataset.tick = String(sim.tick);
+					canvas.dataset.dayTicks = String(sim.dayTicks);
+					canvas.dataset.paused = sim.paused || document.hidden ? '1' : '0';
+				}
 				scene?.sync(sim, selected);
 				scene?.render(now);
 				raf = requestAnimationFrame(loop);
