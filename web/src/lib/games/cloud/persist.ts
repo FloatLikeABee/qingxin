@@ -1,7 +1,14 @@
 import {
 	CLOUD_ISLANDS,
+	HOME,
+	WORLD_R,
+	Y_MAX,
+	Y_MIN,
+	biomeAt,
 	createSky,
 	FRAG_KINDS,
+	mapVisitedToBiomes,
+	type BiomeId,
 	type FragKind,
 	type GardenPlant,
 	type SkyCreature,
@@ -11,7 +18,7 @@ import {
 } from './sim';
 
 export const CLOUD_SAVE_KEY = 'qingxin.games.cloud-walk';
-export const CLOUD_SCHEMA = 1;
+export const CLOUD_SCHEMA = 2;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return value && typeof value === 'object' && !Array.isArray(value)
@@ -73,8 +80,8 @@ function parseCreatures(raw: unknown, fallback: SkyCreature[]): SkyCreature[] {
 		next.push({
 			id: clamp(rec.id, 1, 9, next.length + 1),
 			kind: rec.kind as SkyCreature['kind'],
-			x: clamp(rec.x, -20, 40, 4),
-			z: clamp(rec.z, -20, 20, -12),
+			x: clamp(rec.x, -48, 48, 4),
+			z: clamp(rec.z, -48, 48, -12),
 			heading: clamp(rec.heading, -6.4, 6.4, 0),
 			speed: clamp(rec.speed, 0.2, 1.4, 0.5),
 			discovered: rec.discovered === true
@@ -101,7 +108,9 @@ export function serializeSky(world: SkyWorld) {
 		z: world.z,
 		yaw: world.yaw,
 		island: world.island,
+		biome: world.biome,
 		visited: world.visited,
+		biomes: world.biomes,
 		didWind: world.didWind,
 		didBounce: world.didBounce,
 		skyMode: world.skyMode,
@@ -134,26 +143,46 @@ export function writeSkySave(
 }
 
 export function readSkySave(
-	storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage
+	storage: Pick<Storage, 'getItem' | 'setItem'> | undefined = globalThis.localStorage
 ): SkyWorld {
 	const fresh = createSky();
 	try {
 		const raw = storage?.getItem(CLOUD_SAVE_KEY);
 		if (!raw) return fresh;
 		const rec = asRecord(JSON.parse(raw) as unknown);
-		if (!rec || rec.schema !== CLOUD_SCHEMA) {
+		const schema = Number(rec?.schema);
+		if (!rec || (schema !== 1 && schema !== 2)) {
 			fresh.recovered = true;
 			fresh.notice = '云上的记事读不出来，风又从头吹起。';
 			return fresh;
 		}
+		const migrated = schema === 1;
 		fresh.fragments = parseFragments(rec.fragments, fresh.fragments);
 		fresh.garden = parseGarden(rec.garden);
 		fresh.creatures = parseCreatures(rec.creatures, fresh.creatures);
 		fresh.visited = parseVisited(rec.visited);
-		fresh.x = clamp(rec.x, -30, 40, 0);
-		fresh.z = clamp(rec.z, -24, 24, 0);
-		fresh.y = clamp(rec.y, -1, 12, 0);
+		fresh.biomes = mapVisitedToBiomes(fresh.visited);
+		if (Array.isArray(rec.biomes)) {
+			const known: BiomeId[] = ['garden', 'alien', 'city', 'water', 'underworld'];
+			for (const item of rec.biomes) {
+				const id = String(item) as BiomeId;
+				if (known.includes(id) && !fresh.biomes.includes(id)) fresh.biomes = [...fresh.biomes, id];
+			}
+		}
+		fresh.x = clamp(rec.x, -48, 48, HOME.x);
+		fresh.z = clamp(rec.z, -48, 48, HOME.z);
+		fresh.y = clamp(rec.y, -16, 20, HOME.y);
 		fresh.yaw = clamp(rec.yaw, -6.4, 6.4, 0);
+		fresh.lookX = Math.sin(fresh.yaw);
+		fresh.lookZ = Math.cos(fresh.yaw);
+		const inside = Math.hypot(fresh.x, fresh.z) <= WORLD_R && fresh.y >= Y_MIN && fresh.y <= Y_MAX;
+		if (!inside) {
+			fresh.x = HOME.x;
+			fresh.y = HOME.y;
+			fresh.z = HOME.z;
+			fresh.notice = '云界变大了，从家里再走。';
+		}
+		fresh.biome = biomeAt(fresh.x, fresh.y, fresh.z);
 		fresh.island = clamp(rec.island, 0, CLOUD_ISLANDS.length - 1, 0);
 		if (!fresh.visited.includes(fresh.island)) fresh.visited = [...fresh.visited, fresh.island];
 		fresh.didWind = rec.didWind === true;
@@ -173,6 +202,7 @@ export function readSkySave(
 		fresh.recovered = false;
 		const n = fresh.fragments.filter((f) => f.collected).length;
 		fresh.notice = n > 0 ? `云还记得你。天气碎片 ${n} / ${FRAG_KINDS.length}。` : fresh.notice;
+		if (migrated) writeSkySave(fresh, storage);
 		return fresh;
 	} catch {
 		fresh.recovered = true;
