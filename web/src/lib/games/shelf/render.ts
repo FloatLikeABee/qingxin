@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import {
-	ROWS,
-	SLOTS,
+	HIGH_ROWS,
+	HIGH_SLOTS,
 	findItem,
 	hauntProgress,
-	isHaunting,
+	isCompact,
 	slotWorld,
+	tableOf,
+	type Haunt,
 	type ShelfItem,
 	type ShelfWorld
 } from './sim';
@@ -21,7 +23,7 @@ export interface ShelfScene {
 		ignoreId?: string | null
 	): { id?: string; row?: number; slot?: number } | null;
 	project(id: string): { x: number; y: number } | null;
-	projectGhost(): { x: number; y: number } | null;
+	projectGhost(index?: number): { x: number; y: number } | null;
 }
 
 type G = InstanceType<typeof THREE.Group>;
@@ -60,9 +62,9 @@ function shown(obj: InstanceType<typeof THREE.Object3D>) {
 	return true;
 }
 
-function inLod(item: ShelfItem, lowDetail: boolean) {
-	if (!lowDetail) return true;
-	return item.row > 0 && item.slot > 0 && item.slot < SLOTS - 1;
+function itemVisible(world: ShelfWorld, item: ShelfItem) {
+	const { rows, slots } = tableOf(world);
+	return item.row >= 0 && item.row < rows && item.slot >= 0 && item.slot < slots;
 }
 
 export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
@@ -207,37 +209,41 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 	const caseG = new THREE.Group();
 	caseG.name = 'case';
 	const caseBack = mesh(box, wood);
-	caseBack.scale.set(2.92, 2.62, 0.1);
-	caseBack.position.set(0, 1.32, -1.96);
+	caseBack.scale.set(2.72, 3.12, 0.1);
+	caseBack.position.set(0, 1.58, -1.96);
 	caseG.add(caseBack);
 	const caseLeft = mesh(box, wood);
-	caseLeft.scale.set(0.12, 2.62, 0.52);
-	caseLeft.position.set(-1.46, 1.32, -1.72);
+	caseLeft.scale.set(0.12, 3.12, 0.52);
+	caseLeft.position.set(-1.36, 1.58, -1.72);
 	caseG.add(caseLeft);
 	const caseRight = caseLeft.clone();
-	caseRight.position.x = 1.46;
+	caseRight.position.x = 1.36;
 	caseG.add(caseRight);
 	const crown = mesh(box, woodDark);
-	crown.scale.set(3.08, 0.14, 0.58);
-	crown.position.set(0, 2.7, -1.7);
+	crown.scale.set(2.88, 0.14, 0.58);
+	crown.position.set(0, 3.18, -1.7);
 	caseG.add(crown);
 	const inlay = mesh(box, brass);
-	inlay.scale.set(2.4, 0.03, 0.08);
-	inlay.position.set(0, 2.7, -1.4);
+	inlay.scale.set(2.2, 0.03, 0.08);
+	inlay.position.set(0, 3.18, -1.4);
 	caseG.add(inlay);
 	const plinth = mesh(box, woodDark);
-	plinth.scale.set(3.02, 0.18, 0.56);
+	plinth.scale.set(2.82, 0.18, 0.56);
 	plinth.position.set(0, 0.09, -1.7);
 	caseG.add(plinth);
-	for (let i = 0; i < ROWS; i++) {
+	const boards: M[] = [];
+	const lips: M[] = [];
+	for (let i = 0; i < HIGH_ROWS; i++) {
 		const board = mesh(box, woodDark);
-		board.scale.set(2.82, 0.07, 0.5);
-		board.position.set(0, 0.28 + i * 0.58, -1.72);
+		board.scale.set(2.62, 0.07, 0.5);
+		board.position.set(0, 0.24 + i * 0.46, -1.72);
 		caseG.add(board);
+		boards.push(board);
 		const lip = mesh(box, brass);
-		lip.scale.set(2.7, 0.012, 0.03);
-		lip.position.set(0, 0.32 + i * 0.58, -1.48);
+		lip.scale.set(2.5, 0.012, 0.03);
+		lip.position.set(0, 0.28 + i * 0.46, -1.48);
 		caseG.add(lip);
+		lips.push(lip);
 	}
 	for (const x of [-1.42, 1.42]) {
 		const knob = mesh(sphereLo, brass);
@@ -286,15 +292,15 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 	scene.add(itemRoot);
 	const itemMap = new Map<string, G>();
 	const slotPads: M[] = [];
-	for (let row = 0; row < ROWS; row++) {
-		for (let slot = 0; slot < SLOTS; slot++) {
+	for (let row = 0; row < HIGH_ROWS; row++) {
+		for (let slot = 0; slot < HIGH_SLOTS; slot++) {
 			const pad = mesh(
 				box,
 				keepMat(mat(0x000000, { transparent: true, opacity: 0, depthWrite: false }))
 			);
-			const p = slotWorld(row, slot);
-			pad.position.set(p.x, p.y - 0.18, p.z);
-			pad.scale.set(0.34, 0.06, 0.36);
+			const p = slotWorld(row, slot, false);
+			pad.position.set(p.x, p.y - 0.16, p.z);
+			pad.scale.set(0.28, 0.06, 0.34);
 			pad.userData.row = row;
 			pad.userData.slot = slot;
 			pad.castShadow = false;
@@ -490,86 +496,93 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 		return g;
 	}
 
-	const ghost = new THREE.Group();
-	ghost.name = 'haunt-ghost';
-	const veil = mesh(
-		ico,
-		keepMat(
-			mat(0xe8f4ff, {
-				transparent: true,
-				opacity: 0.52,
-				emissive: 0xc4b5fd,
-				emissiveIntensity: 0.85,
-				depthWrite: false,
-				roughness: 0.32
-			})
-		)
-	);
-	veil.scale.set(0.34, 0.48, 0.3);
-	veil.position.y = 0.22;
-	ghost.add(veil);
-	const core = new THREE.Mesh(
-		sphere,
-		keepMat(
-			new THREE.MeshBasicMaterial({
-				color: 0xf8fafc,
-				transparent: true,
-				opacity: 0.9
-			})
-		)
-	);
-	core.scale.setScalar(0.16);
-	core.position.y = 0.3;
-	ghost.add(core);
-	const brow = mesh(box, keepMat(mat(0x1e1b4b)));
-	brow.scale.set(0.2, 0.025, 0.04);
-	brow.position.set(0, 0.42, 0.14);
-	ghost.add(brow);
-	for (const x of [-0.09, 0.09]) {
-		const eye = mesh(sphere, keepMat(mat(0xf8fafc)));
-		eye.scale.setScalar(0.08);
-		eye.position.set(x, 0.34, 0.18);
-		ghost.add(eye);
-		const pupil = mesh(sphere, keepMat(mat(0x1e1b4b)));
-		pupil.scale.setScalar(0.038);
-		pupil.position.set(x, 0.32, 0.25);
-		ghost.add(pupil);
-	}
-	const mouth = mesh(torus, keepMat(mat(0x6d28d9, { roughness: 0.35 })));
-	mouth.scale.set(0.08, 0.05, 0.05);
-	mouth.position.set(0, 0.18, 0.2);
-	mouth.rotation.x = 1.15;
-	ghost.add(mouth);
-	const tears: G[] = [];
-	for (const x of [-0.1, 0.1]) {
-		const tear = new THREE.Group();
-		const drop = mesh(
-			cone,
+	type GhostRig = { group: G; veil: M; brow: M; mouth: M; tears: G[] };
+
+	function makeGhost(): GhostRig {
+		const group = new THREE.Group();
+		group.name = 'haunt-ghost';
+		const veil = mesh(
+			ico,
 			keepMat(
-				mat(0x7dd3fc, {
+				mat(0xe8f4ff, {
 					transparent: true,
-					opacity: 0.92,
-					emissive: 0x38bdf8,
-					emissiveIntensity: 0.7
+					opacity: 0.52,
+					emissive: 0xc4b5fd,
+					emissiveIntensity: 0.85,
+					depthWrite: false,
+					roughness: 0.32
 				})
 			)
 		);
-		drop.scale.set(0.045, 0.14, 0.045);
-		drop.rotation.x = Math.PI;
-		tear.add(drop);
-		const bead = mesh(
-			sphereLo,
-			keepMat(mat(0xbae6fd, { emissive: 0x7dd3fc, emissiveIntensity: 0.4 }))
+		veil.scale.set(0.3, 0.42, 0.26);
+		veil.position.y = 0.2;
+		group.add(veil);
+		const core = new THREE.Mesh(
+			sphere,
+			keepMat(
+				new THREE.MeshBasicMaterial({
+					color: 0xf8fafc,
+					transparent: true,
+					opacity: 0.9
+				})
+			)
 		);
-		bead.scale.setScalar(0.035);
-		bead.position.y = -0.08;
-		tear.add(bead);
-		tear.position.set(x, 0.22, 0.22);
-		ghost.add(tear);
-		tears.push(tear);
+		core.scale.setScalar(0.14);
+		core.position.y = 0.28;
+		group.add(core);
+		const brow = mesh(box, keepMat(mat(0x1e1b4b)));
+		brow.scale.set(0.18, 0.022, 0.035);
+		brow.position.set(0, 0.38, 0.12);
+		group.add(brow);
+		for (const x of [-0.08, 0.08]) {
+			const eye = mesh(sphere, keepMat(mat(0xf8fafc)));
+			eye.scale.setScalar(0.07);
+			eye.position.set(x, 0.3, 0.16);
+			group.add(eye);
+			const pupil = mesh(sphere, keepMat(mat(0x1e1b4b)));
+			pupil.scale.setScalar(0.032);
+			pupil.position.set(x, 0.28, 0.22);
+			group.add(pupil);
+		}
+		const mouth = mesh(torus, keepMat(mat(0x6d28d9, { roughness: 0.35 })));
+		mouth.scale.set(0.07, 0.045, 0.045);
+		mouth.position.set(0, 0.16, 0.18);
+		mouth.rotation.x = 1.15;
+		group.add(mouth);
+		const tears: G[] = [];
+		for (const x of [-0.09, 0.09]) {
+			const tear = new THREE.Group();
+			const drop = mesh(
+				cone,
+				keepMat(
+					mat(0x7dd3fc, {
+						transparent: true,
+						opacity: 0.92,
+						emissive: 0x38bdf8,
+						emissiveIntensity: 0.7
+					})
+				)
+			);
+			drop.scale.set(0.04, 0.12, 0.04);
+			drop.rotation.x = Math.PI;
+			tear.add(drop);
+			const bead = mesh(
+				sphereLo,
+				keepMat(mat(0xbae6fd, { emissive: 0x7dd3fc, emissiveIntensity: 0.4 }))
+			);
+			bead.scale.setScalar(0.03);
+			bead.position.y = -0.07;
+			tear.add(bead);
+			tear.position.set(x, 0.2, 0.2);
+			group.add(tear);
+			tears.push(tear);
+		}
+		group.visible = false;
+		scene.add(group);
+		return { group, veil, brow, mouth, tears };
 	}
-	ghost.visible = false;
-	scene.add(ghost);
+
+	const ghosts: GhostRig[] = [makeGhost(), makeGhost(), makeGhost(), makeGhost()];
 
 	const raycaster = new THREE.Raycaster();
 	const pointer = new THREE.Vector2();
@@ -591,70 +604,109 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 	}
 
 	function poseItem(world: ShelfWorld, item: ShelfItem, g: G) {
-		const home = slotWorld(item.row, item.slot);
+		const compact = isCompact(world);
+		const home = slotWorld(item.row, item.slot, compact);
 		const held = world.heldId === item.id;
-		const hauntNow = held && isHaunting(world);
+		const haunt = world.haunts.find((h) => h.bookId === item.id);
+		const hauntNow = Boolean(haunt && haunt.phase !== 'idle');
 		g.userData.row = item.row;
 		g.userData.slot = item.slot;
 		g.position.set(
 			home.x,
-			home.y + (held ? (hauntNow ? 0.1 : 0.08) : 0),
+			home.y + (held ? 0.08 : hauntNow ? 0.04 : 0),
 			home.z + (held ? 0.42 : item.kind === 'book' ? 0.04 : 0)
 		);
 		g.scale.setScalar(held ? 1.08 : 1);
 		g.rotation.y = held ? 0.22 : item.kind === 'book' && item.slot % 5 === 1 ? 0.16 : 0;
 		g.rotation.z = held || item.kind !== 'book' ? 0 : (item.tone - 0.5) * 0.02;
-		g.visible = inLod(item, lowDetail) || item.id === world.hauntId || item.id === world.heldId;
+		g.visible = itemVisible(world, item) || item.id === world.heldId;
 	}
 
-	function poseGhost(world: ShelfWorld) {
-		const haunt = findItem(world, world.hauntId);
-		if (!haunt || !isHaunting(world)) {
-			ghost.visible = false;
-			ghostLight.intensity = 0;
+	function poseOneGhost(world: ShelfWorld, haunt: Haunt | undefined, rig: GhostRig) {
+		if (!haunt || haunt.phase === 'idle') {
+			rig.group.visible = false;
 			return;
 		}
-		ghost.visible = true;
-		const g = itemMap.get(haunt.id);
-		const base = g ? g.position : new THREE.Vector3();
-		const u = hauntProgress(world);
-		let yOff = 0.16;
-		let zOff = 0.32;
-		let scale = 1;
-		if (world.phase === 'emerge') {
-			yOff = 0.04 + u * 0.14;
-			zOff = 0.08 + u * 0.3;
-			scale = 0.28 + u * 0.78;
-		} else if (world.phase === 'retreat') {
-			yOff = 0.18 - u * 0.14;
-			zOff = 0.38 - u * 0.3;
-			scale = 1.06 - u * 0.9;
-		} else {
-			yOff = 0.18;
-			zOff = 0.38;
-			scale = 1.06;
+		const book = findItem(world, haunt.bookId);
+		if (!book || !itemVisible(world, book)) {
+			rig.group.visible = false;
+			return;
 		}
-		ghost.position.set(base.x, Math.min(2.08, Math.max(0.62, base.y + yOff)), base.z + zOff);
-		ghost.scale.setScalar(Math.max(0.1, scale));
-		ghost.rotation.set(0, 0, 0);
-		const cry = world.phase === 'cry' || world.phase === 'sorry';
-		tears.forEach((tear, i) => {
+		rig.group.visible = true;
+		const g = itemMap.get(book.id);
+		const base = g ? g.position : new THREE.Vector3();
+		const u = hauntProgress(world, haunt.bookId);
+		let yOff = 0.16;
+		let zOff = 0.28;
+		let scale = 1;
+		if (haunt.phase === 'emerge') {
+			yOff = 0.04 + u * 0.14;
+			zOff = 0.08 + u * 0.26;
+			scale = 0.28 + u * 0.72;
+		} else if (haunt.phase === 'retreat') {
+			yOff = 0.18 - u * 0.14;
+			zOff = 0.32 - u * 0.26;
+			scale = 1.0 - u * 0.88;
+		} else {
+			yOff = 0.16;
+			zOff = 0.32;
+			scale = 1.0;
+		}
+		rig.group.position.set(base.x, Math.min(2.9, Math.max(0.5, base.y + yOff)), base.z + zOff);
+		rig.group.scale.setScalar(Math.max(0.1, scale));
+		rig.group.rotation.set(0, 0, 0);
+		const cry = haunt.phase === 'cry' || haunt.phase === 'sorry';
+		rig.tears.forEach((tear, i) => {
 			tear.visible = cry;
 			const fall = cry ? (world.t * 0.0024 + i * 0.14) % 0.26 : 0;
-			tear.position.set(i === 0 ? -0.1 : 0.1, 0.12 - fall, 0.24);
+			tear.position.set(i === 0 ? -0.09 : 0.09, 0.1 - fall, 0.22);
 			tear.scale.setScalar(cry ? 1.2 : 0.2);
 		});
-		mouth.scale.set(0.08, cry ? 0.09 : world.phase === 'face' ? 0.04 : 0.05, 0.05);
-		brow.rotation.z = cry ? 0.18 : -0.08;
-		ghostLight.position.copy(ghost.position);
-		ghostLight.intensity = reduceMotion ? 1.6 : 2.8;
+		rig.mouth.scale.set(0.07, cry ? 0.08 : haunt.phase === 'face' ? 0.035 : 0.045, 0.045);
+		rig.brow.rotation.z = cry ? 0.18 : -0.08;
+	}
+
+	function poseGhosts(world: ShelfWorld) {
+		let lit = false;
+		for (let i = 0; i < ghosts.length; i++) {
+			const haunt = world.haunts[i];
+			poseOneGhost(world, haunt, ghosts[i]!);
+			if (ghosts[i]!.group.visible && !lit) {
+				ghostLight.position.copy(ghosts[i]!.group.position);
+				ghostLight.intensity = reduceMotion ? 1.4 : 2.4;
+				lit = true;
+			}
+		}
+		if (!lit) ghostLight.intensity = 0;
+	}
+
+	function layoutCase(world: ShelfWorld) {
+		const compact = isCompact(world);
+		const { rows, slots } = tableOf(world);
+		for (let i = 0; i < boards.length; i++) {
+			boards[i]!.visible = i < rows;
+			lips[i]!.visible = i < rows;
+		}
+		for (const pad of slotPads) {
+			const row = Number(pad.userData.row);
+			const slot = Number(pad.userData.slot);
+			const on = row < rows && slot < slots;
+			pad.visible = on;
+			if (on) {
+				const p = slotWorld(row, slot, compact);
+				pad.position.set(p.x, p.y - 0.16, p.z);
+			}
+		}
+		caseLeft.position.x = compact ? -1.12 : -1.36;
+		caseRight.position.x = compact ? 1.12 : 1.36;
 	}
 
 	function sync(world: ShelfWorld, opts?: { reducedMotion?: boolean }) {
 		if (opts?.reducedMotion != null) reduceMotion = opts.reducedMotion;
 		applyDetail(world);
+		layoutCase(world);
 		for (const item of world.items) poseItem(world, item, ensureItem(item));
-		poseGhost(world);
+		poseGhosts(world);
 	}
 
 	function hit(clientX: number, clientY: number, ignoreId?: string | null) {
@@ -707,16 +759,20 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 		return toCanvas(g.position);
 	}
 
-	function projectGhost() {
-		if (!ghost.visible) return null;
-		return toCanvas(ghost.position);
+	function projectGhost(index = 0) {
+		const rig = ghosts[index] ?? ghosts.find((g) => g.group.visible);
+		if (!rig?.group.visible) return null;
+		return toCanvas(rig.group.position);
 	}
 
 	function render(now: number) {
 		const t = now / 1000;
-		if (!reduceMotion && ghost.visible) {
-			veil.rotation.y = t * 1.35;
-			veil.position.y = 0.22 + Math.sin(t * 3.1) * 0.02;
+		if (!reduceMotion) {
+			for (const rig of ghosts) {
+				if (!rig.group.visible) continue;
+				rig.veil.rotation.y = t * 1.35;
+				rig.veil.position.y = 0.2 + Math.sin(t * 3.1) * 0.02;
+			}
 		}
 		renderer.render(scene, camera);
 	}
@@ -728,13 +784,14 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 		renderer.setSize(w, h, false);
 		camera.aspect = w / h;
 		if (camera.aspect < 0.9) {
-			camera.fov = 50;
-			camera.position.set(0.08, 1.58, 4.35);
+			camera.fov = 48;
+			camera.position.set(0.06, 1.72, 4.55);
+			camera.lookAt(0, 1.42, -1.7);
 		} else {
-			camera.fov = 42;
-			camera.position.set(0.12, 1.52, 3.28);
+			camera.fov = 40;
+			camera.position.set(0.1, 1.72, 3.85);
+			camera.lookAt(0, 1.58, -1.7);
 		}
-		camera.lookAt(0, 1.38, -1.7);
 		camera.updateProjectionMatrix();
 	}
 

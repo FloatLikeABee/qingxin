@@ -6,15 +6,23 @@
 	import { readShelfSave, writeShelfSave } from './persist';
 	import type { ShelfScene } from './render';
 	import {
+		anyApology,
+		applyTable,
 		findItem,
+		hauntOf,
+		hauntIdsOf,
 		hauntProgress,
+		isCompact,
 		isHaunting,
 		nextRound,
 		pickItem,
 		placeHeld,
 		restartShelf,
 		shelfLayout,
+		shelfPhase,
 		stepShelf,
+		tableOf,
+		visibleItems,
 		type HauntPhase,
 		type ShelfWorld
 	} from './sim';
@@ -38,10 +46,9 @@
 	let canvasEl = $state<HTMLCanvasElement | null>(null);
 	let stageEl = $state<HTMLDivElement | null>(null);
 	let audioOn = $state(false);
-	let bubbleX = $state(50);
-	let bubbleY = $state(28);
+	let bubbles = $state<Array<{ x: number; y: number; id: string }>>([]);
 	let fpsLabel = $state('—');
-	let lastPhase: HauntPhase = 'idle';
+	let lastHauntSig = '';
 
 	function save() {
 		writeShelfSave(world);
@@ -54,21 +61,26 @@
 
 	function paint(canvas: HTMLCanvasElement | null = canvasEl, scene: ShelfScene | null = null) {
 		if (!canvas) return;
-		canvas.dataset.phase = world.phase;
-		canvas.dataset.haunt = world.hauntId;
+		const vis = visibleItems(world);
+		const ids = hauntIdsOf(world);
+		const busy = new Set(ids);
+		canvas.dataset.phase = shelfPhase(world);
+		canvas.dataset.haunt = ids.join(',');
+		canvas.dataset.hcount = String(ids.length);
 		canvas.dataset.held = world.heldId ?? '';
 		canvas.dataset.layout = shelfLayout(world).join('|');
-		canvas.dataset.apology = world.apology ? '1' : '0';
+		canvas.dataset.apology = anyApology(world) ? '1' : '0';
 		canvas.dataset.round = String(world.round);
 		canvas.dataset.anim = world.paused ? '0' : '1';
 		canvas.dataset.detail = world.lowDetail ? 'low' : 'high';
+		canvas.dataset.compact = isCompact(world) ? '1' : '0';
 		canvas.dataset.audio = audioOn ? '1' : '0';
 		canvas.dataset.progress = String(Math.round(hauntProgress(world) * 100) / 100);
 		canvas.dataset.playing = isHaunting(world) ? '1' : '0';
-		canvas.dataset.items = String(world.items.length);
+		canvas.dataset.items = String(vis.length);
 		canvas.dataset.fps = fpsLabel;
 		canvas.dataset.notice = world.notice;
-		const others = world.items.filter((item) => item.id !== world.hauntId);
+		const others = vis.filter((item) => !busy.has(item.id));
 		const other = others.reduce((best, item) => {
 			if (!best) return item;
 			if (item.slot < best.slot || (item.slot === best.slot && item.row <= best.row)) return item;
@@ -85,8 +97,31 @@
 		);
 		canvas.dataset.aid = other?.id ?? '';
 		canvas.dataset.bid = buddy?.id ?? '';
+		const nextBubbles: Array<{ x: number; y: number; id: string }> = [];
 		if (scene) {
-			const hauntPt = scene.project(world.hauntId);
+			ids.forEach((id, i) => {
+				canvas.dataset[`h${i}`] = id;
+				canvas.dataset[`hp${i}`] = world.haunts[i]?.phase ?? '';
+				const bookPt = scene.project(id);
+				if (bookPt) {
+					canvas.dataset[`hx${i}`] = String(Math.round(bookPt.x));
+					canvas.dataset[`hy${i}`] = String(Math.round(bookPt.y));
+				}
+				const ghostPt = scene.projectGhost(i);
+				if (ghostPt) {
+					canvas.dataset[`gx${i}`] = String(Math.round(ghostPt.x));
+					canvas.dataset[`gy${i}`] = String(Math.round(ghostPt.y));
+				}
+				if (world.haunts[i]?.phase === 'sorry' && ghostPt) {
+					nextBubbles.push({
+						id,
+						x: Math.min(88, Math.max(12, (ghostPt.x / (canvas.clientWidth || 1)) * 100)),
+						y: Math.min(62, Math.max(18, (ghostPt.y / (canvas.clientHeight || 1)) * 100))
+					});
+				}
+			});
+			const tapId = world.haunts.find((h) => h.phase === 'idle')?.bookId ?? ids[0];
+			const hauntPt = tapId ? scene.project(tapId) : null;
 			if (hauntPt) {
 				canvas.dataset.hx = String(Math.round(hauntPt.x));
 				canvas.dataset.hy = String(Math.round(hauntPt.y));
@@ -105,14 +140,13 @@
 					canvas.dataset.by = String(Math.round(b.y));
 				}
 			}
-			const ghostPt = scene.projectGhost() ?? hauntPt;
+			const ghostPt = scene.projectGhost(0) ?? hauntPt;
 			if (ghostPt) {
 				canvas.dataset.gx = String(Math.round(ghostPt.x));
 				canvas.dataset.gy = String(Math.round(ghostPt.y));
-				bubbleX = Math.min(88, Math.max(12, (ghostPt.x / (canvas.clientWidth || 1)) * 100));
-				bubbleY = Math.min(70, Math.max(14, (ghostPt.y / (canvas.clientHeight || 1)) * 100));
 			}
 		}
+		bubbles = nextBubbles;
 	}
 
 	function togglePause() {
@@ -127,6 +161,7 @@
 
 	function toggleDetail() {
 		world.lowDetail = !world.lowDetail;
+		applyTable(world);
 		save();
 		paint();
 	}
@@ -149,7 +184,7 @@
 
 	function restart() {
 		restartShelf(world);
-		lastPhase = world.phase;
+		lastHauntSig = '';
 		save();
 		paint();
 	}
@@ -162,7 +197,7 @@
 
 	onMount(() => {
 		world = readShelfSave();
-		lastPhase = world.phase;
+		lastHauntSig = world.haunts.map((h) => `${h.bookId}:${h.phase}`).join('|');
 		let scene: ShelfScene | null = null;
 		let raf = 0;
 		let last = performance.now();
@@ -175,6 +210,8 @@
 		let cancelled = false;
 		const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
 		world.reducedMotion = motion.matches;
+		world.narrow = (stage.clientWidth || window.innerWidth) < 500;
+		applyTable(world);
 
 		let pointerDown = false;
 		let pickedThisDown = false;
@@ -191,10 +228,6 @@
 			startX = event.clientX;
 			startY = event.clientY;
 			stage.setPointerCapture(event.pointerId);
-			if (isHaunting(world)) {
-				paint(canvas, scene);
-				return;
-			}
 			const hit = scene?.hit(event.clientX, event.clientY);
 			if (!world.heldId && hit?.id) {
 				pickItem(world, hit.id);
@@ -215,7 +248,7 @@
 			} catch {
 				// already released
 			}
-			if (world.paused || isHaunting(world) || !world.heldId) {
+			if (world.paused || !world.heldId) {
 				paint(canvas, scene);
 				return;
 			}
@@ -240,7 +273,7 @@
 			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
 				return;
 			if (event.key === 'p' || event.key === 'P') togglePause();
-			if (event.key === 'Escape' && world.heldId && !isHaunting(world)) {
+			if (event.key === 'Escape' && world.heldId) {
 				const held = findItem(world, world.heldId);
 				if (held) placeHeld(world, held.row, held.slot);
 				save();
@@ -257,7 +290,14 @@
 			canvas.dataset.ready = '1';
 			scene?.sync(world, { reducedMotion: motion.matches });
 			paint(canvas, scene);
-			resizeObserver = new ResizeObserver(() => scene?.resize());
+			resizeObserver = new ResizeObserver(() => {
+				const nextNarrow = (stage.clientWidth || window.innerWidth) < 500;
+				if (nextNarrow !== world.narrow) {
+					world.narrow = nextNarrow;
+					applyTable(world);
+				}
+				scene?.resize();
+			});
 			resizeObserver.observe(stage);
 			const loop = (now: number) => {
 				const dt = Math.min(48, now - last);
@@ -265,11 +305,15 @@
 				world.reducedMotion = motion.matches;
 				if (!world.paused && !document.hidden) {
 					stepShelf(world, dt);
-					if (world.phase === 'emerge' && lastPhase !== 'emerge') popShelf();
-					if (world.phase === 'cry' && lastPhase !== 'cry') whimperShelf();
-					if (world.phase !== lastPhase) {
-						lastPhase = world.phase;
-						if (world.phase === 'done' || world.phase === 'idle') save();
+					const sig = world.haunts.map((h) => `${h.bookId}:${h.phase}`).join('|');
+					if (sig !== lastHauntSig) {
+						for (const haunt of world.haunts) {
+							const key = `${haunt.bookId}:${haunt.phase}`;
+							if (haunt.phase === 'emerge' && !lastHauntSig.includes(key)) popShelf();
+							if (haunt.phase === 'cry' && !lastHauntSig.includes(key)) whimperShelf();
+						}
+						lastHauntSig = sig;
+						save();
 					}
 				}
 				scene?.sync(world, { reducedMotion: motion.matches });
@@ -322,7 +366,7 @@
 		<ul class="stats" aria-label="书房进度">
 			<li><b>{world.round + 1}</b><span>轮次</span></li>
 			<li><b>{heldTitle()}</b><span>手里</span></li>
-			<li><b>{PHASE_LABEL[world.phase]}</b><span>书柜</span></li>
+			<li><b>{PHASE_LABEL[shelfPhase(world)]}</b><span>书柜</span></li>
 		</ul>
 		<div class="top-actions">
 			<Button variant="secondary" class="px-4" onclick={togglePause}>
@@ -336,14 +380,43 @@
 
 	<div bind:this={stageEl} class="stage" data-play="shelf">
 		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="记忆货架书房"></canvas>
-		{#if world.apology}
-			<p class="sorry" data-apology="1" style="left: {bubbleX}%; top: {bubbleY}%">
+		{#each bubbles as bubble (bubble.id)}
+			<p class="sorry" data-apology="1" style="left: {bubble.x}%; top: {bubble.y}%">
 				对不起！<small>sorry</small>
 			</p>
-		{/if}
+		{/each}
 		<p class="sr-only" aria-live="polite">{world.notice}</p>
 		{#if sceneFailed}
-			<p class="fail">这台设备画不出书房。暂停和下一轮仍可用。</p>
+			<p class="fail">这台设备画不出三维书房。仍可在格子上拿起、放下，鬼会用平面的脸说对不起。</p>
+			<div
+				class="flat"
+				data-flat="1"
+				style="grid-template-columns: repeat({tableOf(world).slots}, minmax(44px, 1fr)); grid-template-rows: repeat({tableOf(world).rows}, minmax(44px, 1fr));"
+			>
+				{#each visibleItems(world) as item (item.id)}
+					<button
+						type="button"
+						class="cell"
+						style="grid-row: {tableOf(world).rows - item.row}; grid-column: {item.slot + 1}"
+						onclick={() => {
+							if (world.heldId) placeHeld(world, item.row, item.slot);
+							else pickItem(world, item.id);
+							save();
+							paint();
+						}}
+					>
+						<span class="spine">{item.title}</span>
+						{#if hauntOf(world, item.id) && hauntOf(world, item.id)?.phase !== 'idle'}
+							<span
+								class="face"
+								class:cry={hauntOf(world, item.id)?.phase === 'cry' ||
+									hauntOf(world, item.id)?.phase === 'sorry'}
+								aria-hidden="true"
+							></span>
+						{/if}
+					</button>
+				{/each}
+			</div>
 		{/if}
 	</div>
 
@@ -351,12 +424,10 @@
 		<section class="dock qx-glass" aria-label="书房操作">
 			<p class="notice" aria-live="polite">{world.notice}</p>
 			<p class="need">
-				点一下拿起，再点或拖到格子上放下。每轮只有一本会闹鬼。没有计时，也没有分数。
+				点一下拿起，再点或拖到格子上放下。最多四只鬼会同时道歉。没有计时，也没有分数。
 			</p>
 			<div class="actions">
-				{#if world.phase === 'done'}
-					<Button class="min-h-12 px-5" onclick={goNext}>下一轮</Button>
-				{/if}
+				<Button class="min-h-12 px-5" onclick={goNext}>下一轮</Button>
 				<Button class="min-h-12 px-5" variant="secondary" onclick={toggleDetail}>
 					{world.lowDetail ? '高细腻' : '低细腻'}
 				</Button>
@@ -465,13 +536,57 @@
 
 	.fail {
 		position: absolute;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1rem;
+		top: 0.4rem;
+		left: 0.6rem;
+		right: 0.6rem;
+		z-index: 3;
+		margin: 0;
+		padding: 0.35rem 0.55rem;
 		text-align: center;
 		color: var(--qx-muted);
+		font-size: 0.82rem;
+	}
+
+	.flat {
+		position: absolute;
+		inset: 12% 6% 10%;
+		z-index: 2;
+		display: grid;
+		gap: 0.2rem;
+		pointer-events: auto;
+	}
+
+	.cell {
+		position: relative;
+		min-width: 44px;
+		min-height: 44px;
+		padding: 0.15rem;
+		border: 1px solid rgb(201 162 39 / 0.35);
+		border-radius: 0.35rem;
+		background: #5a341c;
+		color: #f7ecd2;
+		font-size: 0.68rem;
+		line-height: 1.1;
+	}
+
+	.spine {
+		display: block;
+		writing-mode: vertical-rl;
+	}
+
+	.face {
+		position: absolute;
+		right: 0.15rem;
+		top: 0.2rem;
+		width: 0.7rem;
+		height: 0.85rem;
+		border-radius: 50% 50% 45% 45%;
+		background: #e8f4ff;
+		box-shadow: inset 0 -0.12rem 0 #c4b5fd;
+	}
+
+	.face.cry {
+		background: #dbeafe;
 	}
 
 	.dock {

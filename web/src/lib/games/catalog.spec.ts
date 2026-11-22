@@ -114,9 +114,11 @@ describe('games registry', () => {
 			category: '益智',
 			tags: ['书房', '书柜', '闹鬼']
 		});
-		expect(getGame('memory-shelf')?.summary).toMatch(/闹鬼/);
+		expect(getGame('memory-shelf')?.summary).toMatch(/闹鬼|四只鬼/);
 		expect(getGame('memory-shelf')?.about).toMatch(/对不起！/);
 		expect(getGame('memory-shelf')?.about).toMatch(/没有计时，也没有分数/);
+		expect(getGame('memory-shelf')?.about).toMatch(/最多四只鬼/);
+		expect(getGame('memory-shelf')?.about).not.toMatch(/每轮只有一本/);
 		expect(getGame('memory-shelf')?.about).not.toMatch(/布帘|收藏室/);
 		expect(getGame('cargo-haul')).toMatchObject({
 			title: '重卡',
