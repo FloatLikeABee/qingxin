@@ -1,8 +1,9 @@
 import {
-	ROWS,
-	SLOTS,
+	applyTable,
 	createShelf,
-	type HauntPhase,
+	fillHigh,
+	hauntIdsOf,
+	seedHaunts,
 	type ItemKind,
 	type PropId,
 	type ShelfItem,
@@ -10,7 +11,7 @@ import {
 } from './sim';
 
 export const SHELF_SAVE_KEY = 'qingxin.games.memory-shelf';
-export const SHELF_SCHEMA = 2;
+export const SHELF_SCHEMA = 3;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return value && typeof value === 'object' && !Array.isArray(value)
@@ -25,7 +26,6 @@ function clamp(n: unknown, min: number, max: number, fallback: number) {
 }
 
 const KINDS = new Set<ItemKind>(['book', 'prop']);
-const PHASES = new Set<HauntPhase>(['idle', 'emerge', 'face', 'cry', 'sorry', 'retreat', 'done']);
 const PROPS = new Set<string>([
 	'globe',
 	'cup',
@@ -39,41 +39,80 @@ const PROPS = new Set<string>([
 	'moth'
 ]);
 
-function parseItems(raw: unknown, fallback: ShelfItem[]): ShelfItem[] {
-	if (!Array.isArray(raw) || raw.length !== fallback.length) {
-		return fallback.map((item) => ({ ...item }));
+function parseOne(raw: unknown, fallback: ShelfItem): ShelfItem | null {
+	const rec = asRecord(raw);
+	if (!rec) return null;
+	const id = String(rec.id ?? fallback.id);
+	const kind = String(rec.kind ?? fallback.kind);
+	const item: ShelfItem = {
+		...fallback,
+		id: fallback.id,
+		kind: KINDS.has(kind as ItemKind) ? (kind as ItemKind) : fallback.kind,
+		title: String(rec.title ?? fallback.title).slice(0, 12),
+		tone: clamp(rec.tone, 0, 1, fallback.tone),
+		row: clamp(rec.row, 0, 7, fallback.row),
+		slot: clamp(rec.slot, 0, 7, fallback.slot),
+		tall: clamp(rec.tall, 0.2, 0.8, fallback.tall),
+		thick: clamp(rec.thick, 0.08, 0.4, fallback.thick)
+	};
+	const prop = String(rec.prop ?? fallback.prop ?? '');
+	if (item.kind === 'prop' && PROPS.has(prop)) item.prop = prop as PropId;
+	return { ...item, id };
+}
+
+function parseItemsById(raw: unknown, template: ShelfItem[]): ShelfItem[] {
+	const saved = new Map<string, Record<string, unknown>>();
+	if (Array.isArray(raw)) {
+		for (const entry of raw) {
+			const rec = asRecord(entry);
+			if (!rec || rec.id == null) continue;
+			saved.set(String(rec.id), rec);
+		}
 	}
-	const used = new Set<string>();
-	return fallback.map((base, i) => {
-		const rec = asRecord(raw[i]);
-		const id = String(rec?.id ?? base.id);
-		if (used.has(id)) return { ...base };
-		used.add(id);
-		const kind = String(rec?.kind ?? base.kind);
-		const item: ShelfItem = {
-			...base,
-			id: fallback.some((f) => f.id === id) ? id : base.id,
-			kind: KINDS.has(kind as ItemKind) ? (kind as ItemKind) : base.kind,
-			title: String(rec?.title ?? base.title).slice(0, 12),
-			tone: clamp(rec?.tone, 0, 1, base.tone),
-			row: clamp(rec?.row, 0, ROWS - 1, base.row),
-			slot: clamp(rec?.slot, 0, SLOTS - 1, base.slot),
-			tall: clamp(rec?.tall, 0.2, 0.8, base.tall),
-			thick: clamp(rec?.thick, 0.08, 0.4, base.thick)
-		};
-		const prop = String(rec?.prop ?? base.prop ?? '');
-		if (item.kind === 'prop' && PROPS.has(prop)) item.prop = prop as PropId;
-		return item;
-	});
+	const usedSlots = new Set<string>();
+	const out: ShelfItem[] = [];
+	for (const base of template) {
+		const rec = saved.get(base.id);
+		let item = rec ? (parseOne(rec, base) ?? { ...base }) : { ...base };
+		item = { ...item, id: base.id };
+		if (item.row > 5 || item.slot > 7) {
+			item.row = base.row;
+			item.slot = base.slot;
+		}
+		let key = `${item.row}:${item.slot}`;
+		if (usedSlots.has(key)) {
+			item.row = base.row;
+			item.slot = base.slot;
+			key = `${item.row}:${item.slot}`;
+		}
+		if (usedSlots.has(key)) {
+			let found = false;
+			for (let row = 0; row < 6 && !found; row++) {
+				for (let slot = 0; slot < 8; slot++) {
+					const next = `${row}:${slot}`;
+					if (!usedSlots.has(next)) {
+						item.row = row;
+						item.slot = slot;
+						key = next;
+						found = true;
+						break;
+					}
+				}
+			}
+		}
+		usedSlots.add(key);
+		out.push(item);
+	}
+	return out;
 }
 
 export function serializeShelf(world: ShelfWorld) {
 	return {
 		schema: SHELF_SCHEMA,
 		items: world.items,
-		hauntId: world.hauntId,
-		lastHauntId: world.lastHauntId,
-		phase: world.phase === 'idle' || world.phase === 'done' ? world.phase : 'idle',
+		hauntIds: hauntIdsOf(world),
+		coolIds: world.coolIds,
+		lastHauntIds: world.lastHauntIds,
 		round: world.round,
 		lowDetail: world.lowDetail,
 		audioWanted: world.audioWanted,
@@ -99,6 +138,25 @@ function keepSettings(fresh: ShelfWorld, rec: Record<string, unknown>) {
 	fresh.dockCollapsed = rec.dockCollapsed === true;
 }
 
+function applyHauntIds(fresh: ShelfWorld, rec: Record<string, unknown>, fromSchema2: boolean) {
+	const books = new Set(fresh.items.filter((i) => i.kind === 'book').map((i) => i.id));
+	let ids: string[] = [];
+	if (Array.isArray(rec.hauntIds)) {
+		ids = rec.hauntIds.map((id) => String(id)).filter((id) => books.has(id));
+	} else if (fromSchema2 || rec.hauntId != null) {
+		const one = String(rec.hauntId ?? '');
+		if (books.has(one)) ids = [one];
+	}
+	fresh.haunts = [];
+	fresh.coolIds = Array.isArray(rec.coolIds)
+		? rec.coolIds.map((id) => String(id)).filter((id) => books.has(id) && !ids.includes(id))
+		: [];
+	for (const id of ids.slice(0, 4)) {
+		fresh.haunts.push({ bookId: id, phase: 'idle', phaseT: 0 });
+	}
+	seedHaunts(fresh, Math.random, ids);
+}
+
 export function readShelfSave(
 	storage: Pick<Storage, 'getItem' | 'setItem'> | undefined = globalThis.localStorage
 ): ShelfWorld {
@@ -114,29 +172,30 @@ export function readShelfSave(
 		}
 		if (rec.schema === 1) {
 			keepSettings(fresh, rec);
+			applyTable(fresh);
 			fresh.recovered = true;
 			fresh.notice = '货架换了样子，书还在等你摆。';
 			writeShelfSave(fresh, storage, { flash: 'migrated' });
 			return fresh;
 		}
-		if (rec.schema !== SHELF_SCHEMA) {
+		if (rec.schema !== 2 && rec.schema !== SHELF_SCHEMA) {
 			fresh.recovered = true;
 			fresh.notice = '货架换了样子，书还在等你摆。';
 			return fresh;
 		}
-		fresh.items = parseItems(rec.items, fresh.items);
-		const haunt = String(rec.hauntId ?? '');
-		if (fresh.items.some((i) => i.id === haunt && i.kind === 'book')) fresh.hauntId = haunt;
-		const last = rec.lastHauntId == null ? null : String(rec.lastHauntId);
-		fresh.lastHauntId = last && fresh.items.some((i) => i.id === last) ? last : null;
-		const phase = String(rec.phase);
-		fresh.phase = PHASES.has(phase as HauntPhase) ? (phase as HauntPhase) : 'idle';
-		if (fresh.phase !== 'idle' && fresh.phase !== 'done') fresh.phase = 'idle';
-		fresh.round = clamp(rec.round, 0, 99, 0);
+		const fromSchema2 = rec.schema === 2;
+		fresh.items = parseItemsById(rec.items, fillHigh());
 		keepSettings(fresh, rec);
+		applyHauntIds(fresh, rec, fromSchema2);
+		applyTable(fresh);
+		fresh.round = clamp(rec.round, 0, 99, 0);
 		if (rec.flash === 'migrated') {
 			fresh.recovered = true;
 			fresh.notice = '货架换了样子，书还在等你摆。';
+		} else if (fromSchema2 || rec.flash === 'expanded') {
+			fresh.recovered = false;
+			fresh.notice = '货架又添了几格。';
+			if (fromSchema2) writeShelfSave(fresh, storage, { flash: 'expanded' });
 		} else {
 			fresh.recovered = false;
 			fresh.notice = `书柜还记得你。这是第 ${fresh.round + 1} 轮。`;
