@@ -11,16 +11,7 @@ export const DT_CAP = 48;
 export type HauntPhase = 'idle' | 'emerge' | 'face' | 'cry' | 'sorry' | 'retreat' | 'done';
 export type ItemKind = 'book' | 'prop';
 export type PropId =
-	| 'globe'
-	| 'cup'
-	| 'clock'
-	| 'cat'
-	| 'candle'
-	| 'plant'
-	| 'frame'
-	| 'ink'
-	| 'teapot'
-	| 'moth';
+	'globe' | 'cup' | 'clock' | 'cat' | 'candle' | 'plant' | 'frame' | 'ink' | 'teapot' | 'moth';
 
 export type ShelfItem = {
 	id: string;
@@ -195,7 +186,9 @@ export function tableOf(world: Pick<ShelfWorld, 'lowDetail' | 'narrow' | 'reduce
 
 export function visibleItems(world: ShelfWorld) {
 	const { rows, slots } = tableOf(world);
-	return world.items.filter((item) => item.row >= 0 && item.row < rows && item.slot >= 0 && item.slot < slots);
+	return world.items.filter(
+		(item) => item.row >= 0 && item.row < rows && item.slot >= 0 && item.slot < slots
+	);
 }
 
 export function hauntIdsOf(world: ShelfWorld) {
@@ -223,10 +216,16 @@ function inTable(world: ShelfWorld, item: ShelfItem) {
 
 function eligibleBooks(world: ShelfWorld, extraSkip: string[] = []) {
 	const skip = new Set([...hauntIdsOf(world), ...world.coolIds, ...extraSkip]);
-	return world.items.filter((item) => item.kind === 'book' && inTable(world, item) && !skip.has(item.id));
+	return world.items.filter(
+		(item) => item.kind === 'book' && inTable(world, item) && !skip.has(item.id)
+	);
 }
 
-export function seedHaunts(world: ShelfWorld, rng: () => number = Math.random, skip: string[] = []) {
+export function seedHaunts(
+	world: ShelfWorld,
+	rng: () => number = Math.random,
+	skip: string[] = []
+) {
 	const cap = tableOf(world).cap;
 	while (world.haunts.length < cap) {
 		let pool = eligibleBooks(world, skip);
@@ -239,6 +238,22 @@ export function seedHaunts(world: ShelfWorld, rng: () => number = Math.random, s
 		const pick = pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))]!;
 		world.haunts.push({ bookId: pick.id, phase: 'idle', phaseT: 0 });
 	}
+}
+
+export function hauntCapWord(world: Pick<ShelfWorld, 'lowDetail' | 'narrow' | 'reducedMotion'>) {
+	return tableOf(world).cap <= 2 ? '两' : '四';
+}
+
+export function idleShelfNotice(world: Pick<ShelfWorld, 'lowDetail' | 'narrow' | 'reducedMotion'>) {
+	return `拿起书和旧物，摆到喜欢的格子。最多${hauntCapWord(world)}只鬼会同时钻出来道歉。`;
+}
+
+export function hauntCapHint(world: Pick<ShelfWorld, 'lowDetail' | 'narrow' | 'reducedMotion'>) {
+	return `点一下拿起，再点或拖到格子上放下。最多${hauntCapWord(world)}只鬼会同时道歉。没有计时，也没有分数。`;
+}
+
+export function isIdleCapNotice(notice: string) {
+	return /^拿起书和旧物，摆到喜欢的格子。最多[两四]只鬼会同时钻出来道歉。$/.test(notice);
 }
 
 export function applyTable(world: ShelfWorld, rng: () => number = Math.random) {
@@ -255,6 +270,7 @@ export function applyTable(world: ShelfWorld, rng: () => number = Math.random) {
 		}
 	}
 	seedHaunts(world, rng);
+	if (isIdleCapNotice(world.notice)) world.notice = idleShelfNotice(world);
 }
 
 export function createShelf(rng: () => number = Math.random): ShelfWorld {
@@ -264,7 +280,7 @@ export function createShelf(rng: () => number = Math.random): ShelfWorld {
 		coolIds: [],
 		lastHauntIds: [],
 		heldId: null,
-		notice: '拿起书和旧物，摆到喜欢的格子。最多四只鬼会同时钻出来道歉。',
+		notice: idleShelfNotice({ lowDetail: false, narrow: false, reducedMotion: false }),
 		paused: false,
 		over: false,
 		lowDetail: false,

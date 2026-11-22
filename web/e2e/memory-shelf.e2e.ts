@@ -54,6 +54,43 @@ async function clickProjected(page: Page, study: Locator, xKey: string, yKey: st
 	await page.mouse.click(pt.x, pt.y);
 }
 
+async function dragProjected(page: Page, study: Locator) {
+	const aid = await study.getAttribute('data-aid');
+	const start = await canvasPoint(study, 'ax', 'ay');
+	await page.mouse.move(start.x, start.y);
+	await page.mouse.down();
+	await expect(study).toHaveAttribute('data-held', aid!);
+	const dest = await canvasPoint(study, 'bx', 'by');
+	expect(Math.hypot(dest.x - start.x, dest.y - start.y)).toBeGreaterThan(12);
+	await page.mouse.move(dest.x, dest.y, { steps: 20 });
+	await page.mouse.up();
+	await expect(study).toHaveAttribute('data-held', '');
+}
+
+async function assertApologyOnStage(page: Page, study: Locator) {
+	const canvasBox = await study.boundingBox();
+	const headerBox = await page.locator('[data-shelf-top]').boundingBox();
+	expect(canvasBox).toBeTruthy();
+	expect(headerBox).toBeTruthy();
+	const bubbles = page.locator('p.sorry[data-apology="1"]');
+	await expect(bubbles.first()).toBeVisible();
+	const n = await bubbles.count();
+	expect(n).toBeGreaterThanOrEqual(1);
+	for (let i = 0; i < n; i++) {
+		const bubble = bubbles.nth(i);
+		await expect(bubble.locator('.say')).toHaveText('对不起！');
+		await expect(bubble.locator('.say')).toHaveCSS('white-space', 'nowrap');
+		const box = await bubble.boundingBox();
+		expect(box).toBeTruthy();
+		expect(box!.y).toBeGreaterThanOrEqual(headerBox!.y + headerBox!.height - 1);
+		expect(box!.y).toBeGreaterThanOrEqual(canvasBox!.y - 1);
+		expect(box!.x).toBeGreaterThanOrEqual(canvasBox!.x - 1);
+		expect(box!.x + box!.width).toBeLessThanOrEqual(canvasBox!.x + canvasBox!.width + 1);
+		expect(box!.y + box!.height).toBeLessThanOrEqual(canvasBox!.y + canvasBox!.height + 1);
+		expect(box!.height).toBeLessThan(72);
+	}
+}
+
 async function pauseWhen(page: Page, study: Locator, phase: string, minProgress = 0.25) {
 	await expect.poll(async () => study.getAttribute('data-phase'), { timeout: 12_000 }).toBe(phase);
 	await expect
@@ -86,6 +123,8 @@ test.describe('记忆货架', () => {
 		await expect(study).toHaveAttribute('data-phase', 'idle');
 		await expect(study).toHaveAttribute('data-items', '48');
 		expect(Number(await study.getAttribute('data-hcount'))).toBe(4);
+		await expect(study).toHaveAttribute('data-cap', '4');
+		await expect(page.getByText(/最多四只鬼会同时道歉/)).toBeVisible();
 		await expect(page.getByRole('button', { name: '书房声' })).toBeVisible();
 		await dualShot(page, study, 'memory-shelf-full');
 
@@ -102,6 +141,14 @@ test.describe('记忆货架', () => {
 		expect(swapped).not.toBe(before);
 		expect(
 			(swapped ?? '').split('|').filter((line, i) => line !== before?.split('|')[i])
+		).toHaveLength(2);
+
+		const afterTap = await study.getAttribute('data-layout');
+		await dragProjected(page, study);
+		const afterDrag = await study.getAttribute('data-layout');
+		expect(afterDrag).not.toBe(afterTap);
+		expect(
+			(afterDrag ?? '').split('|').filter((line, i) => line !== afterTap?.split('|')[i])
 		).toHaveLength(2);
 
 		const first = await study.getAttribute('data-h0');
@@ -150,6 +197,7 @@ test.describe('记忆货架', () => {
 		await expect(page.locator('p.sorry[data-apology="1"]').first()).toBeVisible();
 		await expect(page.locator('p.sorry').first()).toContainText('对不起！');
 		expect(await page.locator('p.sorry[data-apology="1"]').count()).toBeGreaterThanOrEqual(1);
+		await assertApologyOnStage(page, study);
 		await shot1280(page, study, 'memory-shelf-sorry');
 		await resume(page, study);
 
@@ -196,6 +244,9 @@ test.describe('记忆货架', () => {
 		const study = await waitStudy(page);
 		expect(Number(await study.getAttribute('data-items'))).toBeLessThanOrEqual(30);
 		expect(Number(await study.getAttribute('data-hcount'))).toBeLessThanOrEqual(2);
+		await expect(study).toHaveAttribute('data-cap', '2');
+		await expect(page.getByText(/最多两只鬼会同时道歉/)).toBeVisible();
+		await expect(page.locator('.need')).not.toContainText('最多四只鬼');
 		const before = await study.getAttribute('data-layout');
 		const aid = await study.getAttribute('data-aid');
 		const start = await canvasPoint(study, 'ax', 'ay');
@@ -209,6 +260,10 @@ test.describe('记忆货架', () => {
 		expect(await study.getAttribute('data-layout')).not.toBe(before);
 		await page.screenshot({ path: 'screenshots/memory-shelf-touch-390-dark.png' });
 
+		const afterTap = await study.getAttribute('data-layout');
+		await dragProjected(page, study);
+		expect(await study.getAttribute('data-layout')).not.toBe(afterTap);
+
 		const hauntN = Math.min(2, Number(await study.getAttribute('data-hcount')) || 0);
 		expect(hauntN).toBeGreaterThanOrEqual(1);
 		for (let i = 0; i < hauntN; i++) {
@@ -220,7 +275,10 @@ test.describe('记忆货架', () => {
 		await expect
 			.poll(async () => study.getAttribute('data-apology'), { timeout: 10_000 })
 			.toBe('1');
+		await page.getByRole('button', { name: '暂停' }).click();
+		await expect(study).toHaveAttribute('data-anim', '0');
 		await expect(page.locator('p.sorry[data-apology="1"]').first()).toBeVisible();
+		await assertApologyOnStage(page, study);
 		await page.screenshot({ path: 'screenshots/memory-shelf-ghost-390-dark.png' });
 		await page.screenshot({ path: 'screenshots/memory-shelf-sorry-390-dark.png' });
 

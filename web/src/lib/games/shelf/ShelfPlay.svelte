@@ -3,12 +3,14 @@
 	import Button from '#lib/components/Button.svelte';
 	import { LINK_CLASS } from '#lib/ui/affordance';
 	import { popShelf, setShelfMuted, stopShelfAudio, unlockShelfAudio, whimperShelf } from './audio';
+	import { placeSorryBubbles, SORRY_BUBBLE, SORRY_BUBBLE_NARROW } from './bubbles';
 	import { readShelfSave, writeShelfSave } from './persist';
 	import type { ShelfScene } from './render';
 	import {
 		anyApology,
 		applyTable,
 		findItem,
+		hauntCapHint,
 		hauntOf,
 		hauntIdsOf,
 		hauntProgress,
@@ -78,6 +80,7 @@
 		canvas.dataset.progress = String(Math.round(hauntProgress(world) * 100) / 100);
 		canvas.dataset.playing = isHaunting(world) ? '1' : '0';
 		canvas.dataset.items = String(vis.length);
+		canvas.dataset.cap = String(tableOf(world).cap);
 		canvas.dataset.fps = fpsLabel;
 		canvas.dataset.notice = world.notice;
 		const others = vis.filter((item) => !busy.has(item.id) && item.id !== world.heldId);
@@ -100,7 +103,7 @@
 		);
 		canvas.dataset.aid = other?.id ?? '';
 		canvas.dataset.bid = buddy?.id ?? '';
-		const nextBubbles: Array<{ x: number; y: number; id: string }> = [];
+		const sorryAnchors: Array<{ id: string; x: number; y: number }> = [];
 		if (scene) {
 			ids.forEach((id, i) => {
 				canvas.dataset[`h${i}`] = id;
@@ -116,11 +119,7 @@
 					canvas.dataset[`gy${i}`] = String(Math.round(ghostPt.y));
 				}
 				if (world.haunts[i]?.phase === 'sorry' && ghostPt) {
-					nextBubbles.push({
-						id,
-						x: Math.min(88, Math.max(12, (ghostPt.x / (canvas.clientWidth || 1)) * 100)),
-						y: Math.min(62, Math.max(18, (ghostPt.y / (canvas.clientHeight || 1)) * 100))
-					});
+					sorryAnchors.push({ id, x: ghostPt.x, y: ghostPt.y });
 				}
 			});
 			const tapId = world.haunts.find((h) => h.phase === 'idle')?.bookId ?? ids[0];
@@ -149,7 +148,9 @@
 				canvas.dataset.gy = String(Math.round(ghostPt.y));
 			}
 		}
-		bubbles = nextBubbles;
+		const canvasBox = { width: canvas.clientWidth || 1, height: canvas.clientHeight || 1 };
+		const bubbleSize = canvasBox.width < 500 ? SORRY_BUBBLE_NARROW : SORRY_BUBBLE;
+		bubbles = placeSorryBubbles(sorryAnchors, canvasBox, bubbleSize);
 	}
 
 	function togglePause() {
@@ -239,12 +240,16 @@
 			}
 			paint(canvas, scene);
 		};
+		const markMoved = (x: number, y: number) => {
+			if (Math.hypot(x - startX, y - startY) > DRAG_PX) moved = true;
+		};
 		const onMove = (event: PointerEvent) => {
 			if (!pointerDown) return;
-			if (Math.hypot(event.clientX - startX, event.clientY - startY) > DRAG_PX) moved = true;
+			markMoved(event.clientX, event.clientY);
 		};
 		const onUp = (event: PointerEvent) => {
 			if (!pointerDown) return;
+			markMoved(event.clientX, event.clientY);
 			pointerDown = false;
 			try {
 				stage.releasePointerCapture(event.pointerId);
@@ -336,6 +341,7 @@
 		window.addEventListener('keydown', onKeyDown);
 		stage.addEventListener('pointerdown', onDown);
 		stage.addEventListener('pointermove', onMove);
+		window.addEventListener('pointermove', onMove);
 		stage.addEventListener('pointerup', onUp);
 		stage.addEventListener('pointercancel', onUp);
 		window.addEventListener('pagehide', save);
@@ -348,6 +354,7 @@
 			window.removeEventListener('keydown', onKeyDown);
 			stage.removeEventListener('pointerdown', onDown);
 			stage.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointermove', onMove);
 			stage.removeEventListener('pointerup', onUp);
 			stage.removeEventListener('pointercancel', onUp);
 			window.removeEventListener('pagehide', save);
@@ -363,7 +370,7 @@
 </svelte:head>
 
 <div class="shelf-play">
-	<header class="top qx-glass">
+	<header class="top qx-glass" data-shelf-top="1">
 		<a href="/modules/games" class="{LINK_CLASS} shrink-0">← 返回目录</a>
 		<h1 class="sr-only">{title}</h1>
 		<ul class="stats" aria-label="书房进度">
@@ -384,8 +391,8 @@
 	<div bind:this={stageEl} class="stage" data-play="shelf">
 		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="记忆货架书房"></canvas>
 		{#each bubbles as bubble (bubble.id)}
-			<p class="sorry" data-apology="1" style="left: {bubble.x}%; top: {bubble.y}%">
-				对不起！<small>sorry</small>
+			<p class="sorry" data-apology="1" style="left: {bubble.x}px; top: {bubble.y}px">
+				<span class="say">对不起！</span><small>sorry</small>
 			</p>
 		{/each}
 		<p class="sr-only" aria-live="polite">{world.notice}</p>
@@ -428,9 +435,7 @@
 	{#if !world.dockCollapsed}
 		<section class="dock qx-glass" aria-label="书房操作">
 			<p class="notice" aria-live="polite">{world.notice}</p>
-			<p class="need">
-				点一下拿起，再点或拖到格子上放下。最多四只鬼会同时道歉。没有计时，也没有分数。
-			</p>
+			<p class="need">{hauntCapHint(world)}</p>
 			<div class="actions">
 				<Button class="min-h-12 px-5" onclick={goNext}>下一轮</Button>
 				<Button class="min-h-12 px-5" variant="secondary" onclick={toggleDetail}>
@@ -503,6 +508,7 @@
 		position: relative;
 		flex: 1;
 		min-height: 0;
+		overflow: hidden;
 		touch-action: none;
 		cursor: grab;
 	}
@@ -514,29 +520,38 @@
 	.sorry {
 		position: absolute;
 		z-index: 4;
-		translate: -50% -120%;
 		margin: 0;
-		padding: 0.45rem 0.85rem 0.4rem;
-		border-radius: 1.1rem 1.1rem 1.1rem 0.35rem;
+		padding: 0.38rem 0.72rem 0.32rem;
+		border-radius: 0.95rem 0.95rem 0.95rem 0.35rem;
 		background: #fff6e8;
 		color: #4a1d6a;
-		font-size: 1.65rem;
+		font-size: 1.28rem;
 		font-weight: 800;
-		line-height: 1.1;
-		letter-spacing: 0.04em;
+		line-height: 1.15;
+		letter-spacing: 0.02em;
 		box-shadow: 0 10px 28px rgb(40 16 8 / 0.35);
 		pointer-events: none;
-		text-wrap: balance;
+		width: max-content;
+		max-width: none;
+		white-space: nowrap;
+	}
+
+	.sorry .say {
+		display: block;
+		white-space: nowrap;
+		word-break: keep-all;
+		line-break: strict;
 	}
 
 	.sorry small {
 		display: block;
-		margin-top: 0.12rem;
-		font-size: 0.72rem;
+		margin-top: 0.08rem;
+		font-size: 0.68rem;
 		font-weight: 600;
 		letter-spacing: 0.08em;
 		color: #7c3aed;
 		text-transform: lowercase;
+		white-space: nowrap;
 	}
 
 	.fail {
@@ -642,12 +657,6 @@
 		}
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.sorry {
-			translate: -50% -110%;
-		}
-	}
-
 	@media (max-width: 430px) {
 		.stats {
 			gap: 0.4rem;
@@ -663,7 +672,8 @@
 		}
 
 		.sorry {
-			font-size: 1.35rem;
+			font-size: 1.12rem;
+			padding: 0.32rem 0.6rem 0.28rem;
 		}
 	}
 </style>

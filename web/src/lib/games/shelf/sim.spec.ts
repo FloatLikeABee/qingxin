@@ -44,16 +44,20 @@ describe('haunted bookshelf', () => {
 	it('compact table is 30 visible cells and haunt cap 2 without dropping ids', () => {
 		const world = createShelf(() => 0.2);
 		const ids = world.items.map((i) => i.id).sort();
+		expect(world.notice).toMatch(/最多四只鬼/);
 		world.lowDetail = true;
 		applyTable(world, () => 0.3);
 		expect(world.items).toHaveLength(48);
 		expect(visibleItems(world)).toHaveLength(30);
 		expect(visibleItems(world).filter((i) => i.kind === 'book').length).toBeGreaterThanOrEqual(20);
 		expect(hauntIdsOf(world).length).toBeLessThanOrEqual(2);
+		expect(world.notice).toMatch(/最多两只鬼/);
+		expect(world.notice).not.toMatch(/最多四只鬼/);
 		world.lowDetail = false;
 		applyTable(world, () => 0.3);
 		expect(world.items.map((i) => i.id).sort()).toEqual(ids);
 		expect(visibleItems(world)).toHaveLength(48);
+		expect(world.notice).toMatch(/最多四只鬼/);
 	});
 
 	it('swaps two items on pick and place without moving the rest', () => {

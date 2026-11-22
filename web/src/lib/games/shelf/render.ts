@@ -636,23 +636,24 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 		const g = itemMap.get(book.id);
 		const base = g ? g.position : new THREE.Vector3();
 		const u = hauntProgress(world, haunt.bookId);
-		let yOff = 0.16;
-		let zOff = 0.28;
+		let yOff = 0.08;
+		let zOff = 0.34;
 		let scale = 1;
 		if (haunt.phase === 'emerge') {
-			yOff = 0.04 + u * 0.14;
-			zOff = 0.08 + u * 0.26;
-			scale = 0.28 + u * 0.72;
+			yOff = 0.02 + u * 0.08;
+			zOff = 0.1 + u * 0.28;
+			scale = 0.28 + u * 0.64;
 		} else if (haunt.phase === 'retreat') {
-			yOff = 0.18 - u * 0.14;
-			zOff = 0.32 - u * 0.26;
-			scale = 1.0 - u * 0.88;
+			yOff = 0.1 - u * 0.08;
+			zOff = 0.38 - u * 0.28;
+			scale = 0.92 - u * 0.82;
 		} else {
-			yOff = 0.16;
-			zOff = 0.32;
-			scale = 1.0;
+			yOff = 0.08;
+			zOff = 0.38;
+			scale = 0.92;
 		}
-		rig.group.position.set(base.x, Math.min(2.9, Math.max(0.5, base.y + yOff)), base.z + zOff);
+		const yCap = isCompact(world) ? 2.02 : 2.18;
+		rig.group.position.set(base.x, Math.min(yCap, Math.max(0.48, base.y + yOff)), base.z + zOff);
 		rig.group.scale.setScalar(Math.max(0.1, scale));
 		rig.group.rotation.set(0, 0, 0);
 		const cry = haunt.phase === 'cry' || haunt.phase === 'sorry';
@@ -787,13 +788,13 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 		renderer.setSize(w, h, false);
 		camera.aspect = w / h;
 		if (camera.aspect < 0.9) {
-			camera.fov = 48;
-			camera.position.set(0.06, 1.72, 4.55);
-			camera.lookAt(0, 1.42, -1.7);
+			camera.fov = 46;
+			camera.position.set(0.06, 1.62, 4.75);
+			camera.lookAt(0, 1.32, -1.7);
 		} else {
-			camera.fov = 40;
-			camera.position.set(0.1, 1.72, 3.85);
-			camera.lookAt(0, 1.58, -1.7);
+			camera.fov = 38;
+			camera.position.set(0.1, 1.64, 4.1);
+			camera.lookAt(0, 1.46, -1.7);
 		}
 		camera.updateProjectionMatrix();
 	}
