@@ -299,8 +299,8 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 				keepMat(mat(0x000000, { transparent: true, opacity: 0, depthWrite: false }))
 			);
 			const p = slotWorld(row, slot, false);
-			pad.position.set(p.x, p.y - 0.16, p.z);
-			pad.scale.set(0.28, 0.06, 0.34);
+			pad.position.set(p.x, p.y - 0.08, p.z + 0.12);
+			pad.scale.set(0.36, 0.18, 0.48);
 			pad.userData.row = row;
 			pad.userData.slot = slot;
 			pad.castShadow = false;
@@ -694,7 +694,8 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 			pad.visible = on;
 			if (on) {
 				const p = slotWorld(row, slot, compact);
-				pad.position.set(p.x, p.y - 0.16, p.z);
+				pad.position.set(p.x, p.y - 0.08, p.z + 0.12);
+				pad.scale.set(compact ? 0.42 : 0.36, compact ? 0.22 : 0.18, compact ? 0.55 : 0.48);
 			}
 		}
 		caseLeft.position.x = compact ? -1.12 : -1.36;
@@ -756,7 +757,9 @@ export function mountShelfScene(canvas: HTMLCanvasElement): ShelfScene | null {
 	function project(id: string) {
 		const g = itemMap.get(id);
 		if (!g) return null;
-		return toCanvas(g.position);
+		const p = g.position.clone();
+		p.z += 0.18;
+		return toCanvas(p);
 	}
 
 	function projectGhost(index = 0) {

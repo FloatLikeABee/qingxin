@@ -10,8 +10,8 @@
 
 ## Global Constraints
 
-- Ancestor `aeb766a` (PR #50 Operation). Branch `cursor/shelf-more-haunts-4e4e`, stack on PR #50, base `cursor/operation-cut-sew-4e4e`.
-- Preserve truck, cloud, operation. Do not edit those games except sibling boot URLs in shelf e2e.
+- Ancestor `0394185` (PR #51 cloud left/right, itself on Operation `aeb766a` PR #50). Branch `cursor/shelf-full-haunts-4e4e`, stack on PR #51, base `cursor/cloud-left-right-4e4e`. Preserve WIP `ab7b30b` by cherry-pick; do not drop cloud/truck/operation fixes.
+- Preserve truck, cloud left/right, operation. Do not edit those games except sibling boot URLs in shelf e2e.
 - High: **6×8 = 48**, ~36 books + 12 props, **4** haunts. Compact: **5×6 = 30**, ~22 books + 8 props, **2** haunts.
 - Low-detail toggle **cannot drop books**. Park extras; restore on high.
 - Auto-refill after retreat. No one-ghost-per-round limitation. Rearrange while other ghosts play.
@@ -91,7 +91,7 @@ export function seedHaunts(w, rng): void;
 export function applyTable(w, rng): void; // trim haunts to cap, reseed
 ```
 
-- [ ] **Step 1: Failing tests** (rewrite `sim.spec.ts`)
+- [x] **Step 1: Failing tests** (rewrite `sim.spec.ts`)
 
 ```ts
 it('high fill is 48 cells with ~36 books and 12 props', () => {
@@ -171,8 +171,8 @@ it('rearranges a non-haunt while another ghost plays; no dupe or loss', () => {
 
 Also keep pause / reduced-motion sorry / unique swap tests, rewritten onto `haunts[]`.
 
-- [ ] **Step 2: RED** `cd web && npx vitest --run src/lib/games/shelf/sim.spec.ts`
-- [ ] **Step 3: Implement `sim.ts`**
+- [x] **Step 2: RED** `cd web && npx vitest --run src/lib/games/shelf/sim.spec.ts`
+- [x] **Step 3: Implement `sim.ts`**
   - `fillHigh()`: row-major 6×8; prop when `(row + slot) % 4 === 0` and `propI < 12` (yields 12 props / 36 books; compact 5×6 yields 8 props / 22 books).
   - Extend `BOOK_TITLES` to ≥36 short Chinese titles.
   - `seedHaunts`: while `haunts.length < cap`, pick visible book not in haunts/cool; if pool empty, drop cool ids that are not currently haunting, retry; never pick the book that just retreated in the same call.
@@ -182,8 +182,8 @@ Also keep pause / reduced-motion sorry / unique swap tests, rewritten onto `haun
   - `nextRound`: optional reshuffle — cool current haunt ids, clear haunts, `round++`, seed, keep layout.
   - `slotWorld(row, slot, table)`: high gapX 0.30 / gapY 0.46; compact gapX 0.34 / gapY 0.50.
   - Remove global `hauntId` / `phase` / `apology` fields (derive via helpers).
-- [ ] **Step 4: GREEN**
-- [ ] **Step 5: Commit** `feat(shelf): 48-cell case with four independent haunts`
+- [x] **Step 4: GREEN**
+- [x] **Step 5: Commit** `feat(shelf): 48-cell case with four independent haunts`
 
 ---
 
@@ -191,7 +191,7 @@ Also keep pause / reduced-motion sorry / unique swap tests, rewritten onto `haun
 
 **Files:** `persist.ts`, `persist.spec.ts`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```ts
 expect(SHELF_SCHEMA).toBe(3);
@@ -202,15 +202,15 @@ expect(SHELF_SCHEMA).toBe(3);
 // written save has hauntIds array, no required singular hauntId
 ```
 
-- [ ] **Step 2: RED**
-- [ ] **Step 3: Implement**
+- [x] **Step 2: RED**
+- [x] **Step 3: Implement**
   - `SHELF_SCHEMA = 3`
   - Parse items **by id** against `fillHigh()` template. Keep matching ids' titles/tone/kind and in-range slots; fill leftover template cells; resolve slot collisions by giving the later item its template slot.
   - `hauntIds` if present (cap 4, valid books); else wrap schema-2 `hauntId`.
   - Persist `coolIds`, `round`, settings. Do not persist playing phases (reload → idle haunts).
   - Schema 2 notice 「货架又添了几格。」 and write schema 3.
-- [ ] **Step 4: GREEN**
-- [ ] **Step 5: Commit** `feat(shelf): migrate memory-shelf saves to schema 3`
+- [x] **Step 4: GREEN**
+- [x] **Step 5: Commit** `feat(shelf): migrate memory-shelf saves to schema 3`
 
 ---
 
@@ -227,7 +227,7 @@ expect(SHELF_SCHEMA).toBe(3);
 - 2D fallback: CSS grid of cells (no emoji); CSS oval face + 对不起 when sorry.
 - Catalog: drop 「每轮只有一本」; say 最多四只鬼会同时钻出来道歉.
 
-- [ ] Commit `feat(shelf): denser case, four ghost meshes, 2D fallback`
+- [x] Commit `feat(shelf): denser case, four ghost meshes, 2D fallback`
 
 ---
 
@@ -246,10 +246,10 @@ Natural pointer only. No `evaluate` haunt writes.
 
 Inspect 1280 + 390 PNGs: packed shelf, ghosts, apology — not catalog-only.
 
-- [ ] Commit `test(shelf): concurrent haunts and 48-cell e2e`
+- [x] Commit `test(shelf): concurrent haunts and 48-cell e2e`
 
 ---
 
 ### Task 5: Verify + PR
 
-`npx svelte-check --threshold error`; `npx vitest run`; `CI=1 npx playwright test e2e/memory-shelf.e2e.ts`. Copy inspected PNGs to `/opt/cursor/artifacts/`. Push. ManagePullRequest create stack_on 50, base `cursor/operation-cut-sew-4e4e`. STOP.
+`npx svelte-check --threshold error`; `npx vitest run`; `CI=1 npx playwright test e2e/memory-shelf.e2e.ts`. Copy inspected PNGs to `/opt/cursor/artifacts/`. Push. ManagePullRequest create stack_on **51**, base `cursor/cloud-left-right-4e4e`. STOP.

@@ -80,20 +80,23 @@
 		canvas.dataset.items = String(vis.length);
 		canvas.dataset.fps = fpsLabel;
 		canvas.dataset.notice = world.notice;
-		const others = vis.filter((item) => !busy.has(item.id));
-		const other = others.reduce((best, item) => {
+		const others = vis.filter((item) => !busy.has(item.id) && item.id !== world.heldId);
+		const reachable = others.filter((item) => item.row >= 1 && item.row <= 3);
+		const books = reachable.filter((item) => item.kind === 'book');
+		const pool = books.length >= 2 ? books : reachable.length >= 2 ? reachable : others;
+		const other = pool.reduce((best, item) => {
 			if (!best) return item;
 			if (item.slot < best.slot || (item.slot === best.slot && item.row <= best.row)) return item;
 			return best;
-		}, others[0]);
-		const buddy = others.reduce(
+		}, pool[0]);
+		const buddy = pool.reduce(
 			(best, item) => {
 				if (!best) return item;
 				if (item.id === other?.id) return best;
 				if (item.slot > best.slot || (item.slot === best.slot && item.row >= best.row)) return item;
 				return best;
 			},
-			others.find((item) => item.id !== other?.id)
+			pool.find((item) => item.id !== other?.id)
 		);
 		canvas.dataset.aid = other?.id ?? '';
 		canvas.dataset.bid = buddy?.id ?? '';
@@ -391,7 +394,9 @@
 			<div
 				class="flat"
 				data-flat="1"
-				style="grid-template-columns: repeat({tableOf(world).slots}, minmax(44px, 1fr)); grid-template-rows: repeat({tableOf(world).rows}, minmax(44px, 1fr));"
+				style="grid-template-columns: repeat({tableOf(world)
+					.slots}, minmax(44px, 1fr)); grid-template-rows: repeat({tableOf(world)
+					.rows}, minmax(44px, 1fr));"
 			>
 				{#each visibleItems(world) as item (item.id)}
 					<button

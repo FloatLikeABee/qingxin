@@ -31,6 +31,13 @@ async function dualShot(page: Page, study: Locator, name: string) {
 	await page.screenshot({ path: `screenshots/${name}-390-dark.png` });
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await expect.poll(async () => (await study.boundingBox())?.width ?? 0).toBeGreaterThan(400);
+	await expect.poll(async () => study.getAttribute('data-items'), { timeout: 8_000 }).toBe('48');
+}
+
+async function shot1280(page: Page, study: Locator, name: string) {
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await expect.poll(async () => (await study.boundingBox())?.width ?? 0).toBeGreaterThan(400);
+	await page.screenshot({ path: `screenshots/${name}-1280-dark.png` });
 }
 
 async function canvasPoint(study: Locator, xKey: string, yKey: string) {
@@ -87,9 +94,10 @@ test.describe('记忆货架', () => {
 		await clickProjected(page, study, 'ax', 'ay');
 		await expect(study).toHaveAttribute('data-held', aid!);
 		await expect(study).toHaveAttribute('data-phase', 'idle');
-		await dualShot(page, study, 'memory-shelf-place');
+		await shot1280(page, study, 'memory-shelf-place');
 		await clickProjected(page, study, 'bx', 'by');
 		await expect(study).toHaveAttribute('data-held', '');
+		await dualShot(page, study, 'memory-shelf-swapped');
 		const swapped = await study.getAttribute('data-layout');
 		expect(swapped).not.toBe(before);
 		expect(
@@ -98,31 +106,63 @@ test.describe('记忆货架', () => {
 
 		const first = await study.getAttribute('data-h0');
 		for (let i = 0; i < 4; i++) {
+			await expect
+				.poll(async () => study.getAttribute(`data-hx${i}`), { timeout: 8_000 })
+				.not.toBeNull();
 			await clickProjected(page, study, `hx${i}`, `hy${i}`);
 		}
+		await expect
+			.poll(async () => {
+				const phases = await Promise.all(
+					[0, 1, 2, 3].map((i) => study.getAttribute(`data-hp${i}`))
+				);
+				return phases.filter((phase) => phase && phase !== 'idle').length;
+			})
+			.toBe(4);
 		await expect(study).toHaveAttribute('data-playing', '1');
-		await pauseWhen(page, study, 'emerge', 0.2);
-		await dualShot(page, study, 'memory-shelf-emerge');
-		await resume(page, study);
-
-		await pauseWhen(page, study, 'cry', 0.15);
-		expect(Number(await study.getAttribute('data-hcount'))).toBeGreaterThanOrEqual(2);
-		await dualShot(page, study, 'memory-shelf-cry');
-		await resume(page, study);
-
-		await pauseWhen(page, study, 'sorry', 0.12);
-		await expect(page.locator('p.sorry[data-apology="1"]').first()).toBeVisible();
-		await expect(page.locator('p.sorry').first()).toContainText('对不起！');
-		await dualShot(page, study, 'memory-shelf-sorry');
+		await page.getByRole('button', { name: '暂停' }).click();
+		await expect(study).toHaveAttribute('data-anim', '0');
+		await shot1280(page, study, 'memory-shelf-emerge');
 		await resume(page, study);
 
 		await expect
-			.poll(async () => (await study.getAttribute('data-haunt'))?.split(',').includes(first ?? ''), {
-				timeout: 10_000
-			})
+			.poll(
+				async () => {
+					const phases = await Promise.all(
+						[0, 1, 2, 3].map((i) => study.getAttribute(`data-hp${i}`))
+					);
+					return phases.filter((phase) => phase === 'cry' || phase === 'sorry').length;
+				},
+				{ timeout: 12_000 }
+			)
+			.toBe(4);
+		await page.getByRole('button', { name: '暂停' }).click();
+		await expect(study).toHaveAttribute('data-anim', '0');
+		expect(Number(await study.getAttribute('data-hcount'))).toBe(4);
+		await shot1280(page, study, 'memory-shelf-cry');
+		await resume(page, study);
+
+		await expect
+			.poll(async () => study.getAttribute('data-apology'), { timeout: 10_000 })
+			.toBe('1');
+		await page.getByRole('button', { name: '暂停' }).click();
+		await expect(study).toHaveAttribute('data-anim', '0');
+		await expect(page.locator('p.sorry[data-apology="1"]').first()).toBeVisible();
+		await expect(page.locator('p.sorry').first()).toContainText('对不起！');
+		expect(await page.locator('p.sorry[data-apology="1"]').count()).toBeGreaterThanOrEqual(1);
+		await shot1280(page, study, 'memory-shelf-sorry');
+		await resume(page, study);
+
+		await expect
+			.poll(
+				async () => (await study.getAttribute('data-haunt'))?.split(',').includes(first ?? ''),
+				{
+					timeout: 10_000
+				}
+			)
 			.toBe(false);
 		expect(Number(await study.getAttribute('data-hcount'))).toBe(4);
-		await dualShot(page, study, 'memory-shelf-return');
+		await shot1280(page, study, 'memory-shelf-return');
 
 		const layoutDone = await study.getAttribute('data-layout');
 		await page.getByRole('button', { name: '下一轮' }).click();
@@ -159,21 +199,30 @@ test.describe('记忆货架', () => {
 		const before = await study.getAttribute('data-layout');
 		const aid = await study.getAttribute('data-aid');
 		const start = await canvasPoint(study, 'ax', 'ay');
-		const dest = await canvasPoint(study, 'bx', 'by');
 		expect(start.localY).toBeGreaterThan(48);
 		await page.mouse.click(start.x, start.y);
 		await expect(study).toHaveAttribute('data-held', aid!);
+		const dest = await canvasPoint(study, 'bx', 'by');
+		expect(Math.hypot(dest.x - start.x, dest.y - start.y)).toBeGreaterThan(12);
 		await page.mouse.click(dest.x, dest.y);
 		await expect(study).toHaveAttribute('data-held', '');
 		expect(await study.getAttribute('data-layout')).not.toBe(before);
 		await page.screenshot({ path: 'screenshots/memory-shelf-touch-390-dark.png' });
 
-		await clickProjected(page, study, 'hx', 'hy');
+		const hauntN = Math.min(2, Number(await study.getAttribute('data-hcount')) || 0);
+		expect(hauntN).toBeGreaterThanOrEqual(1);
+		for (let i = 0; i < hauntN; i++) {
+			await expect
+				.poll(async () => study.getAttribute(`data-hx${i}`), { timeout: 8_000 })
+				.not.toBeNull();
+			await clickProjected(page, study, `hx${i}`, `hy${i}`);
+		}
 		await expect
 			.poll(async () => study.getAttribute('data-apology'), { timeout: 10_000 })
 			.toBe('1');
 		await expect(page.locator('p.sorry[data-apology="1"]').first()).toBeVisible();
 		await page.screenshot({ path: 'screenshots/memory-shelf-ghost-390-dark.png' });
+		await page.screenshot({ path: 'screenshots/memory-shelf-sorry-390-dark.png' });
 
 		const audio = page.getByRole('button', { name: '书房声' });
 		const box = await audio.boundingBox();

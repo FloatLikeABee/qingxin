@@ -73,7 +73,7 @@ function parseItemsById(raw: unknown, template: ShelfItem[]): ShelfItem[] {
 	const out: ShelfItem[] = [];
 	for (const base of template) {
 		const rec = saved.get(base.id);
-		let item = rec ? parseOne(rec, base) ?? { ...base } : { ...base };
+		let item = rec ? (parseOne(rec, base) ?? { ...base }) : { ...base };
 		item = { ...item, id: base.id };
 		if (item.row > 5 || item.slot > 7) {
 			item.row = base.row;
@@ -192,10 +192,10 @@ export function readShelfSave(
 		if (rec.flash === 'migrated') {
 			fresh.recovered = true;
 			fresh.notice = '货架换了样子，书还在等你摆。';
-		} else if (fromSchema2) {
+		} else if (fromSchema2 || rec.flash === 'expanded') {
 			fresh.recovered = false;
 			fresh.notice = '货架又添了几格。';
-			writeShelfSave(fresh, storage);
+			if (fromSchema2) writeShelfSave(fresh, storage, { flash: 'expanded' });
 		} else {
 			fresh.recovered = false;
 			fresh.notice = `书柜还记得你。这是第 ${fresh.round + 1} 轮。`;

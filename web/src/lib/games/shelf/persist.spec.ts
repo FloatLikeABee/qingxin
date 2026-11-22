@@ -111,6 +111,10 @@ describe('memory-shelf save', () => {
 		const saved = JSON.parse(storage.getItem('qingxin.games.memory-shelf')!);
 		expect(saved.schema).toBe(3);
 		expect(saved.hauntIds).toContain('b0');
+		expect(saved.flash).toBe('expanded');
+		const again = readShelfSave(storage);
+		expect(again.notice).toMatch(/货架又添了几格/);
+		expect(again.items.find((i) => i.id === 'b0')?.slot).toBe(2);
 	});
 
 	it('migrates schema 1 settings and starts a fresh shelf', () => {

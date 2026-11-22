@@ -92,6 +92,23 @@ describe('haunted bookshelf', () => {
 		expect(hauntOf(world, b!)?.bookId).toBe(b);
 	});
 
+	it('four concurrent haunts keep separate books and phases', () => {
+		const world = createShelf(() => 0.12);
+		const ids = hauntIdsOf(world);
+		expect(ids).toHaveLength(4);
+		expect(new Set(ids).size).toBe(4);
+		for (const id of ids) pickItem(world, id);
+		expect(ids.every((id) => hauntOf(world, id)?.phase === 'emerge')).toBe(true);
+		drive(world, 2100);
+		for (const id of ids) {
+			const haunt = hauntOf(world, id);
+			expect(haunt?.bookId).toBe(id);
+			expect(['face', 'cry', 'sorry']).toContain(haunt?.phase);
+		}
+		expect(world.haunts).toHaveLength(4);
+		expect(new Set(world.items.map((i) => i.id)).size).toBe(48);
+	});
+
 	it('apology is 对不起 and the ghost returns to the same book then auto-refills', () => {
 		const world = createShelf(() => 0.15);
 		const book = hauntIdsOf(world)[0]!;
