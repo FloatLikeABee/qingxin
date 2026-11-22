@@ -159,23 +159,35 @@ export function pickPanPiece(world: KitchenWorld, id: string) {
 	world.notice = `盛起${FOOD_LABEL[piece.kind]}。拖到盘子上，或在锅里搅拌。`;
 }
 
+function nestlePan(world: KitchenWorld, x: number, z: number) {
+	let px = clamp(x, -0.5, 0.5);
+	let pz = clamp(z, -0.5, 0.5);
+	const crowded = world.pan.some((piece) => Math.hypot(piece.x - px, piece.z - pz) < 0.14);
+	if (crowded || (world.pan.length > 0 && Math.hypot(px, pz) < 0.08)) {
+		const a = world.pan.length * 2.15;
+		const r = 0.22 + (world.pan.length % 3) * 0.08;
+		px = clamp(Math.cos(a) * r, -0.5, 0.5);
+		pz = clamp(Math.sin(a) * r, -0.5, 0.5);
+	}
+	return { x: px, z: pz };
+}
+
 export function dropOnPan(world: KitchenWorld, x: number, z: number): boolean {
 	const held = world.held;
 	if (!held) return false;
-	const px = clamp(x, -0.62, 0.62);
-	const pz = clamp(z, -0.62, 0.62);
 	if (held.source === 'bowl') {
 		if (world.pan.length >= PAN_CAP) {
 			world.notice = '锅满了';
 			world.held = null;
 			return false;
 		}
+		const at = nestlePan(world, x, z);
 		world.pan.push({
 			id: `k${world.nextId++}`,
 			kind: held.kind,
 			doneness: 0,
-			x: px,
-			z: pz
+			x: at.x,
+			z: at.z
 		});
 		world.held = null;
 		world.notice = `${FOOD_LABEL[held.kind]}下锅了。`;
@@ -186,8 +198,8 @@ export function dropOnPan(world: KitchenWorld, x: number, z: number): boolean {
 		world.held = null;
 		return false;
 	}
-	piece.x = px;
-	piece.z = pz;
+	piece.x = clamp(x, -0.5, 0.5);
+	piece.z = clamp(z, -0.5, 0.5);
 	world.held = null;
 	world.notice = '搅了一下。';
 	return true;
@@ -288,9 +300,9 @@ export function bowlSlot(kind: FoodKind) {
 
 export function bowlWorld(kind: FoodKind) {
 	const i = bowlSlot(kind);
-	return { x: -2.5 + i * 1, y: 0.28, z: -1.42 };
+	return { x: -1.75 + i * 0.7, y: 0.28, z: -1.18 };
 }
 
 export function plateWorld(slot: number) {
-	return { x: -2.45 + slot * 0.7, y: 0.12, z: 1.48 };
+	return { x: -1.75 + slot * 0.5, y: 0.12, z: 1.12 };
 }

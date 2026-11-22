@@ -68,8 +68,8 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 	const scene = new THREE.Scene();
 	scene.fog = new THREE.Fog(0xf3e4c8, 9, 16);
 	const camera = new THREE.PerspectiveCamera(42, 1, 0.08, 40);
-	camera.position.set(0, 5.15, 4.35);
-	camera.lookAt(0, 0.15, 0.1);
+	camera.position.set(0, 5.35, 4.2);
+	camera.lookAt(0, 0.12, 0.05);
 
 	const geos: Geo[] = [];
 	const mats: Array<{ dispose: () => void }> = [];
@@ -145,52 +145,60 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 
 	const bowls: Mesh[] = [];
 	const bowlFood: Mesh[] = [];
+	const bowlHits: Mesh[] = [];
 	FOOD_KINDS.forEach((kind, i) => {
 		const pos = bowlWorld(kind);
 		const bowl = new THREE.Mesh(cyl, ceramic);
-		bowl.scale.set(0.34, 0.14, 0.34);
+		bowl.scale.set(0.38, 0.14, 0.38);
 		bowl.position.set(pos.x, 0.16, pos.z);
 		bowl.castShadow = true;
 		bowl.userData = { zone: 'bowl', kind };
 		scene.add(bowl);
 		bowls.push(bowl);
 		const food = new THREE.Mesh(sphere, bowlMats[i]);
-		food.scale.set(0.22, 0.1, 0.22);
-		food.position.set(pos.x, 0.26, pos.z);
+		food.scale.set(0.26, 0.12, 0.26);
+		food.position.set(pos.x, 0.28, pos.z);
 		food.userData = { zone: 'bowl', kind };
 		scene.add(food);
 		bowlFood.push(food);
+		const bowlHit = new THREE.Mesh(cyl, keepMat(mat(0x222, { transparent: true, opacity: 0 })));
+		bowlHit.scale.set(0.52, 0.22, 0.52);
+		bowlHit.position.set(pos.x, 0.2, pos.z);
+		bowlHit.userData = { zone: 'bowl', kind };
+		scene.add(bowlHit);
+		bowlHits.push(bowlHit);
 	});
 
 	const panGroup = new THREE.Group();
 	panGroup.position.set(0, 0.16, 0.08);
-	const wok = new THREE.Mesh(sphere, iron);
-	wok.scale.set(0.92, 0.22, 0.92);
-	wok.position.y = 0.02;
+	const wok = new THREE.Mesh(cyl, iron);
+	wok.scale.set(0.78, 0.08, 0.78);
+	wok.position.y = 0.04;
 	wok.castShadow = true;
 	wok.userData = { zone: 'pan' };
 	const rim = new THREE.Mesh(torus, copper);
-	rim.scale.set(0.78, 0.78, 0.78);
+	rim.scale.set(0.72, 0.72, 0.72);
 	rim.rotation.x = Math.PI / 2;
-	rim.position.y = 0.16;
+	rim.position.y = 0.1;
 	rim.userData = { zone: 'pan' };
 	const handle = new THREE.Mesh(cyl, woodDark);
 	handle.scale.set(0.05, 0.55, 0.05);
 	handle.rotation.z = Math.PI / 2;
-	handle.position.set(1.05, 0.12, 0);
+	handle.position.set(1.05, 0.1, 0);
 	const panHit = new THREE.Mesh(cyl, keepMat(mat(0x222, { transparent: true, opacity: 0 })));
-	panHit.scale.set(0.82, 0.08, 0.82);
-	panHit.position.y = 0.12;
+	panHit.scale.set(0.9, 0.16, 0.9);
+	panHit.position.y = 0.16;
 	panHit.userData = { zone: 'pan' };
 	panGroup.add(wok, rim, handle, panHit);
 	scene.add(panGroup);
 
 	const flameGroup = new THREE.Group();
-	flameGroup.position.set(0, 0.02, 0.08);
-	for (let i = 0; i < 5; i++) {
+	flameGroup.position.set(0, 0.1, 0.08);
+	for (let i = 0; i < 8; i++) {
 		const f = new THREE.Mesh(cone, flameMat);
-		f.scale.set(0.12 + i * 0.02, 0.22 + (i % 2) * 0.08, 0.12 + i * 0.02);
-		f.position.set((i - 2) * 0.1, 0.1, (i % 2) * 0.06);
+		const a = (i / 8) * Math.PI * 2;
+		f.scale.set(0.08, 0.2, 0.08);
+		f.position.set(Math.cos(a) * 0.55, 0.02, Math.sin(a) * 0.55);
 		flameGroup.add(f);
 	}
 	scene.add(flameGroup);
@@ -217,8 +225,8 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 		scene.add(plate);
 		plates.push(plate);
 		const food = new THREE.Mesh(sphere, plateMats[i]);
-		food.scale.set(0.16, 0.07, 0.16);
-		food.position.set(pos.x, 0.2, pos.z);
+		food.scale.set(0.2, 0.1, 0.2);
+		food.position.set(pos.x, 0.22, pos.z);
 		food.visible = false;
 		food.userData = { zone: 'plate', slot: i };
 		scene.add(food);
@@ -237,14 +245,15 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 	const ray = new THREE.Raycaster();
 	const ndc = new THREE.Vector2();
 	const hitList: Obj[] = [
-		...bowls,
+		...pieces,
+		...bowlHits,
 		...bowlFood,
+		...bowls,
+		...platedFood,
+		...plates,
 		panHit,
 		wok,
-		rim,
-		...pieces,
-		...plates,
-		...platedFood
+		rim
 	];
 
 	function project(obj: Obj): { x: number; y: number } | null {
@@ -269,6 +278,14 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 		const h = canvas.clientHeight || 1;
 		renderer.setSize(w, h, false);
 		camera.aspect = w / h;
+		if (w / h < 0.7) {
+			camera.fov = 48;
+			camera.position.set(0, 6.35, 3.9);
+		} else {
+			camera.fov = 42;
+			camera.position.set(0, 5.35, 4.2);
+		}
+		camera.lookAt(0, 0.12, 0.15);
 		camera.updateProjectionMatrix();
 	}
 
@@ -286,16 +303,16 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 				const mesh = pieces[i];
 				if (!mesh) return;
 				mesh.visible = true;
-				mesh.position.set(piece.x, 0.18, piece.z);
+				mesh.position.set(piece.x, 0.22, piece.z);
 				const flat = pieceFlatten(piece.doneness);
 				const color = pieceColor(piece.kind, piece.doneness);
 				const m = panMats[i]!;
 				mesh.material = m;
 				(m as InstanceType<typeof THREE.MeshStandardMaterial>).color.setHex(color);
-				if (piece.kind === 'veg' || piece.kind === 'dough') mesh.scale.set(0.14, 0.07 * flat, 0.14);
+				if (piece.kind === 'veg' || piece.kind === 'dough') mesh.scale.set(0.22, 0.1 * flat, 0.22);
 				else if (piece.kind === 'tofu' || piece.kind === 'meat')
-					mesh.scale.set(0.12, 0.08 * flat, 0.16);
-				else mesh.scale.set(0.11, 0.11 * flat, 0.11);
+					mesh.scale.set(0.2, 0.11 * flat, 0.24);
+				else mesh.scale.set(0.18, 0.16 * flat, 0.18);
 				mesh.userData = { zone: 'piece', id: piece.id };
 			});
 			for (let i = world.pan.length; i < pieces.length; i++) pieces[i]!.visible = false;
@@ -346,8 +363,10 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 			ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 			ray.setFromCamera(ndc, camera);
 			const hits = ray.intersectObjects(hitList, false);
+			const ranked: KitchenHit[] = [];
 			for (const hit of hits) {
 				let node: Obj | null = hit.object;
+				if (!hit.object.visible) continue;
 				while (node) {
 					const data = node.userData as {
 						zone?: string;
@@ -355,20 +374,34 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 						id?: string;
 						slot?: number;
 					};
-					if (data.zone === 'bowl' && data.kind) return { zone: 'bowl', kind: data.kind };
-					if (data.zone === 'plate' && data.slot != null) return { zone: 'plate', slot: data.slot };
 					if (data.zone === 'piece' && data.id) {
 						const local = panGroup.worldToLocal(hit.point.clone());
-						return { zone: 'piece', id: data.id, x: local.x, z: local.z };
+						ranked.push({ zone: 'piece', id: data.id, x: local.x, z: local.z });
+						break;
+					}
+					if (data.zone === 'bowl' && data.kind) {
+						ranked.push({ zone: 'bowl', kind: data.kind });
+						break;
+					}
+					if (data.zone === 'plate' && data.slot != null) {
+						ranked.push({ zone: 'plate', slot: data.slot });
+						break;
 					}
 					if (data.zone === 'pan') {
 						const local = panGroup.worldToLocal(hit.point.clone());
-						return { zone: 'pan', x: local.x, z: local.z };
+						ranked.push({ zone: 'pan', x: local.x, z: local.z });
+						break;
 					}
 					node = node.parent;
 				}
 			}
-			return null;
+			return (
+				ranked.find((item) => item.zone === 'piece') ??
+				ranked.find((item) => item.zone === 'bowl') ??
+				ranked.find((item) => item.zone === 'plate') ??
+				ranked.find((item) => item.zone === 'pan') ??
+				null
+			);
 		},
 		projectBowl(kind) {
 			const i = FOOD_KINDS.indexOf(kind);

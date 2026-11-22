@@ -222,6 +222,7 @@
 		const stage = stageEl;
 		if (!canvas || !stage) return;
 		let cancelled = false;
+		let resizeObserver: ResizeObserver | undefined;
 		const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 		let pointerDown = false;
@@ -297,6 +298,11 @@
 			canvas.dataset.ready = '1';
 			scene?.sync(world, { reducedMotion: motion.matches });
 			paint(canvas, scene);
+			resizeObserver = new ResizeObserver(() => {
+				scene?.resize();
+				paint(canvas, scene);
+			});
+			resizeObserver.observe(stage);
 			const loop = (now: number) => {
 				const dt = Math.min(48, now - last);
 				last = now;
@@ -328,6 +334,7 @@
 			cancelled = true;
 			cancelAnimationFrame(raf);
 			clearInterval(interval);
+			resizeObserver?.disconnect();
 			window.removeEventListener('keydown', onKeyDown);
 			stage.removeEventListener('pointerdown', onDown);
 			stage.removeEventListener('pointermove', onMove);
@@ -490,6 +497,23 @@
 		display: flex;
 		gap: 0.35rem;
 		flex-shrink: 0;
+	}
+
+	@media (max-width: 640px) {
+		.top {
+			flex-wrap: wrap;
+		}
+
+		.stats {
+			order: 3;
+			flex: 1 0 100%;
+			justify-content: space-around;
+			gap: 0.35rem;
+		}
+
+		.top-actions {
+			margin-left: auto;
+		}
 	}
 
 	.stage {

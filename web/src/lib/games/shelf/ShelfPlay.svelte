@@ -512,6 +512,23 @@
 		flex-shrink: 0;
 	}
 
+	@media (max-width: 640px) {
+		.top {
+			flex-wrap: wrap;
+		}
+
+		.stats {
+			order: 3;
+			flex: 1 0 100%;
+			justify-content: space-around;
+			gap: 0.35rem;
+		}
+
+		.top-actions {
+			margin-left: auto;
+		}
+	}
+
 	.stage {
 		position: relative;
 		flex: 1;

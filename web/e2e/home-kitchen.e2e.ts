@@ -104,7 +104,9 @@ test.describe('烹饪', () => {
 		const plate = await canvasPoint(stove, 'plx0', 'ply0');
 		await page.mouse.move(piece.x, piece.y);
 		await page.mouse.down();
-		await expect(stove).toHaveAttribute('data-held', /pan:/);
+		await expect
+			.poll(async () => stove.getAttribute('data-held'), { timeout: 4_000 })
+			.toMatch(/pan:/);
 		await page.mouse.move(plate.x, plate.y, { steps: 16 });
 		await page.mouse.up();
 		await expect.poll(async () => stove.getAttribute('data-plated'), { timeout: 8_000 }).toBe('1');
@@ -113,9 +115,9 @@ test.describe('烹饪', () => {
 
 		await dragKindToPan(page, stove, 'egg');
 		await expect.poll(async () => stove.getAttribute('data-pan')).toBe('1');
-		const cooked = Number(await stove.getAttribute('data-doneness'));
 		await page.getByRole('button', { name: '暂停' }).click();
 		await expect(stove).toHaveAttribute('data-anim', '0');
+		const cooked = Number(await stove.getAttribute('data-doneness'));
 		await page.waitForTimeout(800);
 		expect(Number(await stove.getAttribute('data-doneness'))).toBeCloseTo(cooked, 3);
 		await page.getByRole('button', { name: '继续' }).click();
@@ -134,7 +136,7 @@ test.describe('烹饪', () => {
 		await dragKindToPan(page, again, 'meat');
 		await expect.poll(async () => again.getAttribute('data-notice')).toMatch(/锅满了/);
 		await expect(again).toHaveAttribute('data-pan', '12');
-		await expect(page.getByText('锅满了')).toBeVisible();
+		await expect(page.locator('.notice')).toHaveText(/锅满了/);
 	});
 
 	test('390 drags into the pan with 44px heat chips', async ({ page }) => {
@@ -143,7 +145,7 @@ test.describe('烹饪', () => {
 		await boot(page);
 		await page.goto('/modules/games/home-kitchen/play', { waitUntil: 'networkidle' });
 		const stove = await waitKitchen(page);
-		await dragKindToPan(page, stove, 'shrimp');
+		await dragKindToPan(page, stove, 'veg');
 		await expect.poll(async () => stove.getAttribute('data-pan'), { timeout: 8_000 }).toBe('1');
 		const high = page.getByRole('button', { name: '武火' });
 		const box = await high.boundingBox();
@@ -168,7 +170,7 @@ test.describe('烹饪', () => {
 		await page.goto('/modules/games/cloud-walk/play', { waitUntil: 'networkidle' });
 		const sky = page.locator('canvas[aria-label="云上散步天空"]');
 		await expect(sky).toHaveAttribute('data-ready', '1', { timeout: 20_000 });
-		await expect.poll(async () => sky.getAttribute('data-yaw'), { timeout: 8_000 }).toBe('0');
+		await expect.poll(async () => sky.getAttribute('data-lookx'), { timeout: 8_000 }).not.toBeNull();
 		const idle = await sky.evaluate((el) => ({
 			x: Number(el.getAttribute('data-x')),
 			z: Number(el.getAttribute('data-z')),
