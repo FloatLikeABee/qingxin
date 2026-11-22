@@ -11,6 +11,7 @@
 		applyTable,
 		findItem,
 		hauntCapHint,
+		hauntCapWord,
 		hauntOf,
 		hauntIdsOf,
 		hauntProgress,
@@ -81,6 +82,7 @@
 		canvas.dataset.playing = isHaunting(world) ? '1' : '0';
 		canvas.dataset.items = String(vis.length);
 		canvas.dataset.cap = String(tableOf(world).cap);
+		canvas.dataset.capCopy = hauntCapWord(world);
 		canvas.dataset.fps = fpsLabel;
 		canvas.dataset.notice = world.notice;
 		const others = vis.filter((item) => !busy.has(item.id) && item.id !== world.heldId);
@@ -377,6 +379,9 @@
 			<li><b>{world.round + 1}</b><span>轮次</span></li>
 			<li><b>{heldTitle()}</b><span>手里</span></li>
 			<li><b>{PHASE_LABEL[shelfPhase(world)]}</b><span>书柜</span></li>
+			<li data-cap-copy={hauntCapWord(world)}>
+				<b class="cap-live">最多{hauntCapWord(world)}只</b><span>同时</span>
+			</li>
 		</ul>
 		<div class="top-actions">
 			<Button variant="secondary" class="px-4" onclick={togglePause}>
@@ -390,6 +395,9 @@
 
 	<div bind:this={stageEl} class="stage" data-play="shelf">
 		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="记忆货架书房"></canvas>
+		<p class="cap-badge" data-cap-live="1" data-cap-copy={hauntCapWord(world)}>
+			最多{hauntCapWord(world)}只鬼
+		</p>
 		{#each bubbles as bubble (bubble.id)}
 			<p class="sorry" data-apology="1" style="left: {bubble.x}px; top: {bubble.y}px">
 				<span class="say">对不起！</span><small>sorry</small>
@@ -435,7 +443,7 @@
 	{#if !world.dockCollapsed}
 		<section class="dock qx-glass" aria-label="书房操作">
 			<p class="notice" aria-live="polite">{world.notice}</p>
-			<p class="need">{hauntCapHint(world)}</p>
+			<p class="need" data-cap-copy={hauntCapWord(world)}>{hauntCapHint(world)}</p>
 			<div class="actions">
 				<Button class="min-h-12 px-5" onclick={goNext}>下一轮</Button>
 				<Button class="min-h-12 px-5" variant="secondary" onclick={toggleDetail}>
@@ -504,6 +512,23 @@
 		flex-shrink: 0;
 	}
 
+	@media (max-width: 640px) {
+		.top {
+			flex-wrap: wrap;
+		}
+
+		.stats {
+			order: 3;
+			flex: 1 0 100%;
+			justify-content: space-around;
+			gap: 0.35rem;
+		}
+
+		.top-actions {
+			margin-left: auto;
+		}
+	}
+
 	.stage {
 		position: relative;
 		flex: 1;
@@ -515,6 +540,29 @@
 
 	.stage:active {
 		cursor: grabbing;
+	}
+
+	.cap-badge {
+		position: absolute;
+		top: 0.55rem;
+		left: 0.55rem;
+		z-index: 5;
+		margin: 0;
+		padding: 0.28rem 0.62rem;
+		border-radius: 999px;
+		background: #fff6e8;
+		color: #4a1d6a;
+		font-size: 1.05rem;
+		font-weight: 800;
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+		pointer-events: none;
+		box-shadow: 0 8px 20px rgb(40 16 8 / 0.28);
+	}
+
+	.cap-live,
+	.cap-phrase {
+		white-space: nowrap;
 	}
 
 	.sorry {

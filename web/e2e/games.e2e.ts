@@ -60,6 +60,10 @@ test('catalog search and category filter', async ({ page }) => {
 	await page.getByLabel('找一款想玩的').fill('手术');
 	await expect(page.getByRole('heading', { name: '手术' }).first()).toBeVisible();
 	await page.getByLabel('找一款想玩的').fill('');
+	await page.getByLabel('找一款想玩的').fill('烹饪');
+	await expect(page.getByRole('heading', { name: '烹饪' }).first()).toBeVisible();
+	await expect(page.getByRole('heading', { name: '灶台' })).toHaveCount(0);
+	await page.getByLabel('找一款想玩的').fill('');
 	await page.getByRole('button', { name: '节奏' }).click();
 	await expect(page.getByRole('heading', { name: '潮汐呼吸' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: '便利店经理' })).toHaveCount(0);

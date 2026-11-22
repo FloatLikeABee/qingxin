@@ -7,6 +7,7 @@
 	import ReportPlay from '#lib/games/report/ReportPlay.svelte';
 	import OpPlay from '#lib/games/op/OpPlay.svelte';
 	import ShelfPlay from '#lib/games/shelf/ShelfPlay.svelte';
+	import KitchenPlay from '#lib/games/kitchen/KitchenPlay.svelte';
 	import TidePlay from '#lib/games/tide/TidePlay.svelte';
 	import ShangbanPlay from '#lib/shangban/ShangbanPlay.svelte';
 	import type { PageProps } from './$types';
@@ -24,6 +25,8 @@
 	<CloudPlay title={data.game.title} />
 {:else if data.game.id === 'memory-shelf'}
 	<ShelfPlay title={data.game.title} />
+{:else if data.game.id === 'home-kitchen'}
+	<KitchenPlay title={data.game.title} />
 {:else if data.game.id === 'cargo-haul'}
 	<CargoPlay title={data.game.title} />
 {:else if data.game.id === 'annual-report'}

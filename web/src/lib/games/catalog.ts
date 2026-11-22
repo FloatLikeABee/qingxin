@@ -12,7 +12,8 @@ export type CoverMotif =
 	| 'office'
 	| 'truck'
 	| 'ledger'
-	| 'orlamp';
+	| 'orlamp'
+	| 'wok';
 
 export const GAME_ALIASES: Record<string, string> = {
 	'corner-florist': 'window-garden',
@@ -62,6 +63,24 @@ export const GAMES: GameInfo[] = [
 			ground: '#F4E7D0',
 			accent: '#3B82F6',
 			motif: 'store'
+		}
+	},
+	{
+		id: 'home-kitchen',
+		title: '烹饪',
+		englishTitle: 'Cooking',
+		summary: '在自家厨房把菜叶、肉片、蛋、面团、豆腐和虾炒熟，再盛盘。没有订单，也不赶时间。',
+		about:
+			'这是一间家里的厨房。碗里是生菜叶、肉片、蛋、面团、豆腐和虾。拖进锅里，文火或武火，在锅里搅一搅。食材会从生变熟、出一点蒸汽。炒好了盛到盘子上，名字只是口味，不是通关。锅最多十二份，盘子最多八盘；满了会轻轻说一声，不是失败。没有客人，没有倒计时。锅气要你自己打开。',
+		category: '经营',
+		tags: ['厨房', '炒菜', '烹饪'],
+		status: 'playable',
+		playCta: '开始做饭',
+		cover: {
+			sky: '#F8E0B8',
+			ground: '#C47A3A',
+			accent: '#E36B2A',
+			motif: 'wok'
 		}
 	},
 	{

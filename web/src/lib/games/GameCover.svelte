@@ -84,6 +84,12 @@
 		<div class="or-cone"></div>
 		<div class="or-table"></div>
 		<div class="or-drape"></div>
+	{:else if cover.motif === 'wok'}
+		<div class="wok-flame"></div>
+		<div class="wok-pan"></div>
+		<div class="wok-handle"></div>
+		<div class="wok-steam a"></div>
+		<div class="wok-steam b"></div>
 	{:else}
 		<div class="mini-shelf s1"></div>
 		<div class="mini-shelf s2"></div>
@@ -566,6 +572,57 @@
 		height: 10%;
 		border-radius: 0.2rem;
 		background: color-mix(in srgb, var(--cover-ground) 70%, white);
+	}
+
+	.wok-flame {
+		position: absolute;
+		left: 32%;
+		right: 32%;
+		bottom: 18%;
+		height: 22%;
+		background: linear-gradient(180deg, #ffb020, #e36b2a 55%, transparent);
+		clip-path: polygon(42% 0, 58% 0, 88% 100%, 12% 100%);
+	}
+
+	.wok-pan {
+		position: absolute;
+		left: 22%;
+		right: 22%;
+		bottom: 28%;
+		height: 22%;
+		border-radius: 50%;
+		background: radial-gradient(circle at 40% 35%, #6b6e74, #1f1f22 70%);
+		box-shadow: 0 10px 18px -12px rgb(15 23 42 / 0.7);
+	}
+
+	.wok-handle {
+		position: absolute;
+		right: 8%;
+		bottom: 36%;
+		width: 22%;
+		height: 0.38rem;
+		border-radius: 999px;
+		background: #5a341c;
+		transform: rotate(-12deg);
+	}
+
+	.wok-steam {
+		position: absolute;
+		width: 12%;
+		height: 16%;
+		border-radius: 999px;
+		background: color-mix(in srgb, white 55%, transparent);
+		bottom: 48%;
+	}
+
+	.wok-steam.a {
+		left: 38%;
+	}
+
+	.wok-steam.b {
+		left: 52%;
+		bottom: 54%;
+		width: 9%;
 	}
 
 	.mini-shelf {
