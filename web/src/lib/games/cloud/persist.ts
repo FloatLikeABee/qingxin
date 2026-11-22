@@ -18,7 +18,7 @@ import {
 } from './sim';
 
 export const CLOUD_SAVE_KEY = 'qingxin.games.cloud-walk';
-export const CLOUD_SCHEMA = 2;
+export const CLOUD_SCHEMA = 3;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return value && typeof value === 'object' && !Array.isArray(value)
@@ -151,7 +151,7 @@ export function readSkySave(
 		if (!raw) return fresh;
 		const rec = asRecord(JSON.parse(raw) as unknown);
 		const schema = Number(rec?.schema);
-		if (!rec || (schema !== 1 && schema !== 2)) {
+		if (!rec || (schema !== 1 && schema !== 2 && schema !== 3)) {
 			fresh.recovered = true;
 			fresh.notice = '云上的记事读不出来，风又从头吹起。';
 			return fresh;

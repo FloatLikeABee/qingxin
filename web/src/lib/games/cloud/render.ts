@@ -1,5 +1,12 @@
 import * as THREE from 'three';
 import {
+	BULLET_POOL,
+	BULLET_R,
+	SHARD_POOL,
+	flyAimAlongRay,
+	type Breakable
+} from './cannon';
+import {
 	FRAG_KINDS,
 	GARDEN_PLOTS,
 	WELL,
@@ -18,6 +25,9 @@ export interface CloudScene {
 	dispose(): void;
 	hitFly(clientX: number, clientY: number): { x: number; y: number; z: number } | null;
 	hitWalk(clientX: number, clientY: number): { x: number; z: number } | null;
+	breakables(): Breakable[];
+	aim(world: SkyWorld): { origin: { x: number; y: number; z: number }; dir: { x: number; y: number; z: number } };
+	gpuMs: number;
 }
 
 type CloudGroup = InstanceType<typeof THREE.Group>;
@@ -254,8 +264,10 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	const camTarget = new THREE.Vector3(0, 1.2, 0);
 	const camPos = new THREE.Vector3(-2.4, 5.6, 11.2);
 
-	function addWalk(mesh: CloudMesh) {
+	function addWalk(mesh: CloudMesh, opts?: { id?: string; protect?: boolean }) {
 		mesh.userData.walk = true;
+		mesh.userData.sceneryId = opts?.id ?? `walk-${walkMeshes.length}`;
+		mesh.userData.protect = Boolean(opts?.protect);
 		walkMeshes.push(mesh);
 		return mesh;
 	}
@@ -286,7 +298,7 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		rock.position.y = -0.72;
 		rock.castShadow = true;
 		rock.receiveShadow = true;
-		g.add(addWalk(rock));
+		g.add(addWalk(rock, { id: `isle-${isle.id}` }));
 		const top = new THREE.Mesh(
 			cap,
 			keepMat(
@@ -302,7 +314,7 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		top.position.y = 0.08;
 		top.scale.setScalar(isle.r * 1.04);
 		top.receiveShadow = true;
-		g.add(addWalk(top));
+		g.add(addWalk(top, { id: `isle-${isle.id}` }));
 		const under = new THREE.Mesh(cone, keepMat(mat(stone[look], { roughness: 0.95 })));
 		under.position.y = -1.85;
 		under.scale.set(isle.r * 0.7, 1.7, isle.r * 0.7);
@@ -440,7 +452,7 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	);
 	wellRing.scale.set(WELL.r, WELL.r, WELL.r);
 	wellRing.rotation.x = Math.PI / 2;
-	well.add(addWalk(wellRing));
+	well.add(addWalk(wellRing, { id: 'well', protect: true }));
 	const wellMirror = new THREE.Mesh(
 		cap,
 		keepMat(
@@ -464,7 +476,7 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	gardenDisk.position.y = -0.02;
 	gardenDisk.scale.setScalar(8);
 	gardenDisk.receiveShadow = true;
-	scene.add(addWalk(gardenDisk));
+	scene.add(addWalk(gardenDisk, { id: 'garden-disk' }));
 	for (const kind of FRAG_KINDS) {
 		const plot = GARDEN_PLOTS[kind];
 		const ring = new THREE.Mesh(
@@ -837,7 +849,7 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	);
 	shelf.position.set(2.2, -10.6, 1.6);
 	shelf.scale.set(1.8, 1.1, 1.5);
-	diveRoot.add(addWalk(shelf));
+	diveRoot.add(addWalk(shelf, { id: 'cavern-shelf', protect: true }));
 	const hutDown = new THREE.Group();
 	const wall = new THREE.Mesh(box, keepMat(mat(0xf3e6d0)));
 	wall.scale.set(1.1, 0.85, 0.9);
@@ -857,7 +869,7 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		keepMat(mat(0x334155, { roughness: 0.7, emissive: 0x1e293b, emissiveIntensity: 0.2 }))
 	);
 	pavement.scale.set(4.6, 0.14, 1.7);
-	street.add(addWalk(pavement));
+	street.add(addWalk(pavement, { id: 'cavern-street', protect: true }));
 	for (let i = 0; i < 4; i++) {
 		const lamp = new THREE.Group();
 		const post = new THREE.Mesh(cyl, keepMat(mat(0x475569)));
@@ -1072,6 +1084,30 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 	blob.name = 'blob';
 	ghost.add(blob);
 	scene.add(ghost);
+
+	const bulletGeo = keepGeo(new THREE.SphereGeometry(BULLET_R, 10, 8));
+	const bulletMat = keepMat(
+		mat(0xf8fafc, { emissive: 0x7dd3fc, emissiveIntensity: 1.1, roughness: 0.22 })
+	);
+	const bulletBalls: CloudMesh[] = Array.from({ length: BULLET_POOL }, () => {
+		const mesh = new THREE.Mesh(bulletGeo, bulletMat);
+		mesh.visible = false;
+		mesh.castShadow = true;
+		scene.add(mesh);
+		return mesh;
+	});
+	const shardGeo = keepGeo(new THREE.BoxGeometry(0.62, 0.48, 0.4));
+	const shardMat = keepMat(
+		mat(0xffedd5, { emissive: 0xea580c, emissiveIntensity: 1.35, roughness: 0.35 })
+	);
+	const shardBoxes: CloudMesh[] = Array.from({ length: SHARD_POOL }, () => {
+		const mesh = new THREE.Mesh(shardGeo, shardMat);
+		mesh.visible = false;
+		scene.add(mesh);
+		return mesh;
+	});
+	let lastGpuMs = 0;
+	const worldScale = new THREE.Vector3();
 
 	const fragMeshes: CloudMesh[] = [];
 	const fragGlow: InstanceType<typeof THREE.PointLight>[] = [];
@@ -1388,9 +1424,9 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		const height = chase.height;
 		camTarget.set(world.x, world.y + chase.lift, world.z);
 		camPos.set(
-			world.x - Math.sin(world.yaw || 0.15) * dist,
+			world.x - Math.sin(world.yaw) * dist,
 			world.y + height,
-			world.z - Math.cos(world.yaw || 0.15) * dist
+			world.z - Math.cos(world.yaw) * dist
 		);
 		const origin = new THREE.Vector3(world.x, world.y + 0.4, world.z);
 		const dir = camPos.clone().sub(origin);
@@ -1399,7 +1435,10 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 			raycaster.set(origin, dir.normalize());
 			const blocks = raycaster
 				.intersectObjects(walkMeshes, false)
-				.filter((hit: { object: CloudMesh }) => !hit.object.userData.skipOcclude);
+				.filter(
+					(hit: { object: CloudMesh }) =>
+						hit.object.visible && !hit.object.userData.skipOcclude
+				);
 			if (blocks[0] && blocks[0].distance < span - 0.2) {
 				dist = Math.max(2.4, blocks[0].distance - 0.45);
 				camPos.copy(origin).add(dir.multiplyScalar(dist));
@@ -1422,11 +1461,6 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 			camera.position.copy(camPos);
 		else camera.position.lerp(camPos, 0.085);
 		camera.lookAt(camTarget);
-		world.lookX = camTarget.x - camera.position.x;
-		world.lookZ = camTarget.z - camera.position.z;
-		const lookLen = Math.hypot(world.lookX, world.lookZ) || 1;
-		world.lookX /= lookLen;
-		world.lookZ /= lookLen;
 	}
 
 	function sync(world: SkyWorld, opts?: { reducedMotion?: boolean }) {
@@ -1457,6 +1491,31 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		ensurePlants(world);
 		ensureCreatures(world);
 		follow(world);
+		for (const mesh of walkMeshes) {
+			const id = String(mesh.userData.sceneryId ?? '');
+			mesh.visible = !id || !world.hiddenIds.includes(id);
+		}
+		for (let i = 0; i < bulletBalls.length; i++) {
+			const bullet = world.bullets[i];
+			const mesh = bulletBalls[i]!;
+			if (!bullet?.live) {
+				mesh.visible = false;
+				continue;
+			}
+			mesh.visible = true;
+			mesh.position.set(bullet.x, bullet.y, bullet.z);
+		}
+		for (let i = 0; i < shardBoxes.length; i++) {
+			const shard = world.shards[i];
+			const mesh = shardBoxes[i]!;
+			if (!shard?.live) {
+				mesh.visible = false;
+				continue;
+			}
+			mesh.visible = true;
+			mesh.position.set(shard.x, shard.y, shard.z);
+			if (!reduceMotion) mesh.rotation.y = shard.spin + world.t * 0.008;
+		}
 		bounceA.position.y = 0.88 + (reduceMotion ? 0 : Math.sin(world.t / 520) * 0.08);
 		bounceB.position.y = 1.12 + (reduceMotion ? 0 : Math.cos(world.t / 480) * 0.08);
 		windGroup.visible = true;
@@ -1503,7 +1562,45 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 				if (wingR) wingR.rotation.z = -0.9 - flap;
 			}
 		}
+		const gpu0 = performance.now();
 		renderer.render(scene, camera);
+		lastGpuMs = performance.now() - gpu0;
+	}
+
+	function breakables(): Breakable[] {
+		const out: Breakable[] = [];
+		const seen = new Set<string>();
+		for (const mesh of walkMeshes) {
+			const id = String(mesh.userData.sceneryId ?? '');
+			if (!id || seen.has(id)) continue;
+			seen.add(id);
+			mesh.updateWorldMatrix(true, false);
+			if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+			const local = mesh.geometry.boundingSphere!;
+			const center = local.center.clone().applyMatrix4(mesh.matrixWorld);
+			mesh.getWorldScale(worldScale);
+			const radius = local.radius * Math.max(worldScale.x, worldScale.y, worldScale.z);
+			out.push({
+				id,
+				x: center.x,
+				y: center.y,
+				z: center.z,
+				r: Math.max(0.4, radius),
+				protect: Boolean(mesh.userData.protect)
+			});
+		}
+		return out;
+	}
+
+	function aim(world: SkyWorld) {
+		return {
+			origin: { x: world.x, y: world.y + 0.4, z: world.z },
+			dir: {
+				x: camTarget.x - camera.position.x,
+				y: camTarget.y - camera.position.y,
+				z: camTarget.z - camera.position.z
+			}
+		};
 	}
 
 	function setPointer(clientX: number, clientY: number) {
@@ -1517,11 +1614,12 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 
 	function hitFly(clientX: number, clientY: number) {
 		if (!setPointer(clientX, clientY)) return null;
-		const hits = raycaster.intersectObjects(walkMeshes, false);
-		if (hits[0]) return { x: hits[0].point.x, y: hits[0].point.y, z: hits[0].point.z };
-		const dir = raycaster.ray.direction.clone().normalize();
-		const point = camera.position.clone().add(dir.multiplyScalar(14));
-		return { x: point.x, y: point.y, z: point.z };
+		const dir = raycaster.ray.direction;
+		return flyAimAlongRay(
+			{ x: camera.position.x, y: camera.position.y, z: camera.position.z },
+			{ x: dir.x, y: dir.y, z: dir.z },
+			14
+		);
 	}
 
 	function hitWalk(clientX: number, clientY: number) {
@@ -1551,5 +1649,17 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 
 	applyPalette('dawn');
 	resize();
-	return { sync, render, resize, dispose, hitFly, hitWalk };
+	return {
+		sync,
+		render,
+		resize,
+		dispose,
+		hitFly,
+		hitWalk,
+		breakables,
+		aim,
+		get gpuMs() {
+			return lastGpuMs;
+		}
+	};
 }

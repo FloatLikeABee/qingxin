@@ -34,7 +34,7 @@ describe('cloud-walk save', () => {
 		expect(loaded.lowDetail).toBe(true);
 		expect(loaded.audioWanted).toBe(true);
 		expect(loaded.dockCollapsed).toBe(true);
-		expect(CLOUD_SCHEMA).toBe(2);
+		expect(CLOUD_SCHEMA).toBe(3);
 		expect(CLOUD_SAVE_KEY).toBe('qingxin.games.cloud-walk');
 	});
 
@@ -81,7 +81,7 @@ describe('cloud-walk save', () => {
 		expect(loaded.audioWanted).toBe(true);
 		expect(storage.getItem('qingxin.theme')).toBe('dark');
 		expect(storage.getItem('qingxin.games.tide-breath')).toBe('{"schema":1}');
-		expect(storage.getItem('qingxin.games.cloud-walk')).toContain('"schema":2');
+		expect(storage.getItem('qingxin.games.cloud-walk')).toContain('"schema":3');
 	});
 
 	it('recovers a corrupt save without throwing', () => {
@@ -121,6 +121,67 @@ describe('cloud-walk save', () => {
 		expect(storage.getItem('qingxin.theme')).toBe('light');
 	});
 
+	it('reads a schema 2 save pose and settings without wiping sibling keys', () => {
+		const storage = memory({
+			'qingxin.theme': 'dark',
+			'qingxin.games.cargo-haul': '{"schema":2}',
+			'qingxin.games.cloud-walk': JSON.stringify({
+				schema: 2,
+				x: 4,
+				y: 3,
+				z: -2,
+				yaw: 0.4,
+				island: 0,
+				biome: 'garden',
+				visited: [0],
+				biomes: ['garden'],
+				skyMode: 'dawn',
+				fragments: [
+					{ id: 1, kind: 'sun', collected: false },
+					{ id: 2, kind: 'rain', collected: false },
+					{ id: 3, kind: 'breeze', collected: false },
+					{ id: 4, kind: 'night', collected: false }
+				],
+				garden: [],
+				lowDetail: true,
+				audioWanted: true,
+				dockCollapsed: false
+			})
+		});
+		const loaded = readSkySave(storage);
+		expect(loaded.recovered).toBe(false);
+		expect(loaded.x).toBeCloseTo(4);
+		expect(loaded.y).toBeCloseTo(3);
+		expect(loaded.z).toBeCloseTo(-2);
+		expect(loaded.lowDetail).toBe(true);
+		expect(loaded.audioWanted).toBe(true);
+		expect(loaded.hiddenIds).toEqual([]);
+		expect(storage.getItem('qingxin.theme')).toBe('dark');
+		expect(storage.getItem('qingxin.games.cargo-haul')).toBe('{"schema":2}');
+	});
+
+	it('does not persist destruction; reload restores scenery while keeping pose', () => {
+		const storage = memory();
+		const world = createSky();
+		world.x = 5;
+		world.y = 4;
+		world.z = -3;
+		world.hiddenIds = ['isle-1', 'garden-disk'];
+		world.fireHeld = true;
+		writeSkySave(world, storage);
+		const raw = JSON.parse(storage.getItem('qingxin.games.cloud-walk')!);
+		expect(raw.schema).toBe(3);
+		expect(raw.hiddenIds).toBeUndefined();
+		expect(raw.bullets).toBeUndefined();
+		expect(raw.x).toBeCloseTo(5);
+		const loaded = readSkySave(storage);
+		expect(loaded.x).toBeCloseTo(5);
+		expect(loaded.y).toBeCloseTo(4);
+		expect(loaded.z).toBeCloseTo(-3);
+		expect(loaded.hiddenIds).toEqual([]);
+		expect(loaded.bullets.every((b) => !b.live)).toBe(true);
+	});
+
 	it('keeps schema 2 biomes including water after a round-trip', () => {
 		const storage = memory();
 		const world = createSky();
@@ -130,7 +191,7 @@ describe('cloud-walk save', () => {
 		world.z = -0.55;
 		writeSkySave(world, storage);
 		const loaded = readSkySave(storage);
-		expect(JSON.parse(storage.getItem('qingxin.games.cloud-walk')!).schema).toBe(2);
+		expect(JSON.parse(storage.getItem('qingxin.games.cloud-walk')!).schema).toBe(3);
 		expect(loaded.biomes).toEqual(expect.arrayContaining(['garden', 'water', 'underworld']));
 		expect(loaded.y).toBeLessThan(-6);
 	});

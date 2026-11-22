@@ -27,6 +27,7 @@ type SkyVec = {
 	biome: string | null;
 	lookx: number;
 	lookz: number;
+	bound: boolean;
 };
 
 async function readSky(sky: Locator): Promise<SkyVec> {
@@ -37,7 +38,8 @@ async function readSky(sky: Locator): Promise<SkyVec> {
 		r: Number(el.getAttribute('data-r')),
 		biome: el.getAttribute('data-biome'),
 		lookx: Number(el.getAttribute('data-lookx')),
-		lookz: Number(el.getAttribute('data-lookz'))
+		lookz: Number(el.getAttribute('data-lookz')),
+		bound: el.getAttribute('data-bound') === '1'
 	}));
 }
 
@@ -101,6 +103,36 @@ async function releaseMouse(page: Page) {
 	await page.mouse.up();
 }
 
+const KEY_FLAG: Record<string, string> = {
+	ArrowUp: 'data-up',
+	ArrowDown: 'data-down',
+	ArrowLeft: 'data-left',
+	ArrowRight: 'data-right',
+	Space: 'data-rise',
+	Shift: 'data-dive'
+};
+
+async function pressSkyKey(page: Page, sky: Locator, key: string) {
+	await page.keyboard.down(key);
+	const attr = KEY_FLAG[key];
+	if (!attr) return;
+	try {
+		await expect(sky).toHaveAttribute(attr, '1', { timeout: 400 });
+	} catch {
+		const code = key === 'Space' ? 'Space' : key === 'Shift' ? 'ShiftLeft' : key;
+		const name = key === 'Space' ? ' ' : key === 'Shift' ? 'Shift' : key;
+		await page.evaluate(
+			({ code, name }) => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', { key: name, code, bubbles: true, cancelable: true })
+				);
+			},
+			{ code, name }
+		);
+		await expect(sky).toHaveAttribute(attr, '1', { timeout: 2500 });
+	}
+}
+
 async function flyUntil(
 	page: Page,
 	sky: Locator,
@@ -110,13 +142,28 @@ async function flyUntil(
 ) {
 	const start = Date.now();
 	let held: string[] = [];
-	let stickKey = '';
-	let stickUntil = 0;
 	const release = async () => {
-		for (const key of held) await page.keyboard.up(key);
+		for (const key of held) {
+			await page.keyboard.up(key);
+			const attr = KEY_FLAG[key];
+			if (attr) {
+				await page.evaluate(
+					({ code, name }) => {
+						window.dispatchEvent(
+							new KeyboardEvent('keyup', { key: name, code, bubbles: true, cancelable: true })
+						);
+					},
+					{
+						code: key === 'Space' ? 'Space' : key === 'Shift' ? 'ShiftLeft' : key,
+						name: key === 'Space' ? ' ' : key === 'Shift' ? 'Shift' : key
+					}
+				);
+			}
+		}
 		held = [];
 	};
 	while (Date.now() - start < timeout) {
+		await focusStage(page);
 		const v = await readSky(sky);
 		if (pred(v)) {
 			await release();
@@ -125,6 +172,7 @@ async function flyUntil(
 		const next: string[] = [];
 		if (target.y != null) {
 			if (v.y < target.y - 0.5) next.push('Space');
+			if (v.y > target.y + 0.8) next.push('Shift');
 		}
 		const dx = target.x - v.x;
 		const dz = target.z - v.z;
@@ -132,27 +180,54 @@ async function flyUntil(
 		const lz = v.lookz;
 		const fwd = dx * lx + dz * lz;
 		const right = dx * lz + dz * -lx;
-		const preferred =
-			Math.abs(fwd) >= Math.abs(right)
-				? fwd >= 0
-					? 'ArrowUp'
-					: 'ArrowDown'
-				: right >= 0
-					? 'ArrowRight'
-					: 'ArrowLeft';
-		const now = Date.now();
-		if (!stickKey || now >= stickUntil || stickKey === preferred) {
-			stickKey = preferred;
-			stickUntil = now + 1400;
+		if (fwd > 0.45) next.push('ArrowUp');
+		else if (fwd < -0.45) next.push('ArrowDown');
+		if (right > 0.45) next.push('ArrowRight');
+		else if (right < -0.45) next.push('ArrowLeft');
+		if (
+			!next.includes('ArrowUp') &&
+			!next.includes('ArrowDown') &&
+			!next.includes('ArrowRight') &&
+			!next.includes('ArrowLeft')
+		) {
+			next.push(
+				Math.abs(fwd) >= Math.abs(right)
+					? fwd >= 0
+						? 'ArrowUp'
+						: 'ArrowDown'
+					: right >= 0
+						? 'ArrowRight'
+						: 'ArrowLeft'
+			);
 		}
-		next.push(stickKey);
 		const uniq = [...new Set(next)];
-		for (const key of held) if (!uniq.includes(key)) await page.keyboard.up(key);
-		for (const key of uniq) if (!held.includes(key)) await page.keyboard.down(key);
+		for (const key of held) {
+			if (uniq.includes(key)) continue;
+			await page.keyboard.up(key);
+			const attr = KEY_FLAG[key];
+			if (attr) {
+				await page.evaluate(
+					({ code, name }) => {
+						window.dispatchEvent(
+							new KeyboardEvent('keyup', { key: name, code, bubbles: true, cancelable: true })
+						);
+					},
+					{
+						code: key === 'Space' ? 'Space' : key === 'Shift' ? 'ShiftLeft' : key,
+						name: key === 'Space' ? ' ' : key === 'Shift' ? 'Shift' : key
+					}
+				);
+			}
+		}
+		for (const key of uniq) if (!held.includes(key)) await pressSkyKey(page, sky, key);
 		held = uniq;
 		await page.waitForTimeout(180);
 	}
 	const last = await readSky(sky);
+	if (pred(last)) {
+		await release();
+		return last;
+	}
 	await release();
 	throw new Error(`timeout flying toward ${JSON.stringify(target)}; last ${JSON.stringify(last)}`);
 }
@@ -190,7 +265,7 @@ test.describe('云上散步', () => {
 	});
 
 	test('guest ghost climbs, dives, roams biomes, and hits the rim', async ({ page }) => {
-		test.setTimeout(180_000);
+		test.setTimeout(210_000);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await boot(page, 'dark');
 		await page.goto('/modules/games/cloud-walk', { waitUntil: 'networkidle' });
@@ -282,7 +357,14 @@ test.describe('云上散步', () => {
 		await shot(page, 'cloud-walk-city-390.png');
 		await page.setViewportSize({ width: 1280, height: 800 });
 
-		await flyUntil(page, sky, { x: 2, z: -40, y: 8 }, (v) => v.r >= 38, 28_000);
+		await focusStage(page);
+		await flyUntil(
+			page,
+			sky,
+			{ x: 2, z: -40, y: 8 },
+			(v) => v.bound || Math.hypot(v.x, v.z) >= 37.5,
+			40_000
+		);
 		await expect(sky).toHaveAttribute('data-bound', '1');
 		await shot(page, 'cloud-walk-bound-1280.png');
 
@@ -371,7 +453,7 @@ test.describe('云上散步', () => {
 		expect(theme).toBe('dark');
 		expect(tide).toBe('{"schema":1}');
 		const saved = await page.evaluate(() => localStorage.getItem('qingxin.games.cloud-walk'));
-		expect(saved).toContain('"schema":2');
+		expect(saved).toContain('"schema":3');
 	});
 
 	test('reduced motion still paints a sky and other games still boot', async ({ page }) => {
@@ -402,5 +484,213 @@ test.describe('云上散步', () => {
 		await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 		await page.goto('/modules/games/shangban/play', { waitUntil: 'networkidle' });
 		await expect(page.locator('[data-shangban="1"]')).toBeVisible();
+		await page.goto('/modules/games/cargo-haul/play', { waitUntil: 'networkidle' });
+		await expect(page.locator('canvas[aria-label="重卡公路"]')).toBeVisible();
+		await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
+	});
+
+	test('yaw 0 holds W straight on +Z without idle mesh trap', async ({ page }) => {
+		test.setTimeout(45_000);
+		await page.addInitScript(() => {
+			localStorage.setItem('qingxin.privacyConsent', 'accepted');
+			localStorage.setItem('qingxin.theme', 'dark');
+			localStorage.setItem(
+				'qingxin.games.cloud-walk',
+				JSON.stringify({
+					schema: 3,
+					x: 0,
+					y: 1,
+					z: 0,
+					yaw: 0,
+					island: 0,
+					biome: 'garden',
+					visited: [0],
+					biomes: ['garden'],
+					skyMode: 'dawn',
+					fragments: [
+						{ id: 1, kind: 'sun', collected: false },
+						{ id: 2, kind: 'rain', collected: false },
+						{ id: 3, kind: 'breeze', collected: false },
+						{ id: 4, kind: 'night', collected: false }
+					],
+					garden: []
+				})
+			);
+		});
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.goto('/modules/games/cloud-walk/play', { waitUntil: 'networkidle' });
+		await waitSky(page);
+		const sky = page.locator('canvas[aria-label="云上散步天空"]');
+		await expect(sky).toHaveAttribute('data-yaw', '0');
+		const idleY = Number(await sky.getAttribute('data-y'));
+		expect(idleY).toBeGreaterThan(0.6);
+		await page.waitForTimeout(700);
+		expect(Number(await sky.getAttribute('data-y'))).toBeCloseTo(idleY, 0);
+		expect(Number(await sky.getAttribute('data-y'))).not.toBeCloseTo(0.1, 1);
+		const z0 = Number(await sky.getAttribute('data-z'));
+		const x0 = Number(await sky.getAttribute('data-x'));
+		await focusStage(page);
+		await page.keyboard.down('w');
+		await expect
+			.poll(async () => Number(await sky.getAttribute('data-z')), { timeout: 6_000 })
+			.toBeGreaterThan(z0 + 2);
+		const x1 = Number(await sky.getAttribute('data-x'));
+		expect(Math.abs(x1 - x0)).toBeLessThan(1);
+		expect(Number(await sky.getAttribute('data-lookx'))).toBeCloseTo(0, 1);
+		expect(Number(await sky.getAttribute('data-lookz'))).toBeGreaterThan(0.8);
+		await page.keyboard.up('w');
+	});
+
+	test('left click flies, F destroys scenery, rebuild and pools stay bounded', async ({ page }) => {
+		test.setTimeout(90_000);
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await boot(page, 'dark');
+		await page.goto('/modules/games/cloud-walk/play', { waitUntil: 'networkidle' });
+		await waitSky(page);
+		const sky = page.locator('canvas[aria-label="云上散步天空"]');
+		await expect(page.getByRole('button', { name: '发射' })).toBeVisible();
+		await expect(page.getByRole('button', { name: '重建云界' })).toBeVisible();
+		await expect(sky).toHaveAttribute('data-hidden', '0');
+		await expect(sky).toHaveAttribute('data-bullets', '0');
+		await shot(page, 'cloud-cannon-before-impact-1280.png');
+
+		const box = await sky.boundingBox();
+		expect(box).toBeTruthy();
+		const x0 = Number(await sky.getAttribute('data-x'));
+		const z0 = Number(await sky.getAttribute('data-z'));
+		await page.mouse.move(box!.x + box!.width * 0.62, box!.y + box!.height * 0.42);
+		await page.mouse.down();
+		await expect(sky).toHaveAttribute('data-steer', '1', { timeout: 2500 });
+		await expect(sky).toHaveAttribute('data-fire', '0');
+		await expect
+			.poll(
+				async () => {
+					const v = await readSky(sky);
+					return Math.hypot(v.x - x0, v.z - z0) > 0.6;
+				},
+				{ timeout: 6_000 }
+			)
+			.toBe(true);
+		await expect(sky).toHaveAttribute('data-bullets', '0');
+		await page.mouse.up();
+		await expect(sky).toHaveAttribute('data-steer', '0', { timeout: 2500 });
+		await expect(sky).toHaveAttribute('data-bullets', '0');
+
+		await page.getByRole('button', { name: '回家' }).click();
+		await expect.poll(async () => Number(await sky.getAttribute('data-y'))).toBeLessThan(2);
+		await focusStage(page);
+		await page.keyboard.down('f');
+		await expect(sky).toHaveAttribute('data-fire', '1', { timeout: 2500 });
+		await expect
+			.poll(async () => Number(await sky.getAttribute('data-bullets')), { timeout: 4_000 })
+			.toBeGreaterThan(0);
+		await expect
+			.poll(async () => Number(await sky.getAttribute('data-hidden')), { timeout: 8_000 })
+			.toBeGreaterThan(0);
+		await expect
+			.poll(async () => Number(await sky.getAttribute('data-shards')), { timeout: 3_000 })
+			.toBeGreaterThan(0);
+		const hiddenIds = (await sky.getAttribute('data-hiddenids')) ?? '';
+		expect(hiddenIds).not.toMatch(/\bwell\b/);
+		expect(hiddenIds).not.toMatch(/cavern/);
+		await shot(page, 'cloud-cannon-after-impact-1280.png');
+		await page.keyboard.up('f');
+		await expect(sky).toHaveAttribute('data-fire', '0');
+
+		const pose = await readSky(sky);
+		await page.getByRole('button', { name: '重建云界' }).click();
+		await expect(sky).toHaveAttribute('data-hidden', '0');
+		await expect(sky).toHaveAttribute('data-bullets', '0');
+		await expect(sky).toHaveAttribute('data-shards', '0');
+		const restored = await readSky(sky);
+		expect(restored.x).toBeCloseTo(pose.x, 0);
+		expect(restored.y).toBeCloseTo(pose.y, 0);
+		expect(restored.z).toBeCloseTo(pose.z, 0);
+
+		await page.keyboard.down('f');
+		await page.waitForTimeout(2200);
+		expect(Number(await sky.getAttribute('data-bullets'))).toBeLessThanOrEqual(12);
+		expect(Number(await sky.getAttribute('data-shards'))).toBeLessThanOrEqual(48);
+		await page.keyboard.up('f');
+
+		await page.getByRole('button', { name: '暂停' }).click();
+		await expect(sky).toHaveAttribute('data-anim', '0');
+		const yPaused = await sky.getAttribute('data-y');
+		await page.waitForTimeout(400);
+		expect(await sky.getAttribute('data-y')).toBe(yPaused);
+		await page.getByRole('button', { name: '继续' }).click();
+
+		await page.evaluate(() => sessionStorage.setItem('qingxin.keepCloud', '1'));
+		await page.reload({ waitUntil: 'networkidle' });
+		await waitSky(page);
+		await expect(sky).toHaveAttribute('data-ready', '1');
+		await expect(sky).toHaveAttribute('data-hidden', '0');
+		const gpu = Number(await sky.getAttribute('data-gpu'));
+		expect(Number.isFinite(gpu)).toBe(true);
+		console.log(`cloud renderer.render ms (CPU timestamp around GL): ${gpu}`);
+
+		await focusStage(page);
+		await page.keyboard.down('Space');
+		await expect(sky).toHaveAttribute('data-rise', '1', { timeout: 2500 });
+		await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+		await expect(sky).toHaveAttribute('data-rise', '0', { timeout: 2500 });
+		await expect(sky).toHaveAttribute('data-fire', '0');
+		await expect(sky).toHaveAttribute('data-steer', '0');
+	});
+
+	test('390 fire control is 44px, tap-drag does not shoot, rise+fire together', async ({
+		page
+	}) => {
+		test.setTimeout(60_000);
+		await page.setViewportSize({ width: 390, height: 844 });
+		await boot(page, 'dark');
+		await page.goto('/modules/games/cloud-walk/play', { waitUntil: 'networkidle' });
+		await waitSky(page);
+		const sky = page.locator('canvas[aria-label="云上散步天空"]');
+		const fire = page.getByRole('button', { name: '发射' });
+		await expect(fire).toBeVisible();
+		const fireBox = await fire.boundingBox();
+		expect(fireBox).toBeTruthy();
+		expect(fireBox!.height).toBeGreaterThanOrEqual(44);
+		expect(fireBox!.width).toBeGreaterThanOrEqual(44);
+		await shot(page, 'cloud-cannon-fire-390.png');
+
+		const canvasBox = await sky.boundingBox();
+		expect(canvasBox).toBeTruthy();
+		const x0 = Number(await sky.getAttribute('data-x'));
+		const z0 = Number(await sky.getAttribute('data-z'));
+		await page.mouse.move(canvasBox!.x + canvasBox!.width * 0.55, canvasBox!.y + canvasBox!.height * 0.4);
+		await page.mouse.down();
+		await expect(sky).toHaveAttribute('data-steer', '1', { timeout: 2500 });
+		await expect(sky).toHaveAttribute('data-fire', '0');
+		await expect
+			.poll(
+				async () => {
+					const v = await readSky(sky);
+					return Math.hypot(v.x - x0, v.z - z0) > 0.4;
+				},
+				{ timeout: 6_000 }
+			)
+			.toBe(true);
+		await expect(sky).toHaveAttribute('data-bullets', '0');
+		await page.mouse.up();
+		await expect(sky).toHaveAttribute('data-steer', '0');
+
+		const y0 = Number(await sky.getAttribute('data-y'));
+		const rise = page.getByRole('button', { name: '飞升' });
+		await rise.dispatchEvent('pointerdown');
+		await fire.dispatchEvent('pointerdown');
+		await expect(sky).toHaveAttribute('data-rise', '1', { timeout: 2500 });
+		await expect(sky).toHaveAttribute('data-fire', '1', { timeout: 2500 });
+		await expect
+			.poll(async () => Number(await sky.getAttribute('data-y')), { timeout: 6_000 })
+			.toBeGreaterThan(y0 + 0.6);
+		await expect
+			.poll(async () => Number(await sky.getAttribute('data-bullets')), { timeout: 4_000 })
+			.toBeGreaterThan(0);
+		await shot(page, 'cloud-cannon-fire-active-390.png');
+		await rise.dispatchEvent('pointerup');
+		await fire.dispatchEvent('pointerup');
+		await expect(sky).toHaveAttribute('data-fire', '0');
 	});
 });

@@ -81,6 +81,23 @@ export function chimeSky() {
 	osc.stop(ctx.currentTime + 0.64);
 }
 
+export function popSky() {
+	if (!graph || graph.master.gain.value === 0) return;
+	const { ctx, master } = graph;
+	const osc = ctx.createOscillator();
+	const gain = ctx.createGain();
+	osc.type = 'triangle';
+	osc.frequency.setValueAtTime(220, ctx.currentTime);
+	osc.frequency.exponentialRampToValueAtTime(90, ctx.currentTime + 0.18);
+	gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+	gain.gain.exponentialRampToValueAtTime(0.07, ctx.currentTime + 0.02);
+	gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+	osc.connect(gain);
+	gain.connect(master);
+	osc.start();
+	osc.stop(ctx.currentTime + 0.3);
+}
+
 export function stopSkyAudio() {
 	try {
 		graph?.noise.stop();

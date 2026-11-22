@@ -68,6 +68,7 @@ describe('cloud walk sandbox', () => {
 		expect(skyControlFromKeyboard({ code: 'Space', key: ' ' })).toEqual({ move: 'rise' });
 		expect(skyControlFromKeyboard({ code: 'KeyP', key: 'p' })).toEqual({ pause: true });
 		expect(skyControlFromKeyboard({ code: 'KeyP', key: 'P', shiftKey: true })).toEqual({});
+		expect(skyControlFromKeyboard({ code: 'KeyF', key: 'f' })).toEqual({ fire: true });
 		const world = createSky();
 		const move = skyControlFromKeyboard({ code: 'ShiftLeft', key: 'Shift' }).move;
 		expect(move).toBe('dive');
@@ -134,6 +135,37 @@ describe('cloud walk sandbox', () => {
 		expect(world.garden.some((p) => p.kind === 'sun')).toBe(true);
 		stepSky(world, 30_000);
 		expect(world.over).toBe(false);
+	});
+
+	it('A/D strafes across yaw 0 without spinning the heading', () => {
+		const world = createSky();
+		world.yaw = 0;
+		world.lookX = 0;
+		world.lookZ = 1;
+		world.x = 0;
+		world.z = 0;
+		setSkyKey(world, 'right', true);
+		for (let i = 0; i < 125; i++) stepSky(world, 16);
+		expect(world.yaw).toBeCloseTo(0, 5);
+		expect(world.x).toBeGreaterThan(2);
+		expect(Math.abs(world.z)).toBeLessThan(0.3);
+		expect(world.lookX).toBeCloseTo(0, 5);
+		expect(world.lookZ).toBeCloseTo(1, 5);
+	});
+
+	it('yaw 0 hold W stays on +Z even if lookX is camera-stale', () => {
+		const world = createSky();
+		world.yaw = 0;
+		world.lookX = 1;
+		world.lookZ = 0;
+		world.x = 0;
+		world.z = 0;
+		setSkyKey(world, 'up', true);
+		for (let i = 0; i < 125; i++) stepSky(world, 16);
+		expect(Math.abs(world.x)).toBeLessThan(0.3);
+		expect(world.z).toBeGreaterThan(2);
+		expect(world.lookX).toBeCloseTo(0, 5);
+		expect(world.lookZ).toBeCloseTo(1, 5);
 	});
 
 	it('pauses without drifting', () => {

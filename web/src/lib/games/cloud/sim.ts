@@ -1,3 +1,5 @@
+import { emptyBullets, emptyShards, type SkyBullet, type SkyShard } from './cannon';
+
 export const FRAG_KINDS = ['sun', 'rain', 'breeze', 'night'] as const;
 export type FragKind = (typeof FRAG_KINDS)[number];
 export type SkyMode = 'dawn' | FragKind;
@@ -90,6 +92,11 @@ export type SkyWorld = {
 	creatures: SkyCreature[];
 	keys: SkyKeys;
 	steer: { x: number; y: number; z: number } | null;
+	fireHeld: boolean;
+	lastFire: number;
+	bullets: SkyBullet[];
+	shards: SkyShard[];
+	hiddenIds: string[];
 	paused: boolean;
 	lowDetail: boolean;
 	reducedMotion: boolean;
@@ -156,6 +163,7 @@ export function chaseOffset(biome: BiomeId): { dist: number; height: number; lif
 export function skyControlFromKeyboard(event: { code: string; key: string; shiftKey?: boolean }): {
 	move?: keyof SkyKeys;
 	pause?: boolean;
+	fire?: boolean;
 } {
 	if (event.code === 'Space') return { move: 'rise' };
 	if (event.code === 'ShiftLeft' || event.code === 'ShiftRight' || event.key === 'Shift') {
@@ -178,6 +186,7 @@ export function skyControlFromKeyboard(event: { code: string; key: string; shift
 	const dir = map[event.code] ?? map[event.key];
 	if (dir) return { move: dir };
 	if ((event.key === 'p' || event.key === 'P') && !event.shiftKey) return { pause: true };
+	if (event.key === 'f' || event.key === 'F' || event.code === 'KeyF') return { fire: true };
 	return {};
 }
 
@@ -279,6 +288,11 @@ export function createSky(): SkyWorld {
 		],
 		keys: { up: false, down: false, left: false, right: false, rise: false, dive: false },
 		steer: null,
+		fireHeld: false,
+		lastFire: -1000,
+		bullets: emptyBullets(),
+		shards: emptyShards(),
+		hiddenIds: [],
 		paused: false,
 		lowDetail: false,
 		reducedMotion: false,
@@ -297,6 +311,13 @@ export function setSkyLook(world: SkyWorld, x: number, z: number) {
 	const len = Math.hypot(x, z) || 1;
 	world.lookX = x / len;
 	world.lookZ = z / len;
+	world.yaw = Math.atan2(world.lookX, world.lookZ);
+}
+
+export function releaseSkyControls(world: SkyWorld) {
+	world.keys = { up: false, down: false, left: false, right: false, rise: false, dive: false };
+	world.steer = null;
+	world.fireHeld = false;
 }
 
 export function setSkySteer(world: SkyWorld, x: number, y: number | null, z?: number) {
@@ -314,8 +335,7 @@ export function recallHome(world: SkyWorld) {
 	world.vx = 0;
 	world.vy = 0;
 	world.vz = 0;
-	world.steer = null;
-	world.keys = { up: false, down: false, left: false, right: false, rise: false, dive: false };
+	releaseSkyControls(world);
 	world.bound = false;
 	world.boundTimer = 0;
 	world.biome = 'garden';
@@ -345,8 +365,8 @@ function wish(world: SkyWorld) {
 	let wx = 0;
 	let wy = 0;
 	let wz = 0;
-	const lx = world.lookX;
-	const lz = world.lookZ;
+	const lx = Math.sin(world.yaw);
+	const lz = Math.cos(world.yaw);
 	const rx = lz;
 	const rz = -lx;
 	if (world.keys.up) {
@@ -460,7 +480,13 @@ function tick(world: SkyWorld, dt: number) {
 		world.y += dir.y * speed * dt;
 		world.z += dir.z * speed * dt;
 	}
-	if (dir.x || dir.z) world.yaw = Math.atan2(dir.x, dir.z);
+	if (world.steer) {
+		const hx = world.steer.x - world.x;
+		const hz = world.steer.z - world.z;
+		if (Math.hypot(hx, hz) > 0.2) world.yaw = Math.atan2(hx, hz);
+	}
+	world.lookX = Math.sin(world.yaw);
+	world.lookZ = Math.cos(world.yaw);
 	world.airborne = true;
 	world.onGround = false;
 	world.biome = biomeAt(world.x, world.y, world.z);
@@ -496,6 +522,19 @@ export function collectFragment(world: SkyWorld, kind: FragKind) {
 	world.biome = biomeAt(world.x, world.y, world.z);
 	world.island = ISLAND_FROM_BIOME[world.biome];
 	markBiome(world, world.biome);
+}
+
+export function defaultSkyBreakables() {
+	return [
+		...CLOUD_ISLANDS.map((isle) => ({
+			id: `isle-${isle.id}`,
+			x: isle.x,
+			y: isle.y + 0.4,
+			z: isle.z,
+			r: isle.r
+		})),
+		{ id: 'well', x: WELL.x, y: 0, z: WELL.z, r: WELL.r, protect: true as const }
+	];
 }
 
 export function restartSky(world: SkyWorld) {
