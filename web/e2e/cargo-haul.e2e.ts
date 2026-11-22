@@ -48,8 +48,19 @@ async function readRoad(road: Locator) {
 		throttle: Number(el.getAttribute('data-throttle')),
 		brake: Number(el.getAttribute('data-brake')),
 		steerPtr: el.getAttribute('data-steer-ptr'),
-		throttlePtr: el.getAttribute('data-throttle-ptr')
+		throttlePtr: el.getAttribute('data-throttle-ptr'),
+		hrNdc: Number(el.getAttribute('data-hr-ndc')),
+		hlNdc: Number(el.getAttribute('data-hl-ndc')),
+		truckNdc: Number(el.getAttribute('data-truck-ndc')),
+		camDet: Number(el.getAttribute('data-cam-det'))
 	}));
+}
+
+function cabRightDelta(
+	start: { x: number; z: number; yaw: number },
+	now: { x: number; z: number }
+) {
+	return (now.x - start.x) * Math.cos(start.yaw) + (now.z - start.z) * Math.sin(start.yaw);
 }
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -130,6 +141,9 @@ test.describe('重卡', () => {
 		await expect(page.getByRole('slider', { name: '方向盘' })).toBeHidden();
 		const start = await readRoad(road);
 		expect(start.biome).toBe('highway');
+		expect(start.hrNdc).toBeGreaterThan(start.hlNdc);
+		expect(start.camDet).toBeGreaterThan(0.5);
+		expect(Math.abs(start.truckNdc)).toBeLessThan(0.45);
 		await assertHudClear(page);
 		await shot(page, 'cargo-haul-highway-1280');
 
@@ -139,6 +153,22 @@ test.describe('重卡', () => {
 		await expect
 			.poll(async () => Number(await road.getAttribute('data-speed')), { timeout: 8_000 })
 			.toBeGreaterThan(start.speed + 1);
+
+		const poseD = await readRoad(road);
+		await page.keyboard.down('d');
+		await expect
+			.poll(async () => {
+				const now = await readRoad(road);
+				return cabRightDelta(poseD, now);
+			}, { timeout: 8_000 })
+			.toBeGreaterThan(0.2);
+		await expect.poll(async () => Number(await road.getAttribute('data-steer'))).toBe(1);
+		await page.keyboard.down('a');
+		await expect.poll(async () => Number(await road.getAttribute('data-steer'))).toBe(-1);
+		await page.keyboard.up('a');
+		await expect.poll(async () => Number(await road.getAttribute('data-steer'))).toBe(1);
+		await page.keyboard.up('d');
+		await expect.poll(async () => Number(await road.getAttribute('data-steer'))).toBe(0);
 
 		const seen = new Set([start.biome ?? 'highway']);
 		await expect
@@ -189,7 +219,16 @@ test.describe('重卡', () => {
 		await expect
 			.poll(async () => Number(await road.getAttribute('data-speed')), { timeout: 8_000 })
 			.toBeLessThan(-0.8);
+		const poseR = await readRoad(road);
+		await page.keyboard.down('d');
+		await expect
+			.poll(async () => {
+				const now = await readRoad(road);
+				return cabRightDelta(poseR, now);
+			}, { timeout: 8_000 })
+			.toBeGreaterThan(0.15);
 		await shot(page, 'cargo-haul-reverse-1280');
+		await page.keyboard.up('d');
 		await page.keyboard.up('w');
 		await page.keyboard.press('r');
 
@@ -306,6 +345,9 @@ test.describe('重卡 390 touch', () => {
 		if (goBox && dockBox) expect(boxesOverlap(goBox, dockBox)).toBe(false);
 		const start = await readRoad(road);
 		expect(start.recover).toBe(0);
+		expect(start.hrNdc).toBeGreaterThan(start.hlNdc);
+		expect(start.camDet).toBeGreaterThan(0.5);
+		expect(Math.abs(start.truckNdc)).toBeLessThan(0.45);
 		await shot(page, 'cargo-haul-mobile-390');
 
 		const leftX = (wheelBox?.x ?? 0) + (wheelBox?.width ?? 0) * 0.14;
@@ -382,6 +424,35 @@ test.describe('重卡 390 touch', () => {
 		await page.setViewportSize({ width: 320, height: 720 });
 		await expect(wheel).toBeVisible();
 		await assertHudClear(page);
+	});
+});
+
+test.describe('重卡 320 dock', () => {
+	test.use({
+		viewport: { width: 320, height: 720 },
+		hasTouch: true,
+		isMobile: true
+	});
+
+	test('fresh 320 guest starts with dock collapsed and truck in the gap', async ({ page }) => {
+		test.setTimeout(60_000);
+		await boot(page, 'dark');
+		await page.goto('/modules/games/cargo-haul/play', { waitUntil: 'networkidle' });
+		const road = await waitRoad(page);
+		const wheel = page.getByRole('slider', { name: '方向盘' });
+		const go = page.getByRole('button', { name: '油门', exact: true });
+		await expect(wheel).toBeVisible();
+		await expect(go).toBeVisible();
+		await expect(page.getByRole('region', { name: '重卡操作' })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: '展开操作' })).toBeVisible();
+		await assertHudClear(page);
+		const wheelBox = await wheel.boundingBox();
+		const goBox = await go.boundingBox();
+		expect((goBox?.width ?? 0) >= 44 && (goBox?.height ?? 0) >= 44).toBe(true);
+		if (wheelBox && goBox) expect(boxesOverlap(wheelBox, goBox)).toBe(false);
+		const pose = await readRoad(road);
+		expect(pose.hrNdc).toBeGreaterThan(pose.hlNdc);
+		expect(Math.abs(pose.truckNdc)).toBeLessThan(0.45);
 		await shot(page, 'cargo-haul-mobile-320');
 	});
 });

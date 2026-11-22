@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
 	createHaulPointers,
+	emptyHaulSteerHeld,
 	haulPointerActive,
 	haulPointerCancelAll,
 	haulPointerDown,
 	haulPointerMove,
 	haulPointerUp,
-	haulSteerFromPad
+	haulSteerFromHeld,
+	haulSteerFromPad,
+	haulSteerKeyDown,
+	haulSteerKeyUp
 } from './touch';
 
 describe('cargo haul touch pointers', () => {
@@ -25,6 +29,18 @@ describe('cargo haul touch pointers', () => {
 		expect(afterSteer.throttle).toBe(1);
 		haulPointerUp(pointers, 22);
 		expect(haulPointerActive(pointers).throttle).toBe(0);
+	});
+
+	it('keeps D while A is tapped and released', () => {
+		const held = emptyHaulSteerHeld();
+		haulSteerKeyDown(held, 1);
+		expect(haulSteerFromHeld(held)).toBe(1);
+		haulSteerKeyDown(held, -1);
+		expect(haulSteerFromHeld(held)).toBe(-1);
+		haulSteerKeyUp(held, -1);
+		expect(haulSteerFromHeld(held)).toBe(1);
+		haulSteerKeyUp(held, 1);
+		expect(haulSteerFromHeld(held)).toBe(0);
 	});
 
 	it('maps pad x to steer and resets on cancel', () => {

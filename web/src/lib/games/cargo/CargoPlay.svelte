@@ -16,13 +16,18 @@
 	} from './sim';
 	import {
 		createHaulPointers,
+		emptyHaulSteerHeld,
 		haulPointerActive,
 		haulPointerCancelAll,
 		haulPointerDown,
 		haulPointerMove,
 		haulPointerUp,
+		haulSteerFromHeld,
 		haulSteerFromPad,
-		type HaulPointerKind
+		haulSteerKeyDown,
+		haulSteerKeyUp,
+		type HaulPointerKind,
+		type HaulSteerHeld
 	} from './touch';
 
 	const BIOME_LABEL: Record<Biome, string> = {
@@ -40,8 +45,14 @@
 	let wheelEl = $state<HTMLDivElement | null>(null);
 	let audioOn = $state(false);
 	const pointers = createHaulPointers();
-	let keyHeld = {
-		steer: 0,
+	let sceneRef: CargoScene | null = null;
+	let keyHeld: {
+		steer: HaulSteerHeld;
+		throttle: boolean;
+		brake: boolean;
+		handbrake: boolean;
+	} = {
+		steer: emptyHaulSteerHeld(),
 		throttle: false,
 		brake: false,
 		handbrake: false
@@ -80,6 +91,13 @@
 		canvas.dataset.steerPtr = String(active.steerHeld ? 1 : 0);
 		canvas.dataset.throttlePtr = String(active.throttleHeld ? 1 : 0);
 		canvas.dataset.brakePtr = String(active.brakeHeld ? 1 : 0);
+		const hud = sceneRef?.projectHud(world);
+		if (hud) {
+			canvas.dataset.hrNdc = String(Math.round(hud.hr * 1000) / 1000);
+			canvas.dataset.hlNdc = String(Math.round(hud.hl * 1000) / 1000);
+			canvas.dataset.truckNdc = String(Math.round(hud.truck * 1000) / 1000);
+			canvas.dataset.camDet = String(Math.round(hud.det * 1000) / 1000);
+		}
 		if (wheelEl) {
 			wheelEl.dataset.steer = canvas.dataset.steer;
 			wheelEl.dataset.held = active.steerHeld ? '1' : '0';
@@ -97,7 +115,7 @@
 			return;
 		}
 		if (active.steerHeld) setHaulControl(world, 'steer', active.steer);
-		else setHaulControl(world, 'steer', keyHeld.steer);
+		else setHaulControl(world, 'steer', haulSteerFromHeld(keyHeld.steer));
 		if (active.throttleHeld) setHaulControl(world, 'throttle', 1);
 		else setHaulControl(world, 'throttle', keyHeld.throttle ? 1 : 0);
 		if (active.brakeHeld) setHaulControl(world, 'brake', 1);
@@ -107,7 +125,12 @@
 
 	function releaseTouch(reason: string) {
 		haulPointerCancelAll(pointers);
-		keyHeld = { steer: 0, throttle: false, brake: false, handbrake: false };
+		keyHeld = {
+			steer: emptyHaulSteerHeld(),
+			throttle: false,
+			brake: false,
+			handbrake: false
+		};
 		setHaulControl(world, 'steer', 0);
 		setHaulControl(world, 'throttle', 0);
 		setHaulControl(world, 'brake', 0);
@@ -216,6 +239,7 @@
 
 	onMount(() => {
 		world = readHaulSave();
+		if (window.matchMedia('(max-width: 320px)').matches) world.dockCollapsed = true;
 		let scene: CargoScene | null = null;
 		let raf = 0;
 		let last = performance.now();
@@ -245,17 +269,23 @@
 			}
 			if (control.move) {
 				event.preventDefault();
-				if (control.move === 'steer') keyHeld.steer = control.value ?? 0;
+				if (control.move === 'steer') haulSteerKeyDown(keyHeld.steer, control.value ?? 0);
 				if (control.move === 'throttle') keyHeld.throttle = true;
 				if (control.move === 'brake') keyHeld.brake = true;
 				if (control.move === 'handbrake') keyHeld.handbrake = true;
-				if (!world.paused) setHaulControl(world, control.move, control.value ?? 1);
+				if (!world.paused) {
+					if (control.move === 'steer') {
+						setHaulControl(world, 'steer', haulSteerFromHeld(keyHeld.steer));
+					} else {
+						setHaulControl(world, control.move, control.value ?? 1);
+					}
+				}
 			}
 			paint();
 		};
 		const onKeyUp = (event: KeyboardEvent) => {
 			const control = haulControlFromKeyboard(event);
-			if (control.move === 'steer') keyHeld.steer = 0;
+			if (control.move === 'steer') haulSteerKeyUp(keyHeld.steer, control.value ?? 0);
 			if (control.move === 'throttle') keyHeld.throttle = false;
 			if (control.move === 'brake') keyHeld.brake = false;
 			if (control.move === 'handbrake') keyHeld.handbrake = false;
@@ -268,6 +298,7 @@
 			const { mountCargoScene } = await import('./render');
 			if (cancelled) return;
 			scene = mountCargoScene(canvas);
+			sceneRef = scene;
 			if (!scene) sceneFailed = true;
 			else scene.resize({ lowDetail: world.lowDetail });
 			canvas.dataset.ready = '1';
@@ -315,6 +346,7 @@
 			document.removeEventListener('visibilitychange', onVis);
 			window.removeEventListener('pagehide', save);
 			scene?.dispose();
+			sceneRef = null;
 			stopHaulAudio();
 			save();
 		};
@@ -414,7 +446,7 @@
 		<section class="dock qx-glass" aria-label="重卡操作">
 			<p class="notice" aria-live="polite">{world.notice}</p>
 			<p class="need">
-				A/D 转向，W 加油，S 刹车，R 倒车。左边方向盘可回正，右边油门刹车倒车。没有通关。
+				A/D 转向，W 加油，S 刹车，R 倒车。左边方向盘可回正，右边油门刹车倒车。倒车时方向盘仍按车头左右，不是按行驶方向。没有通关。
 			</p>
 			<div class="actions">
 				<Button class="min-h-12 px-5" variant="secondary" onclick={recover}>回收</Button>
@@ -696,6 +728,12 @@
 			min-height: 2.5rem;
 			padding-inline: 0.55rem;
 			font-size: 0.85rem;
+		}
+	}
+
+	@media (max-width: 320px) {
+		.need {
+			display: none;
 		}
 	}
 

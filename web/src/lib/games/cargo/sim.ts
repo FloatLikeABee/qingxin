@@ -113,6 +113,15 @@ function wrap(a: number) {
 	return a;
 }
 
+/** Three.js-native heading: yaw 0 faces world −Z, driver right is +X. */
+export function haulAhead(yaw: number) {
+	return { x: Math.sin(yaw), z: -Math.cos(yaw) };
+}
+
+export function haulRight(yaw: number) {
+	return { x: Math.cos(yaw), z: Math.sin(yaw) };
+}
+
 function clamp(n: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, n));
 }
@@ -233,8 +242,9 @@ function fillSamples(piece: RoadPiece) {
 	for (let i = 0; i <= n; i++) {
 		samples.push({ x, z, yaw, s: i * ds });
 		yaw += k * ds;
-		x += Math.sin(yaw) * ds;
-		z += Math.cos(yaw) * ds;
+		const ahead = haulAhead(yaw);
+		x += ahead.x * ds;
+		z += ahead.z * ds;
 	}
 	const last = samples[samples.length - 1]!;
 	piece.samples = samples;
@@ -298,11 +308,12 @@ function scatterScenery(world: HaulWorld, piece: RoadPiece) {
 		const s = piece.samples[1 + Math.floor(world.rng() * (piece.samples.length - 2))]!;
 		const side = world.rng() < 0.5 ? -1 : 1;
 		const lat = side * (piece.width / 2 + 6 + world.rng() * 10);
+		const right = haulRight(s.yaw);
 		world.trees.push({
 			id: alloc(world.freeTree, 't', world, 'tree'),
 			kind: piece.biome === 'country' ? 'field' : 'tree',
-			x: s.x + Math.cos(s.yaw) * lat,
-			z: s.z - Math.sin(s.yaw) * lat,
+			x: s.x + right.x * lat,
+			z: s.z + right.z * lat,
 			yaw: s.yaw,
 			biome: piece.biome,
 			pieceId: piece.id
@@ -312,11 +323,12 @@ function scatterScenery(world: HaulWorld, piece: RoadPiece) {
 		const s = piece.samples[1 + Math.floor(world.rng() * (piece.samples.length - 2))]!;
 		const side = i % 2 === 0 ? 1 : -1;
 		const lat = side * (piece.width / 2 + 10 + world.rng() * 8);
+		const right = haulRight(s.yaw);
 		world.buildings.push({
 			id: alloc(world.freeBuild, 'b', world, 'build'),
 			kind: piece.biome === 'city' ? 'building' : 'sign',
-			x: s.x + Math.cos(s.yaw) * lat,
-			z: s.z - Math.sin(s.yaw) * lat,
+			x: s.x + right.x * lat,
+			z: s.z + right.z * lat,
 			yaw: s.yaw,
 			biome: piece.biome,
 			pieceId: piece.id
@@ -382,8 +394,10 @@ export function projectPoint(
 			else dist -= align * 6;
 			if (preferred.has(piece.id)) dist -= 18;
 			if (best && dist >= best.dist) continue;
-			const lat = dx * Math.cos(sample.yaw) - dz * Math.sin(sample.yaw);
-			const along = dx * Math.sin(sample.yaw) + dz * Math.cos(sample.yaw);
+			const right = haulRight(sample.yaw);
+			const ahead = haulAhead(sample.yaw);
+			const lat = dx * right.x + dz * right.z;
+			const along = dx * ahead.x + dz * ahead.z;
 			best = { piece, sample, lateral: lat, along, dist };
 		}
 	}
@@ -463,9 +477,10 @@ export function poseOnPiece(piece: RoadPiece, s: number, lane = 0) {
 	const idx = Math.min(piece.samples.length - 1, Math.floor(t * (piece.samples.length - 1)));
 	const sample = piece.samples[idx]!;
 	const lat = lane * 5.4;
+	const right = haulRight(sample.yaw);
 	return {
-		x: sample.x + Math.cos(sample.yaw) * lat,
-		z: sample.z - Math.sin(sample.yaw) * lat,
+		x: sample.x + right.x * lat,
+		z: sample.z + right.z * lat,
 		yaw: sample.yaw
 	};
 }
@@ -709,8 +724,9 @@ function tick(world: HaulWorld, dt: number) {
 	world.steer += (world.steerInput * steerMax - world.steer) * Math.min(1, 8 * sec);
 	const tan = Math.tan(world.steer);
 	world.yaw = wrap(world.yaw + (world.speed / WHEELBASE) * tan * sec);
-	world.x += Math.sin(world.yaw) * world.speed * sec;
-	world.z += Math.cos(world.yaw) * world.speed * sec;
+	const go = haulAhead(world.yaw);
+	world.x += go.x * world.speed * sec;
+	world.z += go.z * world.speed * sec;
 	world.trailerYaw = wrap(
 		world.trailerYaw + wrap(world.yaw - world.trailerYaw) * Math.min(1, 2.4 * sec)
 	);
@@ -772,7 +788,8 @@ export function autoFollowHaul(world: HaulWorld, prefer: 'main' | 'exit' = 'main
 	world.brake = approaching && world.speed > 12 ? 0.35 : 0;
 	const dx = world.x - sample.x;
 	const dz = world.z - sample.z;
-	const lat = dx * Math.cos(sample.yaw) - dz * Math.sin(sample.yaw);
+	const right = haulRight(sample.yaw);
+	const lat = dx * right.x + dz * right.z;
 	const yawErr = wrap(sample.yaw - world.yaw);
 	world.steerInput = clamp(-lat * 0.16 - yawErr * 1.45, -1, 1);
 }
