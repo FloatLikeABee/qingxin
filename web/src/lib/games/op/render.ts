@@ -517,18 +517,27 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 	const tools = new THREE.Group();
 	fieldRoot.add(tools);
 	const scalpel = new THREE.Group();
-	const blade = new THREE.Mesh(keepG(new THREE.BoxGeometry(0.32, 0.012, 0.05)), steelM);
-	blade.position.x = 0.16;
+	const blade = new THREE.Mesh(keepG(new THREE.BoxGeometry(0.2, 0.008, 0.034)), steelM);
+	blade.position.x = 0.11;
 	const handle = new THREE.Mesh(
-		keepG(new THREE.CylinderGeometry(0.02, 0.024, 0.34, 8)),
+		keepG(new THREE.CylinderGeometry(0.013, 0.016, 0.16, 8)),
 		keepM(std(0x1f2937, { metalness: 0.4 }))
 	);
 	handle.rotation.z = Math.PI / 2;
-	handle.position.x = -0.1;
+	handle.position.x = -0.05;
 	scalpel.add(blade, handle);
 	const needle = new THREE.Group();
-	needle.add(new THREE.Mesh(keepG(new THREE.CylinderGeometry(0.01, 0.01, 0.34, 6)), steelM));
-	needle.rotation.z = 0.65;
+	const needleArc = new THREE.Mesh(
+		keepG(new THREE.TorusGeometry(0.048, 0.007, 8, 18, Math.PI * 1.2)),
+		steelM
+	);
+	needleArc.rotation.set(0.2, Math.PI / 2, 0);
+	const holder = new THREE.Mesh(
+		keepG(new THREE.BoxGeometry(0.028, 0.014, 0.09)),
+		keepM(std(0x1f2937, { metalness: 0.45, roughness: 0.4 }))
+	);
+	holder.position.set(0.01, 0.02, -0.04);
+	needle.add(needleArc, holder);
 	const toolMap: Record<ToolId, Group | Mesh> = { scalpel, needle };
 	for (const t of Object.values(toolMap)) {
 		t.visible = false;
@@ -536,8 +545,8 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 		tools.add(t);
 	}
 	const guide = new THREE.Mesh(
-		keepG(new THREE.BoxGeometry(1, 0.018, 0.055)),
-		keepM(std(0xfde68a, { emissive: 0xf59e0b, emissiveIntensity: 1.35, roughness: 0.35 }))
+		keepG(new THREE.BoxGeometry(1, 0.006, 0.016)),
+		keepM(std(0xfde68a, { emissive: 0xf59e0b, emissiveIntensity: 1.55, roughness: 0.3 }))
 	);
 	guide.visible = false;
 	fieldRoot.add(guide);
@@ -570,8 +579,11 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 		camera.updateProjectionMatrix();
 	}
 
-	function uvWorld(x: number, y: number) {
-		return new THREE.Vector3((x - 0.5) * 1.5, 1.28, (0.42 - y) * 0.85);
+	function woundAnchor(id: RegionId) {
+		if (id === 'knee') return { x: 0, y: 1.12, z: 0.38, span: 0.62, toolY: 1.24, toolZ: 0.5 };
+		if (id === 'tooth') return { x: 0, y: 1.2, z: 0.42, span: 0.34, toolY: 1.34, toolZ: 0.54 };
+		if (id === 'belly') return { x: 0, y: 1.4, z: 0.12, span: 0.28, toolY: 1.52, toolZ: 0.28 };
+		return { x: 0, y: 1.06, z: 0.3, span: 0.72, toolY: 1.18, toolZ: 0.46 };
 	}
 
 	function sync(world: OpWorld) {
@@ -603,6 +615,10 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 		wellF.position.set(0, 0.99, 0.16 + open * 0.08);
 		filmF.scale.set(2.1 + open * 0.7, 0.14 + open * 0.1, 0.28 + open * 0.18);
 		filmF.position.set(0, 1.0, 0.2 + open * 0.08);
+		wellK.scale.set(0.7 + open * 0.75, 0.14 + open * 0.24, 0.28 + open * 0.27);
+		wellK.visible = world.region === 'knee' && open > 0.12;
+		wellB.scale.set(0.45 + open * 0.6, 0.2 + open * 0.35, 0.45 + open * 0.6);
+		wellB.visible = world.region === 'belly' && open > 0.12;
 		patella.visible = world.region === 'knee' && open < 0.45;
 		wellF.visible = world.region === 'forearm' && open > 0.08;
 		bone.visible = world.region === 'forearm' && open > 0.25;
@@ -625,8 +641,8 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 			ch.rotation.set(Math.PI / 2, 0, 0);
 			if (world.region === 'forearm') ch.position.set(x, 1.04, 0.3);
 			else if (world.region === 'knee') ch.position.set(x * 0.65, 1.1, 0.34);
-			else if (world.region === 'tooth') ch.position.set(x * 0.22, 1.38, 0.12);
-			else ch.position.set(x * 0.18, 1.36, 0.06);
+			else if (world.region === 'tooth') ch.position.set(x * 0.2, 1.22, 0.38);
+			else ch.position.set(x * 0.16, 1.38, 0.08);
 		});
 
 		const wetField = world.view === 'field' && open > 0.12;
@@ -659,16 +675,13 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 		drops.instanceMatrix.needsUpdate = true;
 		drops.visible = n > 0 && wetField;
 
-		if (world.view === 'field' && world.region && world.phase !== 'done') {
-			const lay = fieldLayout(world.region, world.seed);
-			const a = uvWorld(lay.path.x0, lay.path.y0);
-			const b = uvWorld(lay.path.x1, lay.path.y1);
+		const lay = world.region ? fieldLayout(world.region, world.seed) : null;
+		if (world.view === 'field' && world.region && lay && world.phase === 'cut') {
+			const a = woundAnchor(world.region);
 			guide.visible = true;
-			guide.position.copy(a).lerp(b, 0.5);
-			guide.position.y += 0.08;
-			const span = Math.max(0.2, a.distanceTo(b));
-			guide.scale.set(span, 1, 1);
-			guide.lookAt(b.x, guide.position.y, b.z);
+			guide.quaternion.identity();
+			guide.position.set(a.x, a.y, a.z);
+			guide.scale.set(a.span, 1, 1);
 		} else {
 			guide.visible = false;
 		}
@@ -676,11 +689,13 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 		for (const [id, obj] of Object.entries(toolMap)) {
 			obj.visible = world.view === 'field' && world.tool === (id as ToolId);
 		}
-		const at = uvWorld(world.px, world.py);
-		at.y += 0.16;
-		at.z += 0.12;
-		tools.position.copy(at);
-		tools.rotation.z = world.pointerDown ? -0.35 : -0.12;
+		if (world.view === 'field' && world.region) {
+			const a = woundAnchor(world.region);
+			const follow = world.pointerDown ? (world.px - 0.5) * a.span : 0.1;
+			tools.position.set(a.x + follow, a.toolY, a.toolZ);
+			tools.rotation.set(-0.38, 0.42, world.pointerDown ? -0.4 : -0.18);
+			tools.scale.setScalar(world.region === 'belly' || world.region === 'tooth' ? 0.62 : 0.72);
+		}
 	}
 
 	function render(_now: number) {

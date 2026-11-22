@@ -159,6 +159,8 @@ test.describe('手术', () => {
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await ackAndHub(page);
 		await enterRegion(page, '前臂', 'forearm');
+		await page.waitForTimeout(200);
+		await shot(page, 'operation-forearm-cut-1280');
 		await expect(page.getByRole('button', { name: '吸引' })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: '冲洗' })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: '纱布' })).toHaveCount(0);
