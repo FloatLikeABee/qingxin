@@ -125,7 +125,9 @@ export function readClinicSave(
 		const last = asRecord(rec.lastSlip);
 		world.lastSlip = last
 			? {
-					text: Array.from(String(last.text ?? '')).slice(0, SLIP_MAX).join(''),
+					text: Array.from(String(last.text ?? ''))
+						.slice(0, SLIP_MAX)
+						.join(''),
 					herbs: parseHerbs(last.herbs)
 				}
 			: null;

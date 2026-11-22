@@ -40,13 +40,7 @@ export const CASE_IDS = ['fox-draft', 'clerk-tea', 'turtle-well', 'kite-cloud'] 
 export type CaseId = (typeof CASE_IDS)[number];
 
 export type ClinicPhase =
-	| 'disclaimer'
-	| 'hall'
-	| 'talk'
-	| 'examine'
-	| 'write'
-	| 'dispense'
-	| 'recovery';
+	'disclaimer' | 'hall' | 'talk' | 'examine' | 'write' | 'dispense' | 'recovery';
 export type ExamineKind = 'look' | 'listen' | 'pulse';
 export type ClinicOutcome = 'warm' | 'partial' | 'mismatch';
 
@@ -376,7 +370,8 @@ export function examine(world: ClinicWorld, kind: ExamineKind) {
 		return;
 	}
 	world.examined = [...world.examined, kind];
-	if (!world.revealedTags.includes(found.tag)) world.revealedTags = [...world.revealedTags, found.tag];
+	if (!world.revealedTags.includes(found.tag))
+		world.revealedTags = [...world.revealedTags, found.tag];
 	world.examineNote = found.flavor;
 	world.notice = found.flavor;
 }
@@ -474,12 +469,12 @@ export function jarWorld(index: number, compact = false) {
 	const col = index % 4;
 	const row = Math.floor(index / 4);
 	if (compact) {
-		return { x: -0.93 + col * 0.62, y: 1.15 - row * 0.42, z: -0.72 };
+		return { x: -1.02 + col * 0.68, y: 0.52, z: -0.2 - row * 0.54 };
 	}
-	return { x: 0.72 + col * 0.42, y: 1.35 - row * 0.48, z: -0.55 };
+	return { x: 0.62 + col * 0.5, y: 1.55 - row * 0.58, z: -0.28 };
 }
 
 export function patientWorld(compact = false) {
-	if (compact) return { x: 0, y: 0.42, z: 0.78 };
+	if (compact) return { x: 0, y: 0.42, z: 0.58 };
 	return { x: -1.15, y: 0.48, z: 0.35 };
 }

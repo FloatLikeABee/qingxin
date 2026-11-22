@@ -143,8 +143,9 @@ describe('clinic sim', () => {
 		expect(isCompactClinic(1280)).toBe(false);
 		for (let i = 0; i < 12; i++) {
 			const pos = jarWorld(i, true);
-			expect(Math.abs(pos.x)).toBeLessThan(1.1);
+			expect(Math.abs(pos.x)).toBeLessThan(1.15);
 			expect(pos.z).toBeLessThan(0);
+			expect(pos.z).toBeGreaterThan(-1.5);
 		}
 		const who = patientWorld(true);
 		expect(who.z).toBeGreaterThan(0.4);

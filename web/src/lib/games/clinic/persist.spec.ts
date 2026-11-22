@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { CLINIC_SAVE_KEY, CLINIC_SCHEMA, readClinicSave, serializeClinic, writeClinicSave } from './persist';
 import {
-	ackDisclaimer,
-	advanceTalk,
-	createClinic,
-	dispense,
-	setSlip,
-	toggleJar
-} from './sim';
+	CLINIC_SAVE_KEY,
+	CLINIC_SCHEMA,
+	readClinicSave,
+	serializeClinic,
+	writeClinicSave
+} from './persist';
+import { ackDisclaimer, advanceTalk, createClinic, dispense, setSlip, toggleJar } from './sim';
 
 function memory(initial?: Record<string, string>) {
 	const data = new Map<string, string>(Object.entries(initial ?? {}));
@@ -62,9 +61,9 @@ describe('story-clinic save', () => {
 		expect(loaded.dockCollapsed).toBe(true);
 		expect(CLINIC_SCHEMA).toBe(1);
 		expect(CLINIC_SAVE_KEY).toBe('qingxin.games.story-clinic');
-		expect(serializeClinic(world).lastSlip?.herbs.every((jar) => jar.packs >= 1 && jar.packs <= 3)).toBe(
-			true
-		);
+		expect(
+			serializeClinic(world).lastSlip?.herbs.every((jar) => jar.packs >= 1 && jar.packs <= 3)
+		).toBe(true);
 		for (const [key, value] of Object.entries(SIBLINGS)) {
 			expect(storage.getItem(key)).toBe(value);
 		}
