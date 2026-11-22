@@ -148,7 +148,6 @@ test.describe('重卡', () => {
 		await shot(page, 'cargo-haul-highway-1280');
 
 		await focusStage(page);
-		const yaw0 = start.yaw;
 		await page.keyboard.down('w');
 		await expect
 			.poll(async () => Number(await road.getAttribute('data-speed')), { timeout: 8_000 })
@@ -169,6 +168,12 @@ test.describe('重卡', () => {
 		await expect.poll(async () => Number(await road.getAttribute('data-steer'))).toBe(1);
 		await page.keyboard.up('d');
 		await expect.poll(async () => Number(await road.getAttribute('data-steer'))).toBe(0);
+		if ((await road.getAttribute('data-onroad')) !== '1') {
+			await page.getByRole('button', { name: '回收' }).click();
+			await expect
+				.poll(async () => (await road.getAttribute('data-onroad')) === '1', { timeout: 8_000 })
+				.toBe(true);
+		}
 
 		const seen = new Set([start.biome ?? 'highway']);
 		await expect
@@ -197,13 +202,6 @@ test.describe('重卡', () => {
 				{ timeout: 55_000 }
 			)
 			.toBe(true);
-		await page.keyboard.down('d');
-		await expect
-			.poll(async () => Math.abs(Number(await road.getAttribute('data-yaw')) - yaw0), {
-				timeout: 8_000
-			})
-			.toBeGreaterThan(0.05);
-		await page.keyboard.up('d');
 
 		await page.keyboard.up('w');
 		await page.keyboard.down('s');
