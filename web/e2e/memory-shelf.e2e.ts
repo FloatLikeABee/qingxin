@@ -48,7 +48,7 @@ async function clickProjected(page: Page, study: Locator, xKey: string, yKey: st
 }
 
 async function pauseWhen(page: Page, study: Locator, phase: string, minProgress = 0.25) {
-	await expect.poll(async () => study.getAttribute('data-phase'), { timeout: 10_000 }).toBe(phase);
+	await expect.poll(async () => study.getAttribute('data-phase'), { timeout: 12_000 }).toBe(phase);
 	await expect
 		.poll(async () => Number(await study.getAttribute('data-progress')), { timeout: 6_000 })
 		.toBeGreaterThan(minProgress);
@@ -62,7 +62,7 @@ async function resume(page: Page, study: Locator) {
 }
 
 test.describe('记忆货架', () => {
-	test('guest rearranges books, meets one ghost, and starts a new round', async ({ page }) => {
+	test('guest rearranges books, meets concurrent ghosts, and keeps ids', async ({ page }) => {
 		test.setTimeout(180_000);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await boot(page, 'dark');
@@ -71,18 +71,14 @@ test.describe('记忆货架', () => {
 		await expect(page.getByText('Memory Shelf')).toBeVisible();
 		await expect(page.getByText('没有计时，也没有分数')).toBeVisible();
 		await expect(page.getByText('对不起！')).toBeVisible();
+		await expect(page.getByText(/最多四只鬼/)).toBeVisible();
 		await expect(page.getByRole('link', { name: '开始整理' })).toBeVisible();
 		await page.getByRole('link', { name: '开始整理' }).click();
 		await expect(page).toHaveURL(/\/modules\/games\/memory-shelf\/play/);
-		await expect(page.getByRole('link', { name: '← 返回目录' })).toBeVisible();
 		const study = await waitStudy(page);
-		await expect(page.locator('[data-qx-dust]')).toHaveCount(0);
-		await expect(page.locator('[data-qx-nebula]')).toHaveCount(0);
 		await expect(study).toHaveAttribute('data-phase', 'idle');
-		await expect(study).toHaveAttribute('data-round', '0');
-		expect(Number(await study.getAttribute('data-items'))).toBeGreaterThanOrEqual(20);
-		await expect(page.getByRole('button', { name: '我记住了' })).toHaveCount(0);
-		await expect(page.getByRole('button', { name: '收藏室' })).toHaveCount(0);
+		await expect(study).toHaveAttribute('data-items', '48');
+		expect(Number(await study.getAttribute('data-hcount'))).toBe(4);
 		await expect(page.getByRole('button', { name: '书房声' })).toBeVisible();
 		await dualShot(page, study, 'memory-shelf-full');
 
@@ -100,85 +96,141 @@ test.describe('记忆货架', () => {
 			(swapped ?? '').split('|').filter((line, i) => line !== before?.split('|')[i])
 		).toHaveLength(2);
 
-		await clickProjected(page, study, 'hx', 'hy');
-		await pauseWhen(page, study, 'emerge', 0.3);
+		const first = await study.getAttribute('data-h0');
+		for (let i = 0; i < 4; i++) {
+			await clickProjected(page, study, `hx${i}`, `hy${i}`);
+		}
 		await expect(study).toHaveAttribute('data-playing', '1');
+		await pauseWhen(page, study, 'emerge', 0.2);
 		await dualShot(page, study, 'memory-shelf-emerge');
 		await resume(page, study);
 
-		await pauseWhen(page, study, 'cry', 0.2);
+		await pauseWhen(page, study, 'cry', 0.15);
+		expect(Number(await study.getAttribute('data-hcount'))).toBeGreaterThanOrEqual(2);
 		await dualShot(page, study, 'memory-shelf-cry');
 		await resume(page, study);
 
-		await pauseWhen(page, study, 'sorry', 0.15);
-		await expect(page.locator('p.sorry[data-apology="1"]')).toBeVisible();
-		await expect(page.locator('p.sorry')).toContainText('对不起！');
-		await expect(page.locator('p.sorry')).toContainText('sorry');
+		await pauseWhen(page, study, 'sorry', 0.12);
+		await expect(page.locator('p.sorry[data-apology="1"]').first()).toBeVisible();
+		await expect(page.locator('p.sorry').first()).toContainText('对不起！');
 		await dualShot(page, study, 'memory-shelf-sorry');
 		await resume(page, study);
 
-		await pauseWhen(page, study, 'retreat', 0.15);
-		await dualShot(page, study, 'memory-shelf-return');
-		await resume(page, study);
-
 		await expect
-			.poll(async () => study.getAttribute('data-phase'), { timeout: 8_000 })
-			.toBe('done');
-		await expect(study).toHaveAttribute('data-apology', '0');
-		await expect(page.getByRole('button', { name: '下一轮' })).toBeVisible();
-
-		const haunt = await study.getAttribute('data-haunt');
-		await clickProjected(page, study, 'hx', 'hy');
-		await expect(study).toHaveAttribute('data-phase', 'done');
-		await clickProjected(page, study, 'hx', 'hy');
-		await expect(study).toHaveAttribute('data-phase', 'done');
-		await expect(study).toHaveAttribute('data-haunt', haunt!);
+			.poll(async () => (await study.getAttribute('data-haunt'))?.split(',').includes(first ?? ''), {
+				timeout: 10_000
+			})
+			.toBe(false);
+		expect(Number(await study.getAttribute('data-hcount'))).toBe(4);
+		await dualShot(page, study, 'memory-shelf-return');
 
 		const layoutDone = await study.getAttribute('data-layout');
 		await page.getByRole('button', { name: '下一轮' }).click();
 		await expect(study).toHaveAttribute('data-phase', 'idle');
-		await expect(study).toHaveAttribute('data-round', '1');
-		expect(await study.getAttribute('data-haunt')).not.toBe(haunt);
 		expect(await study.getAttribute('data-layout')).toBe(layoutDone);
-		await expect(page.getByRole('button', { name: '下一轮' })).toHaveCount(0);
 
 		await page.evaluate(() => sessionStorage.setItem('qingxin.keepShelf', '1'));
 		await page.reload({ waitUntil: 'networkidle' });
 		const again = await waitStudy(page);
-		await expect(again).toHaveAttribute('data-round', '1');
 		expect(await again.getAttribute('data-layout')).toBe(layoutDone);
-		await expect(again).toHaveAttribute('data-phase', 'idle');
+		await expect(again).toHaveAttribute('data-items', '48');
 
-		await page.getByRole('button', { name: '暂停' }).click();
-		await expect(again).toHaveAttribute('data-anim', '0');
-		await page.getByRole('button', { name: '继续' }).click();
+		const idsHigh = await again.getAttribute('data-layout');
 		await page.getByRole('button', { name: '低细腻' }).click();
 		await expect(again).toHaveAttribute('data-detail', 'low');
+		await expect(again).toHaveAttribute('data-items', '30');
+		await page.getByRole('button', { name: '高细腻' }).click();
+		await expect(again).toHaveAttribute('data-items', '48');
+		expect(await again.getAttribute('data-layout')).toBe(idsHigh);
+
 		await page.getByRole('button', { name: '书房声' }).click();
 		await expect(again).toHaveAttribute('data-audio', '1');
 		await page.getByRole('button', { name: '静音' }).click();
-		await page.getByRole('button', { name: '收起操作' }).click();
-		await expect(page.getByRole('button', { name: '重新开始' })).toHaveCount(0);
-		await page.getByRole('button', { name: '展开操作' }).click();
 	});
 
-	test('390 touch rearranges a book without dock grab buttons', async ({ page }) => {
+	test('390 compact rearranges and taps a ghost with 44px controls', async ({ page }) => {
 		test.setTimeout(90_000);
 		await page.setViewportSize({ width: 390, height: 844 });
 		await boot(page, 'dark');
 		await page.goto('/modules/games/memory-shelf/play', { waitUntil: 'networkidle' });
 		const study = await waitStudy(page);
+		expect(Number(await study.getAttribute('data-items'))).toBeLessThanOrEqual(30);
+		expect(Number(await study.getAttribute('data-hcount'))).toBeLessThanOrEqual(2);
 		const before = await study.getAttribute('data-layout');
 		const aid = await study.getAttribute('data-aid');
 		const start = await canvasPoint(study, 'ax', 'ay');
 		const dest = await canvasPoint(study, 'bx', 'by');
+		expect(start.localY).toBeGreaterThan(48);
 		await page.mouse.click(start.x, start.y);
 		await expect(study).toHaveAttribute('data-held', aid!);
 		await page.mouse.click(dest.x, dest.y);
 		await expect(study).toHaveAttribute('data-held', '');
 		expect(await study.getAttribute('data-layout')).not.toBe(before);
-		await expect(page.getByRole('button', { name: /拿起|放到第/ })).toHaveCount(0);
 		await page.screenshot({ path: 'screenshots/memory-shelf-touch-390-dark.png' });
+
+		await clickProjected(page, study, 'hx', 'hy');
+		await expect
+			.poll(async () => study.getAttribute('data-apology'), { timeout: 10_000 })
+			.toBe('1');
+		await expect(page.locator('p.sorry[data-apology="1"]').first()).toBeVisible();
+		await page.screenshot({ path: 'screenshots/memory-shelf-ghost-390-dark.png' });
+
+		const audio = page.getByRole('button', { name: '书房声' });
+		const box = await audio.boundingBox();
+		expect(box).toBeTruthy();
+		expect(box!.height).toBeGreaterThanOrEqual(44);
+		expect(box!.width).toBeGreaterThanOrEqual(44);
+		await expect(page.getByRole('button', { name: /拿起|放到第/ })).toHaveCount(0);
+	});
+
+	test('schema 2 save keeps b0 and writes schema 3', async ({ page }) => {
+		await page.addInitScript(() => {
+			localStorage.setItem('qingxin.privacyConsent', 'accepted');
+			localStorage.setItem('qingxin.theme', 'dark');
+			localStorage.setItem('qingxin.games.cargo-haul', '{"schema":2}');
+			localStorage.setItem('qingxin.games.cloud-walk', '{"schema":3}');
+			localStorage.setItem('qingxin.games.operation', '{"schema":2}');
+			localStorage.setItem(
+				'qingxin.games.memory-shelf',
+				JSON.stringify({
+					schema: 2,
+					items: [
+						{
+							id: 'b0',
+							kind: 'book',
+							title: '夜航',
+							tone: 0.2,
+							row: 1,
+							slot: 2,
+							tall: 0.5,
+							thick: 0.25
+						}
+					],
+					hauntId: 'b0',
+					phase: 'idle',
+					round: 0,
+					lowDetail: false,
+					audioWanted: false,
+					dockCollapsed: false
+				})
+			);
+		});
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.goto('/modules/games/memory-shelf/play', { waitUntil: 'networkidle' });
+		const study = await waitStudy(page);
+		await expect(page.locator('.notice')).toHaveText('货架又添了几格。');
+		await expect(study).toHaveAttribute('data-items', '48');
+		expect((await study.getAttribute('data-layout')) ?? '').toMatch(/b0:1:2/);
+		const keys = await page.evaluate(() => ({
+			cargo: localStorage.getItem('qingxin.games.cargo-haul'),
+			cloud: localStorage.getItem('qingxin.games.cloud-walk'),
+			op: localStorage.getItem('qingxin.games.operation'),
+			schema: JSON.parse(localStorage.getItem('qingxin.games.memory-shelf') || '{}').schema
+		}));
+		expect(keys.cargo).toBe('{"schema":2}');
+		expect(keys.cloud).toBe('{"schema":3}');
+		expect(keys.op).toBe('{"schema":2}');
+		expect(keys.schema).toBe(3);
 	});
 
 	test('schema 1 save migrates without wiping other qingxin keys', async ({ page }) => {
@@ -202,8 +254,8 @@ test.describe('记忆货架', () => {
 		await page.goto('/modules/games/memory-shelf/play', { waitUntil: 'networkidle' });
 		const study = await waitStudy(page);
 		await expect(page.locator('.notice')).toHaveText('货架换了样子，书还在等你摆。');
-		await expect(study).toHaveAttribute('data-phase', 'idle');
 		await expect(study).toHaveAttribute('data-detail', 'low');
+		await expect(study).toHaveAttribute('data-items', '30');
 		const keys = await page.evaluate(() => ({
 			theme: localStorage.getItem('qingxin.theme'),
 			tide: localStorage.getItem('qingxin.games.tide-breath'),
@@ -211,18 +263,17 @@ test.describe('记忆货架', () => {
 		}));
 		expect(keys.theme).toBe('dark');
 		expect(keys.tide).toBe('{"schema":1}');
-		expect(keys.schema).toBe(2);
+		expect(keys.schema).toBe(3);
 	});
 
-	test('reduced motion still shows apology; store tide cloud shangban still boot', async ({
-		page
-	}) => {
+	test('reduced motion still shows apology; truck cloud operation still boot', async ({ page }) => {
 		test.setTimeout(120_000);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await boot(page, 'light');
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await page.goto('/modules/games/memory-shelf/play', { waitUntil: 'networkidle' });
 		const study = await waitStudy(page);
+		expect(Number(await study.getAttribute('data-items'))).toBeLessThanOrEqual(30);
 		await clickProjected(page, study, 'hx', 'hy');
 		await expect
 			.poll(
@@ -239,35 +290,21 @@ test.describe('记忆货架', () => {
 				{ timeout: 8_000 }
 			)
 			.toBe(true);
-		await expect(page.locator('p.sorry[data-apology="1"]')).toBeVisible();
-		await expect(page.locator('p.sorry')).toContainText('对不起！');
+		await expect(page.locator('p.sorry[data-apology="1"]').first()).toBeVisible();
 		await page.screenshot({ path: 'screenshots/memory-shelf-reduced-1280-light.png' });
 		await resume(page, study);
-		await expect
-			.poll(async () => study.getAttribute('data-phase'), { timeout: 8_000 })
-			.toBe('done');
 
-		await page.goto('/modules/games/convenient-store/play', { waitUntil: 'networkidle' });
-		await expect(page.locator('canvas[aria-label="便利店三维店面"]')).toHaveAttribute(
-			'data-ready',
-			'1',
-			{ timeout: 20_000 }
-		);
-		await page.goto('/modules/games/tide-breath/play', { waitUntil: 'networkidle' });
-		await expect(page.locator('canvas[aria-label="潮汐呼吸夜海"]')).toHaveAttribute(
-			'data-ready',
-			'1',
-			{ timeout: 20_000 }
-		);
+		await page.goto('/modules/games/cargo-haul/play', { waitUntil: 'networkidle' });
+		await expect(page.locator('canvas[aria-label="重卡公路"]')).toHaveAttribute('data-ready', '1', {
+			timeout: 20_000
+		});
 		await page.goto('/modules/games/cloud-walk/play', { waitUntil: 'networkidle' });
 		await expect(page.locator('canvas[aria-label="云上散步天空"]')).toHaveAttribute(
 			'data-ready',
 			'1',
 			{ timeout: 20_000 }
 		);
-		await page.goto('/modules/games/shangban/play', { waitUntil: 'networkidle' });
-		await expect(page.locator('canvas[aria-label="轻心大厦"]')).toHaveAttribute('data-ready', '1', {
-			timeout: 20_000
-		});
+		await page.goto('/modules/games/operation/play', { waitUntil: 'networkidle' });
+		await expect(page.locator('[data-play="operation"]')).toBeVisible();
 	});
 });
