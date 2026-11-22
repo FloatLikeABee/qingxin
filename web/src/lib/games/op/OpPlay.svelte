@@ -140,10 +140,7 @@
 			pointerDown(world, x, y);
 			startHoldTick();
 			if (world.audioWanted && audioOn) {
-				if (world.tool === 'scalpel') tickOpTool('cut');
-				else if (world.tool === 'suction' || world.tool === 'irrigator') tickOpTool('wet');
-				else if (world.tool === 'gauze' || world.tool === 'bandage') tickOpTool('pack');
-				else tickOpTool('metal');
+				tickOpTool(world.tool === 'scalpel' ? 'cut' : 'metal');
 			}
 		} else if (phase === 'move') {
 			pointerMove(world, x, y);
@@ -345,7 +342,7 @@
 			<ul class="warn-list">
 				<li>四个可做区域：前臂、膝、口腔、腹。其他部位尚未开放。</li>
 				<li>画面含伤口、组织与血液。直接进入或刷新都会先看到本警告。</li>
-				<li>请用器械在术野里操作，不是答题。</li>
+				<li>请用刀沿标记线切开，再用缝针缝合。不是答题。</li>
 			</ul>
 			<Button class="ack" onclick={acknowledge}>{ACK_LABEL}</Button>
 		</section>
@@ -374,7 +371,43 @@
 				onpointerup={(e) => onFieldPointer(e, 'up')}
 			></div>
 			{#if sceneFailed}
-				<p class="fail">这台设备画不出术野。仍可用按钮选择区域与器械。</p>
+				<p class="fail">这台设备画不出三维术野。仍可沿平面标记线切开、缝合。</p>
+				{#if world.view === 'field' && lay}
+					<svg class="flat" viewBox="0 0 100 100" aria-hidden="true">
+						<line
+							x1={lay.path.x0 * 100}
+							y1={lay.path.y0 * 100}
+							x2={lay.path.x1 * 100}
+							y2={lay.path.y1 * 100}
+							stroke="#f59e0b"
+							stroke-width="3.2"
+							stroke-linecap="round"
+						/>
+						{#if world.phase === 'cut' && world.progress > 0}
+							<line
+								x1={lay.path.x0 * 100}
+								y1={lay.path.y0 * 100}
+								x2={(lay.path.x0 + (lay.path.x1 - lay.path.x0) * world.progress) * 100}
+								y2={lay.path.y0 * 100}
+								stroke="#9f1239"
+								stroke-width="4"
+								stroke-linecap="round"
+							/>
+						{/if}
+						{#if world.phase === 'sew' || world.complete}
+							{#each Array.from({ length: 6 }, (_, i) => i) as i}
+								<line
+									x1={(lay.path.x0 + (lay.path.x1 - lay.path.x0) * ((i + 0.2) / 6)) * 100}
+									y1={lay.path.y0 * 100 - 4}
+									x2={(lay.path.x0 + (lay.path.x1 - lay.path.x0) * ((i + 0.8) / 6)) * 100}
+									y2={lay.path.y0 * 100 + 4}
+									stroke="#111827"
+									stroke-width="1.6"
+								/>
+							{/each}
+						{/if}
+					</svg>
+				{/if}
 			{/if}
 			{#if world.view === 'hub'}
 				<div class="hub-panel" data-hud="hub">
@@ -451,7 +484,7 @@
 				{#if world.view === 'hub'}
 					四个可做部位。其余未开放。
 				{:else}
-					{PHASE_LABEL[world.phase]} · 出血 {Math.round(world.bleed)} · 种子 {world.seed}
+					沿标记线切开，再沿同一条线缝合。{PHASE_LABEL[world.phase]} · 出血 {Math.round(world.bleed)} · 种子 {world.seed}
 					{#if world.complete} · 完成 {stars}★{/if}
 				{/if}
 			</p>
@@ -681,6 +714,25 @@
 		color: inherit;
 	}
 
+	@media (pointer: coarse) {
+		.chip,
+		.region,
+		:global(.op-play .hud-btn),
+		:global(.op-play .ack) {
+			min-height: 44px;
+			min-width: 44px;
+		}
+	}
+
+	.flat {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		pointer-events: none;
+		width: 100%;
+		height: 100%;
+	}
+
 	.chip.need {
 		outline: 2px solid #f8d0c8;
 	}
@@ -690,7 +742,7 @@
 	}
 
 	.dock {
-		padding: 0.4rem 0.7rem 0.55rem;
+		padding: 0.4rem 0.7rem max(0.55rem, env(safe-area-inset-bottom, 0px));
 		z-index: 3;
 	}
 

@@ -3,52 +3,29 @@ export const WARNING_COPY =
 
 export const ACK_LABEL = '我已知晓，进入手术';
 
-export const PHASES = ['prepare', 'expose', 'operate', 'hemostasis', 'close'] as const;
+export const PHASES = ['cut', 'sew'] as const;
 export type WorkPhase = (typeof PHASES)[number];
 export type Phase = WorkPhase | 'done';
 export type RegionId = 'forearm' | 'knee' | 'tooth' | 'belly';
 export type ViewId = 'warning' | 'hub' | 'field';
-export type Gesture = 'hold' | 'path' | 'pick';
+export type Gesture = 'path';
 
-export type ToolId =
-	| 'gauze'
-	| 'scalpel'
-	| 'forceps'
-	| 'suction'
-	| 'irrigator'
-	| 'needle'
-	| 'bandage'
-	| 'elevator'
-	| 'grasper'
-	| 'bag';
+export type ToolId = 'scalpel' | 'needle';
 
 export const TOOL_LABEL: Record<ToolId, string> = {
-	gauze: '纱布',
 	scalpel: '刀',
-	forceps: '镊',
-	suction: '吸引',
-	irrigator: '冲洗',
-	needle: '缝针',
-	bandage: '绷带',
-	elevator: '挺子',
-	grasper: '抓钳',
-	bag: '取袋'
+	needle: '缝针'
 };
 
 export const PHASE_LABEL: Record<Phase, string> = {
-	prepare: '准备',
-	expose: '显露',
-	operate: '操作',
-	hemostasis: '止血/冲洗',
-	close: '关闭',
+	cut: '切开',
+	sew: '缝合',
 	done: '完成'
 };
 
 export type StepDef = {
 	tool: ToolId;
-	alts?: ToolId[];
 	gesture: Gesture;
-	dual?: ToolId;
 };
 
 export type RegionDef = {
@@ -59,58 +36,40 @@ export type RegionDef = {
 	steps: Record<WorkPhase, StepDef>;
 };
 
+const TWO_TOOLS: ToolId[] = ['scalpel', 'needle'];
+const TWO_STEPS: Record<WorkPhase, StepDef> = {
+	cut: { tool: 'scalpel', gesture: 'path' },
+	sew: { tool: 'needle', gesture: 'path' }
+};
+
 export const REGIONS: Record<RegionId, RegionDef> = {
 	forearm: {
 		id: 'forearm',
 		name: '前臂',
-		blurb: '切开虚构前臂、夹出异物、冲洗后缝合。不是真实术式。',
-		tools: ['gauze', 'scalpel', 'forceps', 'suction', 'irrigator', 'needle'],
-		steps: {
-			prepare: { tool: 'gauze', gesture: 'hold' },
-			expose: { tool: 'scalpel', gesture: 'path' },
-			operate: { tool: 'forceps', gesture: 'pick' },
-			hemostasis: { tool: 'suction', alts: ['gauze', 'irrigator'], gesture: 'hold' },
-			close: { tool: 'needle', gesture: 'path' }
-		}
+		blurb: '沿标记线切开虚构前臂，再沿同一条线缝合。不是真实术式。',
+		tools: TWO_TOOLS,
+		steps: TWO_STEPS
 	},
 	knee: {
 		id: 'knee',
 		name: '膝',
-		blurb: '打开虚构膝部裂伤、压迫止血、冲洗、缝合再包扎。',
-		tools: ['gauze', 'scalpel', 'irrigator', 'needle', 'bandage'],
-		steps: {
-			prepare: { tool: 'gauze', gesture: 'hold' },
-			expose: { tool: 'scalpel', gesture: 'path' },
-			operate: { tool: 'irrigator', gesture: 'hold' },
-			hemostasis: { tool: 'gauze', alts: ['irrigator'], gesture: 'hold' },
-			close: { tool: 'needle', gesture: 'path', dual: 'bandage' }
-		}
+		blurb: '沿标记线切开虚构膝部，再缝合。不是真实术式。',
+		tools: TWO_TOOLS,
+		steps: TWO_STEPS
 	},
 	tooth: {
 		id: 'tooth',
 		name: '口腔',
-		blurb: '挺松并拔除标记的虚构牙，填塞牙槽。不是拔牙教学。',
-		tools: ['elevator', 'forceps', 'gauze', 'suction'],
-		steps: {
-			prepare: { tool: 'suction', gesture: 'hold' },
-			expose: { tool: 'elevator', gesture: 'path' },
-			operate: { tool: 'forceps', gesture: 'pick' },
-			hemostasis: { tool: 'gauze', gesture: 'hold' },
-			close: { tool: 'gauze', alts: ['suction'], gesture: 'hold' }
-		}
+		blurb: '沿标记的牙龈线切开，再缝合。不是拔牙教学。',
+		tools: TWO_TOOLS,
+		steps: TWO_STEPS
 	},
 	belly: {
 		id: 'belly',
 		name: '腹',
-		blurb: '小切口进入，夹起虚构腹内结石装袋后缝合。解剖为编造。',
-		tools: ['scalpel', 'grasper', 'bag', 'suction', 'needle'],
-		steps: {
-			prepare: { tool: 'suction', gesture: 'hold' },
-			expose: { tool: 'scalpel', gesture: 'path' },
-			operate: { tool: 'grasper', gesture: 'pick', dual: 'bag' },
-			hemostasis: { tool: 'suction', gesture: 'hold' },
-			close: { tool: 'needle', gesture: 'path' }
-		}
+		blurb: '在虚构腹壁上切一条小口，再缝合。解剖为编造。',
+		tools: TWO_TOOLS,
+		steps: TWO_STEPS
 	}
 };
 
@@ -190,12 +149,10 @@ export function fieldLayout(region: RegionId, seed: number): FieldLayout {
 	const r = mulberry32((seed >>> 0) + region.charCodeAt(0) * 17);
 	const oy = (r() - 0.5) * 0.1;
 	const ox = (r() - 0.5) * 0.06;
-	const path = { x0: 0.22 + ox, y0: 0.5 + oy, x1: 0.78 + ox, y1: 0.5 + oy };
+	const span = region === 'belly' ? 0.18 : region === 'tooth' ? 0.22 : 0.28;
+	const path = { x0: 0.5 - span + ox, y0: 0.5 + oy, x1: 0.5 + span + ox, y1: 0.5 + oy };
 	const target = { x: 0.5 + ox, y: 0.5 + oy, r: 0.16 };
-	const stones: Pt[] = [0, 1, 2].map((i) => ({
-		x: 0.4 + i * 0.1 + ox * 0.4,
-		y: 0.5 + oy + (i - 1) * 0.03
-	}));
+	const stones: Pt[] = [];
 	return { path, target, stones };
 }
 
@@ -222,11 +179,7 @@ function currentStep(world: OpWorld): StepDef | null {
 export function legalTools(world: OpWorld): ToolId[] {
 	const step = currentStep(world);
 	if (!step) return [];
-	if (step.dual && world.region === 'belly' && world.phase === 'operate') {
-		return world.heldStone ? [step.dual] : [step.tool];
-	}
-	if (step.dual && world.progress >= 0.499) return [step.dual];
-	return [step.tool, ...(step.alts ?? [])];
+	return [step.tool];
 }
 
 function toolOk(world: OpWorld) {
@@ -241,24 +194,8 @@ function layoutOf(world: OpWorld): FieldLayout | null {
 function nearWork(world: OpWorld): boolean {
 	const lay = layoutOf(world);
 	if (!lay) return false;
-	const step = currentStep(world);
-	if (!step) return false;
-	if (step.gesture === 'path') {
-		const { d } = distSeg(
-			world.px,
-			world.py,
-			lay.path.x0,
-			lay.path.y0,
-			lay.path.x1,
-			lay.path.y1
-		);
-		return d < 0.22;
-	}
-	const pt =
-		world.region === 'belly' && world.phase === 'operate'
-			? (lay.stones[world.stoneIndex] ?? lay.target)
-			: lay.target;
-	return Math.hypot(world.px - pt.x, world.py - pt.y) < lay.target.r + 0.14;
+	const { d } = distSeg(world.px, world.py, lay.path.x0, lay.path.y0, lay.path.x1, lay.path.y1);
+	return d < 0.22;
 }
 
 function sprayCapFor(world: OpWorld) {
@@ -271,12 +208,11 @@ function resetBins(world: OpWorld) {
 	world.pathBins = Array(10).fill(false);
 	world.holdClock = 0;
 	world.progress = 0;
-	world.heldStone = false;
 	world.wrongNoted = false;
 }
 
 function resetProcedure(world: OpWorld) {
-	world.phase = 'prepare';
+	world.phase = 'cut';
 	world.complete = false;
 	world.bleed = 0;
 	world.flow = 0;
@@ -285,15 +221,16 @@ function resetProcedure(world: OpWorld) {
 	world.stain = 0;
 	world.extracted = false;
 	world.stoneIndex = 0;
-	world.stoneCount = 1 + (world.seed % 3);
+	world.stoneCount = 0;
+	world.heldStone = false;
 	world.hits = 0;
 	world.misses = 0;
 	world.slips = 0;
 	world.notice = REGIONS[world.region!]?.blurb ?? '';
 	world.pointerDown = false;
 	world.spray = 0;
+	world.tool = 'scalpel';
 	resetBins(world);
-	if (world.region) world.tool = REGIONS[world.region].tools[0];
 }
 
 function noteWrong(world: OpWorld) {
@@ -301,31 +238,22 @@ function noteWrong(world: OpWorld) {
 	world.wrongNoted = true;
 	world.misses += 1;
 	const need = legalTools(world)[0];
-	world.notice = `现在不能用${TOOL_LABEL[world.tool]}。${PHASE_LABEL[world.phase]}阶段请用${TOOL_LABEL[need]}。`;
+	world.notice = `现在不能用${TOOL_LABEL[world.tool]}。${PHASE_LABEL[world.phase]}请用${TOOL_LABEL[need ?? 'scalpel']}。`;
 }
 
 function maybeSlip(world: OpWorld) {
-	if (world.phase !== 'expose' || world.tool !== 'scalpel' || world.slippedThisDown) return;
+	if (world.phase !== 'cut' || world.tool !== 'scalpel' || world.slippedThisDown) return;
 	if (!world.pointerDown) return;
 	if (nearWork(world)) return;
 	const lay = layoutOf(world);
 	if (!lay) return;
-	const { d } = distSeg(
-		world.px,
-		world.py,
-		lay.path.x0,
-		lay.path.y0,
-		lay.path.x1,
-		lay.path.y1
-	);
+	const { d } = distSeg(world.px, world.py, lay.path.x0, lay.path.y0, lay.path.x1, lay.path.y1);
 	if (d < 0.22) return;
 	world.slippedThisDown = true;
 	world.slips += 1;
-	world.progress = 0;
-	world.pathBins = Array(10).fill(false);
-	world.bleed = clamp(world.bleed + 14, 0, 100);
-	world.flow = Math.max(world.flow, 36);
-	world.notice = '刀滑了，这一层重来。血流增加。';
+	world.bleed = clamp(world.bleed + 10, 0, 100);
+	world.flow = Math.max(world.flow, 20);
+	world.notice = '刀滑了一下。伤口还在。';
 }
 
 function coverPath(world: OpWorld) {
@@ -336,71 +264,23 @@ function coverPath(world: OpWorld) {
 	const lay = layoutOf(world);
 	const step = currentStep(world);
 	if (!lay || !step || step.gesture !== 'path') return;
-	const { d, t } = distSeg(
-		world.px,
-		world.py,
-		lay.path.x0,
-		lay.path.y0,
-		lay.path.x1,
-		lay.path.y1
-	);
+	const { d, t } = distSeg(world.px, world.py, lay.path.x0, lay.path.y0, lay.path.x1, lay.path.y1);
 	if (d > 0.2) return;
 	const bin = Math.min(9, Math.floor(t * 10));
 	world.pathBins[bin] = true;
 	if (bin > 0) world.pathBins[bin - 1] = true;
 	if (bin < 9) world.pathBins[bin + 1] = true;
 	const filled = world.pathBins.filter(Boolean).length / 10;
-	if (step.dual && world.tool === step.tool) {
-		world.progress = Math.max(world.progress, filled * 0.5);
-	} else if (step.dual && world.tool === step.dual) {
-		world.progress = Math.max(world.progress, 0.5 + filled * 0.5);
-	} else {
-		world.progress = Math.max(world.progress, filled);
-	}
-	if (world.tool === 'scalpel' && world.phase === 'expose') {
+	world.progress = Math.max(world.progress, filled);
+	if (world.tool === 'scalpel' && world.phase === 'cut') {
 		world.flow = Math.max(world.flow, 24);
 		world.bleed = clamp(world.bleed + 0.9, 0, 100);
 		world.spray = Math.min(world.sprayCap, world.spray + 2);
 	}
-}
-
-function resolvePick(world: OpWorld) {
-	if (!toolOk(world)) {
-		noteWrong(world);
-		return;
+	if (world.tool === 'needle' && world.phase === 'sew') {
+		world.flow = Math.max(0, world.flow - 8);
+		world.bleed = Math.max(0, world.bleed - 1.2);
 	}
-	if (!nearWork(world)) return;
-	const step = currentStep(world);
-	if (!step || step.gesture !== 'pick') return;
-	if (world.region === 'belly' && world.phase === 'operate') {
-		if (world.tool === 'grasper') {
-			if (world.heldStone) return;
-			world.heldStone = true;
-			world.hits += 1;
-			world.pointerDown = false;
-			world.notice = '结石已夹起，装入取袋。';
-			return;
-		}
-		if (world.tool === 'bag') {
-			if (!world.heldStone) {
-				noteWrong(world);
-				return;
-			}
-			world.heldStone = false;
-			world.stoneIndex += 1;
-			world.hits += 1;
-			world.pointerDown = false;
-			world.progress = world.stoneIndex / Math.max(1, world.stoneCount);
-			world.notice =
-				world.stoneIndex >= world.stoneCount ? '结石已全部取出。' : '继续夹取下一枚结石。';
-		}
-		return;
-	}
-	world.extracted = true;
-	world.progress = 1;
-	world.hits += 1;
-	world.pointerDown = false;
-	world.notice = world.region === 'tooth' ? '标记牙已拔出。' : '异物已夹出。';
 }
 
 function maybeAdvance(world: OpWorld) {
@@ -418,17 +298,14 @@ function maybeAdvance(world: OpWorld) {
 		if (acc >= 0.5 && world.slips <= 2) stars = 2;
 		if (acc >= 0.75 && world.slips === 0) stars = 3;
 		if (world.region) world.stars[world.region] = Math.max(world.stars[world.region], stars);
-		world.notice = '关闭完成。这是虚构娱乐，不是医疗建议。';
+		world.notice = '缝合完成。这是虚构娱乐，不是医疗建议。';
 		return;
 	}
 	world.phase = PHASES[idx + 1];
 	resetBins(world);
-	if (world.phase === 'close') world.flow = Math.min(world.flow, 4);
-	world.notice = `进入${PHASE_LABEL[world.phase]}。请改用${TOOL_LABEL[legalTools(world)[0] ?? 'gauze']}。`;
-	if (world.region) {
-		const next = legalTools(world)[0];
-		if (next) world.tool = next;
-	}
+	world.notice = `进入${PHASE_LABEL[world.phase]}。请改用${TOOL_LABEL[legalTools(world)[0] ?? 'needle']}。`;
+	const next = legalTools(world)[0];
+	if (next) world.tool = next;
 }
 
 function applyBlood(world: OpWorld, dt: number) {
@@ -439,18 +316,11 @@ function applyBlood(world: OpWorld, dt: number) {
 		world.flow = 0;
 		world.bleed = Math.max(0, world.bleed - 55 * dt);
 	} else {
-		if (world.phase === 'close') world.flow = Math.max(0, world.flow - 48 * dt);
+		if (world.phase === 'sew') world.flow = Math.max(0, world.flow - 36 * dt);
 		world.bleed = clamp(world.bleed + world.flow * dt, 0, 100);
-		if (world.pointerDown && toolOk(world) && nearWork(world)) {
-			if (world.tool === 'suction' || world.tool === 'gauze') {
-				world.flow = Math.max(0, world.flow - 26 * dt);
-				world.bleed = Math.max(0, world.bleed - 32 * dt);
-				world.spray = Math.max(0, world.spray - 30 * dt);
-			}
-			if (world.tool === 'irrigator') {
-				world.stain = Math.max(0, world.stain - 20 * dt);
-				world.bleed = Math.max(0, world.bleed - 10 * dt);
-			}
+		if (world.pointerDown && toolOk(world) && nearWork(world) && world.tool === 'needle') {
+			world.flow = Math.max(0, world.flow - 22 * dt);
+			world.bleed = Math.max(0, world.bleed - 18 * dt);
 		}
 	}
 	world.stain = clamp(world.stain + world.bleed * 0.01 * dt, 0, 100);
@@ -466,8 +336,8 @@ export function createOp(seed = 1): OpWorld {
 		view: 'warning',
 		graphicAck: false,
 		region: null,
-		phase: 'prepare',
-		tool: 'gauze',
+		phase: 'cut',
+		tool: 'scalpel',
 		bleed: 0,
 		flow: 0,
 		film: 0,
@@ -494,7 +364,7 @@ export function createOp(seed = 1): OpWorld {
 		py: 0.5,
 		sprayCap: 80,
 		spray: 0,
-		stoneCount: 1,
+		stoneCount: 0,
 		stoneIndex: 0,
 		heldStone: false,
 		extracted: false,
@@ -543,12 +413,9 @@ export function reseedRegion(world: OpWorld) {
 }
 
 export function setOpTool(world: OpWorld, tool: ToolId) {
+	if (tool !== 'scalpel' && tool !== 'needle') return;
 	if (!world.region) return;
 	if (!REGIONS[world.region].tools.includes(tool)) return;
-	if (world.tool !== tool) {
-		world.pathBins = Array(10).fill(false);
-		world.holdClock = 0;
-	}
 	world.tool = tool;
 	world.wrongNoted = false;
 }
@@ -582,10 +449,6 @@ export function pointerUp(world: OpWorld) {
 		return;
 	}
 	const step = currentStep(world);
-	if (world.pointerDown && step?.gesture === 'pick') resolvePick(world);
-	if (world.pointerDown && step?.gesture === 'hold' && world.progress >= 0.45) {
-		world.progress = 1;
-	}
 	if (world.pointerDown && step?.gesture === 'path' && world.progress >= 0.6) {
 		world.progress = 1;
 	}
@@ -606,18 +469,7 @@ export function stepOp(world: OpWorld, dt: number) {
 			maybeSlip(world);
 			const step = currentStep(world);
 			if (step && !toolOk(world)) noteWrong(world);
-			else if (step?.gesture === 'hold' && nearWork(world)) {
-				world.holdClock += d;
-				const dual = Boolean(step.dual && world.tool === step.dual);
-				const fill = Math.min(1, world.holdClock / 0.45);
-				if (dual) world.progress = Math.max(world.progress, 0.5 + fill * 0.5);
-				else if (step.dual) world.progress = Math.max(world.progress, fill * 0.5);
-				else world.progress = Math.max(world.progress, fill);
-			} else if (step?.gesture === 'path') coverPath(world);
-			else if (step?.gesture === 'pick' && nearWork(world)) {
-				world.holdClock += d;
-				if (world.holdClock > 0.22) resolvePick(world);
-			}
+			else if (step?.gesture === 'path') coverPath(world);
 		}
 		maybeAdvance(world);
 	}
@@ -635,6 +487,7 @@ export function setPaused(world: OpWorld, paused: boolean) {
 
 export function hydrateOp(world: OpWorld, partial: Partial<OpWorld>) {
 	Object.assign(world, partial);
+	if (world.tool !== 'scalpel' && world.tool !== 'needle') world.tool = 'scalpel';
 	world.sprayCap = sprayCapFor(world);
 	if (!world.graphicAck) {
 		world.view = 'warning';
@@ -643,6 +496,7 @@ export function hydrateOp(world: OpWorld, partial: Partial<OpWorld>) {
 		world.view = 'hub';
 		world.region = null;
 		world.complete = false;
-		world.phase = 'prepare';
+		world.phase = 'cut';
+		world.tool = 'scalpel';
 	}
 }

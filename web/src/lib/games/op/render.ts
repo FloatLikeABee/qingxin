@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { OpWorld, RegionId, ToolId } from './sim';
+import { fieldLayout, type OpWorld, type RegionId, type ToolId } from './sim';
 
 export type OpScene = {
 	sync(world: OpWorld): void;
@@ -230,7 +230,6 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 		wet(0x4a030c, { roughness: 0.05, metalness: 0.24, transparent: true, opacity: 0, depthWrite: false })
 	);
 	const drapeM = keepM(std(0x1c5f44, { map: texDrape, roughness: 0.78, side: THREE.DoubleSide }));
-	const gauzeM = keepM(std(0xf4f1ea, { roughness: 0.86 }));
 	const steelM = keepM(std(0xcfd8e3, { metalness: 0.82, roughness: 0.18 }));
 	const shardM = keepM(std(0x8896a4, { metalness: 0.86, roughness: 0.22 }));
 	const boneM = keepM(std(0xe8d9c4, { roughness: 0.45 }));
@@ -517,71 +516,31 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 
 	const tools = new THREE.Group();
 	fieldRoot.add(tools);
-	const gauze = new THREE.Mesh(keepG(new THREE.BoxGeometry(0.22, 0.05, 0.16)), gauzeM);
 	const scalpel = new THREE.Group();
-	const blade = new THREE.Mesh(keepG(new THREE.BoxGeometry(0.26, 0.008, 0.04)), steelM);
-	blade.position.x = 0.14;
+	const blade = new THREE.Mesh(keepG(new THREE.BoxGeometry(0.32, 0.012, 0.05)), steelM);
+	blade.position.x = 0.16;
 	const handle = new THREE.Mesh(
-		keepG(new THREE.CylinderGeometry(0.018, 0.022, 0.3, 8)),
+		keepG(new THREE.CylinderGeometry(0.02, 0.024, 0.34, 8)),
 		keepM(std(0x1f2937, { metalness: 0.4 }))
 	);
 	handle.rotation.z = Math.PI / 2;
 	handle.position.x = -0.1;
 	scalpel.add(blade, handle);
-	const forceps = new THREE.Group();
-	for (const s of [-1, 1]) {
-		const a = new THREE.Mesh(keepG(new THREE.BoxGeometry(0.32, 0.01, 0.018)), steelM);
-		a.position.set(0.02, s * 0.018, 0);
-		a.rotation.z = s * 0.1;
-		forceps.add(a);
-	}
-	const suction = new THREE.Group();
-	const tube = new THREE.Mesh(keepG(new THREE.CylinderGeometry(0.022, 0.026, 0.38, 8)), steelM);
-	const tip = new THREE.Mesh(keepG(new THREE.SphereGeometry(0.035, 8, 8)), keepM(std(0x111827, { metalness: 0.5 })));
-	tip.position.y = -0.2;
-	suction.add(tube, tip);
-	suction.rotation.z = 0.85;
-	const irrigator = new THREE.Mesh(
-		keepG(new THREE.CylinderGeometry(0.035, 0.04, 0.26, 8)),
-		keepM(std(0xdbeafe, { roughness: 0.28, transparent: true, opacity: 0.72 }))
-	);
 	const needle = new THREE.Group();
-	needle.add(new THREE.Mesh(keepG(new THREE.CylinderGeometry(0.007, 0.007, 0.28, 6)), steelM));
+	needle.add(new THREE.Mesh(keepG(new THREE.CylinderGeometry(0.01, 0.01, 0.34, 6)), steelM));
 	needle.rotation.z = 0.65;
-	const bandage = new THREE.Mesh(
-		keepG(new THREE.CylinderGeometry(0.07, 0.07, 0.14, 12)),
-		keepM(std(0xf5f0e6, { roughness: 0.8 }))
-	);
-	const elevator = new THREE.Group();
-	elevator.add(new THREE.Mesh(keepG(new THREE.CylinderGeometry(0.016, 0.018, 0.28, 8)), steelM));
-	const elevTip = new THREE.Mesh(keepG(new THREE.BoxGeometry(0.07, 0.01, 0.025)), steelM);
-	elevTip.position.set(0.04, -0.14, 0);
-	elevator.add(elevTip);
-	const grasper = new THREE.Mesh(
-		keepG(new THREE.CylinderGeometry(0.014, 0.014, 0.46, 8)),
-		keepM(std(0x6b7280, { metalness: 0.62 }))
-	);
-	const bag = new THREE.Mesh(
-		keepG(new THREE.SphereGeometry(0.08, 10, 8)),
-		keepM(std(0x38bdf8, { roughness: 0.4, transparent: true, opacity: 0.55 }))
-	);
-	const toolMap: Record<ToolId, Group | Mesh> = {
-		gauze,
-		scalpel,
-		forceps,
-		suction,
-		irrigator,
-		needle,
-		bandage,
-		elevator,
-		grasper,
-		bag
-	};
+	const toolMap: Record<ToolId, Group | Mesh> = { scalpel, needle };
 	for (const t of Object.values(toolMap)) {
 		t.visible = false;
 		t.castShadow = true;
 		tools.add(t);
 	}
+	const guide = new THREE.Mesh(
+		keepG(new THREE.BoxGeometry(1, 0.018, 0.055)),
+		keepM(std(0xfde68a, { emissive: 0xf59e0b, emissiveIntensity: 1.35, roughness: 0.35 }))
+	);
+	guide.visible = false;
+	fieldRoot.add(guide);
 
 	let mode: 'hub' | 'field' | '' = '';
 	let region: RegionId | null = null;
@@ -633,16 +592,12 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 		bellyG.visible = world.view === 'field' && world.region === 'belly';
 
 		const open =
-			world.phase === 'prepare'
-				? 0.05
-				: world.phase === 'expose'
-					? 0.12 + world.progress * 0.88
-					: world.phase === 'close'
-						? Math.max(0.08, 1 - world.progress)
-						: world.phase === 'done'
-							? 0.07
-							: 1;
-		const closeAmt = world.phase === 'close' ? world.progress : world.phase === 'done' ? 1 : 0;
+			world.phase === 'cut'
+				? 0.14 + world.progress * 0.86
+				: world.phase === 'sew'
+					? Math.max(0.12, 1 - world.progress * 0.82)
+					: 0.08;
+		const closeAmt = world.phase === 'sew' ? world.progress : world.phase === 'done' ? 1 : 0;
 
 		wellF.scale.set(2.2 + open * 0.9, 0.28 + open * 0.2, 0.4 + open * 0.28);
 		wellF.position.set(0, 0.99, 0.16 + open * 0.08);
@@ -653,39 +608,35 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 		bone.visible = world.region === 'forearm' && open > 0.25;
 		fatUpper.visible = world.region === 'forearm' && open > 0.22;
 		fatLower.visible = world.region === 'forearm' && open > 0.22;
-		shard.visible =
-			world.region === 'forearm' && !world.extracted && world.phase !== 'prepare' && world.phase !== 'done';
-		wrap.visible = world.region === 'knee' && closeAmt > 0.55;
-		socket.visible = world.region === 'tooth' && world.extracted;
+		shard.visible = false;
+		wrap.visible = false;
+		socket.visible = false;
 		for (const t of toothMeshes) {
-			if (t.userData.marked) t.visible = !(world.region === 'tooth' && world.extracted);
+			if (t.userData.marked) t.visible = world.region === 'tooth';
 		}
-		stones.children.forEach((ch: InstanceType<typeof THREE.Object3D>, i: number) => {
-			ch.visible = world.region === 'belly' && i >= world.stoneIndex;
-			if (world.heldStone && i === world.stoneIndex) ch.visible = false;
+		stones.children.forEach((ch: InstanceType<typeof THREE.Object3D>) => {
+			ch.visible = false;
 		});
 
-		sutures.visible = closeAmt > 0.18 && world.region !== 'tooth';
+		sutures.visible = closeAmt > 0.12;
 		sutures.children.forEach((ch: InstanceType<typeof THREE.Object3D>, i: number) => {
 			ch.visible = closeAmt > (i + 1) / 8;
 			const x = -0.26 + i * 0.1;
 			ch.rotation.set(Math.PI / 2, 0, 0);
-			if (world.region === 'forearm') {
-				ch.position.set(x, 0.99, 0.28);
-			}
-			else if (world.region === 'knee') ch.position.set(x * 0.65, 1.06, 0.32);
-			else ch.position.set(x * 0.16, 1.355, 0.04);
+			if (world.region === 'forearm') ch.position.set(x, 1.04, 0.3);
+			else if (world.region === 'knee') ch.position.set(x * 0.65, 1.1, 0.34);
+			else if (world.region === 'tooth') ch.position.set(x * 0.22, 1.38, 0.12);
+			else ch.position.set(x * 0.18, 1.36, 0.06);
 		});
 
-		const wetField = world.view === 'field' && open > 0.15;
-		bloodFilmM.opacity = wetField ? Math.max(0.38, world.film * 0.92) : 0;
-		poolM.opacity = world.region === 'forearm' && wetField ? Math.max(0.22, world.pool * 0.85) : 0;
+		const wetField = world.view === 'field' && open > 0.12;
+		bloodFilmM.opacity = wetField ? Math.max(0.28, world.film * 0.72) : 0;
+		poolM.opacity = world.region === 'forearm' && wetField ? Math.max(0.18, world.pool * 0.7) : 0;
 		filmF.visible = world.region === 'forearm' && wetField;
 		filmK.visible = world.region === 'knee' && wetField;
 		filmB.visible = world.region === 'belly' && wetField;
-		filmT.visible = world.region === 'tooth' && (world.extracted || world.film > 0.08);
+		filmT.visible = world.region === 'tooth' && wetField;
 		poolF.visible = world.region === 'forearm' && wetField && world.pool > 0.05;
-		gauzeM.color.setHex(world.stain > 20 ? 0xb08a86 : 0xf4f1ea);
 
 		const capN = Math.min(world.sprayCap, world.lowDetail ? 12 : 18);
 		const n = Math.min(capN, Math.max(0, Math.floor(world.spray)));
@@ -708,16 +659,28 @@ export function mountOpScene(canvas: HTMLCanvasElement): OpScene | null {
 		drops.instanceMatrix.needsUpdate = true;
 		drops.visible = n > 0 && wetField;
 
+		if (world.view === 'field' && world.region && world.phase !== 'done') {
+			const lay = fieldLayout(world.region, world.seed);
+			const a = uvWorld(lay.path.x0, lay.path.y0);
+			const b = uvWorld(lay.path.x1, lay.path.y1);
+			guide.visible = true;
+			guide.position.copy(a).lerp(b, 0.5);
+			guide.position.y += 0.08;
+			const span = Math.max(0.2, a.distanceTo(b));
+			guide.scale.set(span, 1, 1);
+			guide.lookAt(b.x, guide.position.y, b.z);
+		} else {
+			guide.visible = false;
+		}
+
 		for (const [id, obj] of Object.entries(toolMap)) {
 			obj.visible = world.view === 'field' && world.tool === (id as ToolId);
 		}
 		const at = uvWorld(world.px, world.py);
+		at.y += 0.16;
+		at.z += 0.12;
 		tools.position.copy(at);
 		tools.rotation.z = world.pointerDown ? -0.35 : -0.12;
-		if (world.heldStone) {
-			bag.visible = true;
-			bag.position.copy(at);
-		}
 	}
 
 	function render(_now: number) {
