@@ -480,7 +480,11 @@ function tick(world: SkyWorld, dt: number) {
 		world.y += dir.y * speed * dt;
 		world.z += dir.z * speed * dt;
 	}
-	if (dir.x || dir.z) world.yaw = Math.atan2(dir.x, dir.z);
+	if (world.steer) {
+		const hx = world.steer.x - world.x;
+		const hz = world.steer.z - world.z;
+		if (Math.hypot(hx, hz) > 0.2) world.yaw = Math.atan2(hx, hz);
+	}
 	world.lookX = Math.sin(world.yaw);
 	world.lookZ = Math.cos(world.yaw);
 	world.airborne = true;

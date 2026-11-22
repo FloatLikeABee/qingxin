@@ -137,6 +137,22 @@ describe('cloud walk sandbox', () => {
 		expect(world.over).toBe(false);
 	});
 
+	it('A/D strafes across yaw 0 without spinning the heading', () => {
+		const world = createSky();
+		world.yaw = 0;
+		world.lookX = 0;
+		world.lookZ = 1;
+		world.x = 0;
+		world.z = 0;
+		setSkyKey(world, 'right', true);
+		for (let i = 0; i < 125; i++) stepSky(world, 16);
+		expect(world.yaw).toBeCloseTo(0, 5);
+		expect(world.x).toBeGreaterThan(2);
+		expect(Math.abs(world.z)).toBeLessThan(0.3);
+		expect(world.lookX).toBeCloseTo(0, 5);
+		expect(world.lookZ).toBeCloseTo(1, 5);
+	});
+
 	it('yaw 0 hold W stays on +Z even if lookX is camera-stale', () => {
 		const world = createSky();
 		world.yaw = 0;
