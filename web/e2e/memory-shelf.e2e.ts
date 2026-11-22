@@ -277,6 +277,13 @@ test.describe('记忆货架', () => {
 			.toBe('1');
 		await page.getByRole('button', { name: '暂停' }).click();
 		await expect(study).toHaveAttribute('data-anim', '0');
+		await expect(study).toHaveAttribute('data-cap', '2');
+		await expect(study).toHaveAttribute('data-cap-copy', '两');
+		await expect(page.locator('[data-cap-live="1"]')).toHaveText('最多两只鬼');
+		await expect(page.locator('[data-cap-copy="两"]').first()).toBeVisible();
+		await expect(page.locator('.need')).toContainText(/最多两只鬼/);
+		await expect(page.locator('.need')).not.toContainText('四只鬼');
+		await expect(page.locator('[data-shelf-top]')).toContainText(/最多两只/);
 		await expect(page.locator('p.sorry[data-apology="1"]').first()).toBeVisible();
 		await assertApologyOnStage(page, study);
 		await page.screenshot({ path: 'screenshots/memory-shelf-ghost-390-dark.png' });

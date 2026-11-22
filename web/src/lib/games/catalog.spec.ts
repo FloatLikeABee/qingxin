@@ -33,6 +33,7 @@ describe('games registry', () => {
 				'cargo-haul',
 				'cloud-walk',
 				'convenient-store',
+				'home-kitchen',
 				'memory-shelf',
 				'operation',
 				'shangban',
@@ -157,6 +158,19 @@ describe('games registry', () => {
 		expect(getGame('operation')?.about).not.toMatch(/器械清单/);
 		expect(getGame('operation')?.about).not.toMatch(/伤口喷溅封面/);
 		expect(playHref(getGame('operation')!)).toBe('/modules/games/operation/play');
+		expect(getGame('home-kitchen')).toMatchObject({
+			title: '烹饪',
+			englishTitle: 'Cooking',
+			category: '经营',
+			tags: ['厨房', '炒菜', '烹饪'],
+			status: 'playable',
+			playCta: '开始做饭',
+			cover: { motif: 'wok' }
+		});
+		expect(getGame('home-kitchen')?.title).not.toBe('灶台');
+		expect(getGame('home-kitchen')?.about).toMatch(/没有客人/);
+		expect(getGame('home-kitchen')?.about).toMatch(/倒计时/);
+		expect(playHref(getGame('home-kitchen')!)).toBe('/modules/games/home-kitchen/play');
 		expect(
 			GAMES.every((game) => game.id && game.summary && game.tags.length > 0 && game.playCta)
 		).toBe(true);

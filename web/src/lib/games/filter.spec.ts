@@ -32,6 +32,22 @@ describe('games catalog filter', () => {
 		expect(ops.some((game) => game.id === 'convenient-store')).toBe(true);
 		expect(ops.some((game) => game.id === 'shangban')).toBe(true);
 		expect(ops.some((game) => game.id === 'annual-report')).toBe(true);
+		expect(ops.some((game) => game.id === 'home-kitchen')).toBe(true);
+	});
+
+	it('finds 烹饪 by Chinese title, Cooking, and kitchen tags', () => {
+		expect(filterGames(GAMES, { search: '烹饪' }).some((game) => game.id === 'home-kitchen')).toBe(
+			true
+		);
+		expect(
+			filterGames(GAMES, { search: 'Cooking' }).some((game) => game.id === 'home-kitchen')
+		).toBe(true);
+		expect(filterGames(GAMES, { search: '炒菜' }).some((game) => game.id === 'home-kitchen')).toBe(
+			true
+		);
+		expect(filterGames(GAMES, { search: '灶台' }).some((game) => game.id === 'home-kitchen')).toBe(
+			false
+		);
 	});
 
 	it('finds 上班 by Chinese title and workday tags', () => {
