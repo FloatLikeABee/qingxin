@@ -71,6 +71,20 @@ describe('games catalog filter', () => {
 		expect(drive.some((game) => game.id === 'sky-sortie')).toBe(false);
 	});
 
+	it('finds 中医馆 by 医院, Hospital, and 虚构 tags', () => {
+		expect(
+			filterGames(GAMES, { search: '中医馆' }).some((game) => game.id === 'story-clinic')
+		).toBe(true);
+		expect(filterGames(GAMES, { search: '医院' }).some((game) => game.id === 'story-clinic')).toBe(
+			true
+		);
+		expect(
+			filterGames(GAMES, { search: 'Hospital' }).some((game) => game.id === 'story-clinic')
+		).toBe(true);
+		const puzzle = filterGames(GAMES, { category: '益智' });
+		expect(puzzle.some((game) => game.id === 'story-clinic')).toBe(true);
+	});
+
 	it('finds 手术 in 益智 without treating it as full anatomy', () => {
 		expect(filterGames(GAMES, { search: '手术' }).some((game) => game.id === 'operation')).toBe(
 			true

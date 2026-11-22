@@ -90,6 +90,14 @@
 		<div class="wok-handle"></div>
 		<div class="wok-steam a"></div>
 		<div class="wok-steam b"></div>
+	{:else if cover.motif === 'clinic'}
+		<div class="clinic-lamp"></div>
+		<div class="clinic-cabinet"></div>
+		<div class="clinic-shelf a"></div>
+		<div class="clinic-shelf b"></div>
+		<div class="clinic-jar one"></div>
+		<div class="clinic-jar two"></div>
+		<div class="clinic-jar three"></div>
 	{:else}
 		<div class="mini-shelf s1"></div>
 		<div class="mini-shelf s2"></div>
@@ -617,6 +625,67 @@
 
 	.wok-steam.a {
 		left: 38%;
+	}
+
+	.clinic-lamp {
+		position: absolute;
+		left: 42%;
+		top: 8%;
+		width: 16%;
+		height: 18%;
+		border-radius: 0.35rem 0.35rem 50% 50%;
+		background: color-mix(in srgb, var(--cover-accent) 70%, white);
+		box-shadow: 0 0.4rem 0.8rem color-mix(in srgb, var(--cover-accent) 45%, transparent);
+	}
+
+	.clinic-cabinet {
+		position: absolute;
+		left: 18%;
+		right: 18%;
+		bottom: 12%;
+		height: 48%;
+		border-radius: 0.35rem;
+		background: var(--cover-ground);
+		box-shadow: inset 0 0 0 0.18rem color-mix(in srgb, var(--cover-ground) 70%, black);
+	}
+
+	.clinic-shelf {
+		position: absolute;
+		left: 22%;
+		right: 22%;
+		height: 0.18rem;
+		background: color-mix(in srgb, var(--cover-accent) 55%, var(--cover-ground));
+	}
+
+	.clinic-shelf.a {
+		bottom: 42%;
+	}
+
+	.clinic-shelf.b {
+		bottom: 28%;
+	}
+
+	.clinic-jar {
+		position: absolute;
+		bottom: 30%;
+		width: 10%;
+		height: 14%;
+		border-radius: 0.2rem 0.2rem 0.45rem 0.45rem;
+		background: color-mix(in srgb, var(--cover-accent) 65%, white);
+	}
+
+	.clinic-jar.one {
+		left: 28%;
+	}
+
+	.clinic-jar.two {
+		left: 45%;
+		background: color-mix(in srgb, #86a373 70%, white);
+	}
+
+	.clinic-jar.three {
+		left: 62%;
+		background: color-mix(in srgb, #c45a4a 55%, white);
 	}
 
 	.wok-steam.b {

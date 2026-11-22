@@ -37,6 +37,7 @@ describe('games registry', () => {
 				'memory-shelf',
 				'operation',
 				'shangban',
+				'story-clinic',
 				'sky-sortie',
 				'tide-breath',
 				'window-garden'
@@ -171,6 +172,22 @@ describe('games registry', () => {
 		expect(getGame('home-kitchen')?.about).toMatch(/没有客人/);
 		expect(getGame('home-kitchen')?.about).toMatch(/倒计时/);
 		expect(playHref(getGame('home-kitchen')!)).toBe('/modules/games/home-kitchen/play');
+		expect(getGame('story-clinic')).toMatchObject({
+			title: '中医馆',
+			englishTitle: 'Hospital',
+			category: '益智',
+			tags: ['医院', '中医', '处方', '虚构'],
+			status: 'playable',
+			playCta: '开始接诊',
+			cover: { motif: 'clinic' }
+		});
+		expect(getGame('story-clinic')?.title).not.toBe('医馆');
+		expect(getGame('story-clinic')?.summary).toMatch(/医院/);
+		expect(getGame('story-clinic')?.summary).toMatch(/虚构/);
+		expect(getGame('story-clinic')?.about).toMatch(/药包/);
+		expect(getGame('story-clinic')?.about).toMatch(/不是诊疗/);
+		expect(getGame('story-clinic')?.about).not.toMatch(/疗效|主治|治愈|mg/);
+		expect(playHref(getGame('story-clinic')!)).toBe('/modules/games/story-clinic/play');
 		expect(
 			GAMES.every((game) => game.id && game.summary && game.tags.length > 0 && game.playCta)
 		).toBe(true);
