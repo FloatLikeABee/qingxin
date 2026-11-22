@@ -148,6 +148,11 @@ describe('games registry', () => {
 		});
 		expect(getGame('operation')?.about).toMatch(/写实手术画面/);
 		expect(getGame('operation')?.about).toMatch(/不是医学训练/);
+		expect(getGame('operation')?.about).toMatch(/切开/);
+		expect(getGame('operation')?.about).toMatch(/缝合/);
+		expect(getGame('operation')?.about).not.toMatch(/准备、显露/);
+		expect(getGame('operation')?.about).not.toMatch(/止血\/冲洗/);
+		expect(getGame('operation')?.about).not.toMatch(/器械清单/);
 		expect(getGame('operation')?.about).not.toMatch(/伤口喷溅封面/);
 		expect(playHref(getGame('operation')!)).toBe('/modules/games/operation/play');
 		expect(

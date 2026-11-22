@@ -1,7 +1,7 @@
 import { createOp, hydrateOp, type OpWorld, type RegionId } from './sim';
 
 export const OP_KEY = 'qingxin.games.operation';
-export const OP_SCHEMA = 1 as const;
+export const OP_SCHEMA = 2 as const;
 
 export type OpSave = {
 	schema: typeof OP_SCHEMA;
@@ -41,7 +41,7 @@ function asStars(raw: unknown): Record<RegionId, number> {
 export function parseOpSave(raw: unknown): { save: OpSave; recovered: boolean } {
 	if (!raw || typeof raw !== 'object') return { save: emptyOpSave(), recovered: true };
 	const o = raw as Record<string, unknown>;
-	if (o.schema !== OP_SCHEMA) return { save: emptyOpSave(), recovered: true };
+	if (o.schema !== 1 && o.schema !== 2) return { save: emptyOpSave(), recovered: true };
 	return {
 		save: {
 			schema: OP_SCHEMA,

@@ -9,6 +9,8 @@ async function boot(page: Page, theme: 'light' | 'dark' = 'dark') {
 		localStorage.setItem('qingxin.privacyConsent', 'accepted');
 		localStorage.setItem('qingxin.theme', nextTheme);
 		localStorage.setItem('qingxin.games.shelf', '{"ok":1}');
+		localStorage.setItem('qingxin.games.cargo-haul', '{"schema":2}');
+		localStorage.setItem('qingxin.games.cloud-walk', '{"schema":3}');
 	}, theme);
 }
 
@@ -38,29 +40,13 @@ async function dragUv(page: Page, x0: number, y0: number, x1: number, y1: number
 	const box = await canvasBox(page);
 	await page.mouse.move(box.x + x0 * box.width, box.y + y0 * box.height);
 	await page.mouse.down();
-	for (let i = 1; i <= 12; i++) {
-		const t = i / 12;
+	for (let i = 1; i <= 16; i++) {
+		const t = i / 16;
 		await page.mouse.move(
 			box.x + (x0 + (x1 - x0) * t) * box.width,
 			box.y + (y0 + (y1 - y0) * t) * box.height
 		);
 	}
-	await page.mouse.up();
-}
-
-async function holdUv(page: Page, x: number, y: number, ms = 1400) {
-	const box = await canvasBox(page);
-	await page.mouse.move(box.x + x * box.width, box.y + y * box.height);
-	await page.mouse.down();
-	await page.waitForTimeout(ms);
-	await page.mouse.up();
-}
-
-async function pickUv(page: Page, x: number, y: number) {
-	const box = await canvasBox(page);
-	await page.mouse.move(box.x + x * box.width, box.y + y * box.height);
-	await page.mouse.down();
-	await page.waitForTimeout(280);
 	await page.mouse.up();
 }
 
@@ -85,7 +71,7 @@ async function ackAndHub(page: Page) {
 }
 
 async function enterRegion(page: Page, name: string, id: string) {
-	await page.getByRole('button', { name: name }).click();
+	await page.getByRole('button', { name }).click();
 	await expect(playRoot(page)).toHaveAttribute('data-view', 'field');
 	await expect(playRoot(page)).toHaveAttribute('data-region', id);
 	await waitCanvas(page);
@@ -95,56 +81,31 @@ async function useTool(page: Page, label: string) {
 	await page.locator(`[data-hud="tray"] button:has-text("${label}")`).click();
 }
 
-async function completeRegion(
-	page: Page,
-	name: string,
-	id: string,
-	steps: Array<{ tool: string; gesture: 'hold' | 'path' | 'pick'; dual?: string }>,
-	shots?: { mid?: string; end?: string }
-) {
-	if ((await playRoot(page).getAttribute('data-view')) !== 'hub') {
-		await page.getByRole('button', { name: '身体图' }).click();
-		await expect(playRoot(page)).toHaveAttribute('data-view', 'hub');
+async function cutThenSew(page: Page, shots?: { cut?: string; sew?: string; end?: string }) {
+	await expect(playRoot(page)).toHaveAttribute('data-phase', 'cut');
+	await useTool(page, '刀');
+	const t = await target(page);
+	await dragUv(page, 0.16, t.y, 0.86, t.y);
+	if ((await playRoot(page).getAttribute('data-phase')) !== 'sew') {
+		await dragUv(page, 0.16, t.y, 0.86, t.y);
 	}
-	await enterRegion(page, name, id);
-	const phases = ['prepare', 'expose', 'operate', 'hemostasis', 'close', 'done'];
-	const gesture = async (step: (typeof steps)[number]) => {
-		const t = await target(page);
-		if (id === 'belly' && step.dual === '取袋') {
-			const n = Number((await playRoot(page).getAttribute('data-stones')) ?? '1');
-			for (let s = 0; s < n; s++) {
-				const sx = 0.4 + s * 0.1;
-				await useTool(page, '抓钳');
-				await pickUv(page, sx, t.y);
-				await useTool(page, '取袋');
-				await pickUv(page, sx, t.y);
-			}
-			return;
-		}
-		await useTool(page, step.tool);
-		if (step.gesture === 'hold') await holdUv(page, t.x, t.y, 1400);
-		else if (step.gesture === 'path') await dragUv(page, 0.18, t.y, 0.84, t.y);
-		else await pickUv(page, t.x, t.y);
-		if (step.dual) {
-			await useTool(page, step.dual);
-			await dragUv(page, 0.18, t.y, 0.84, t.y);
-		}
-	};
-	for (let i = 0; i < steps.length; i++) {
-		const step = steps[i]!;
-		const next = phases[i + 1]!;
-		if ((await playRoot(page).getAttribute('data-phase')) === next) continue;
-		await gesture(step);
-		if ((await playRoot(page).getAttribute('data-phase')) !== next) {
-			await gesture(step);
-		}
-		await expect(playRoot(page)).toHaveAttribute('data-phase', next, { timeout: 8_000 });
-		if (next === 'operate' && shots?.mid) {
-			await page.waitForTimeout(250);
-			await shot(page, shots.mid);
-		}
+	await waitPhase(page, 'sew');
+	if (shots?.cut) {
+		await page.waitForTimeout(180);
+		await shot(page, shots.cut);
 	}
-	await expect(playRoot(page)).toHaveAttribute('data-phase', 'done', { timeout: 8_000 });
+	await useTool(page, '缝针');
+	const t2 = await target(page);
+	if (shots?.sew) {
+		await page.waitForTimeout(120);
+		await shot(page, shots.sew);
+	}
+	await dragUv(page, 0.16, t2.y, 0.86, t2.y);
+	if ((await playRoot(page).getAttribute('data-complete')) !== '1') {
+		await dragUv(page, 0.16, t2.y, 0.86, t2.y);
+	}
+	await expect(playRoot(page)).toHaveAttribute('data-complete', '1', { timeout: 8_000 });
+	await expect(playRoot(page)).toHaveAttribute('data-phase', 'done');
 	if (shots?.end) await shot(page, shots.end);
 }
 
@@ -160,6 +121,8 @@ test.describe('手术', () => {
 		await page.locator('a.game-card').filter({ hasText: '手术' }).click();
 		await expect(page.getByRole('heading', { name: '手术', level: 1 })).toBeVisible();
 		await expect(page.getByText(/写实手术画面/)).toBeVisible();
+		await expect(page.getByText(/切开/)).toBeVisible();
+		await expect(page.getByText(/缝合/)).toBeVisible();
 		await shot(page, 'operation-detail-1280');
 		await page.goto('/modules/games/operation/play', { waitUntil: 'networkidle' });
 		await expect(playRoot(page)).toHaveAttribute('data-view', 'warning');
@@ -174,124 +137,75 @@ test.describe('手术', () => {
 		const keys = await page.evaluate(() => ({
 			op: localStorage.getItem('qingxin.games.operation'),
 			shelf: localStorage.getItem('qingxin.games.shelf'),
-			theme: localStorage.getItem('qingxin.theme')
+			theme: localStorage.getItem('qingxin.theme'),
+			cargo: localStorage.getItem('qingxin.games.cargo-haul'),
+			cloud: localStorage.getItem('qingxin.games.cloud-walk')
 		}));
 		expect(keys.shelf).toBe('{"ok":1}');
 		expect(keys.theme).toBe('dark');
+		expect(keys.cargo).toBe('{"schema":2}');
+		expect(keys.cloud).toBe('{"schema":3}');
 		expect(keys.op).toContain('"graphicAck":true');
+		expect(keys.op).toContain('"schema":2');
 		expect(keys.op).not.toContain('"complete":true');
 		await page.reload({ waitUntil: 'networkidle' });
 		await expect(playRoot(page)).toHaveAttribute('data-view', 'hub');
 		await expect(page.getByRole('button', { name: '我已知晓，进入手术' })).toHaveCount(0);
 	});
 
-	test('forearm cut raises bleed, suction lowers it, then close', async ({ page }) => {
+	test('forearm cut then sew, wrong tool stays non-blocking, pause works', async ({ page }) => {
 		test.setTimeout(90_000);
 		await boot(page);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await ackAndHub(page);
 		await enterRegion(page, '前臂', 'forearm');
-		await useTool(page, '刀');
-		await dragUv(page, 0.2, 0.5, 0.8, 0.5);
-		await expect(playRoot(page).locator('[data-hud="notice"]')).toContainText('现在不能用');
-		await expect(playRoot(page)).toHaveAttribute('data-phase', 'prepare');
-		await useTool(page, '纱布');
-		{
-			const p = await target(page);
-			await holdUv(page, p.x, p.y, 1400);
-		}
-		await waitPhase(page, 'expose');
-		const beforeBleed = Number((await playRoot(page).getAttribute('data-bleed')) ?? '0');
-		await useTool(page, '刀');
-		const t = await target(page);
-		await dragUv(page, 0.2, t.y, 0.82, t.y);
-		await waitPhase(page, 'operate');
-		const cutBleed = Number((await playRoot(page).getAttribute('data-bleed')) ?? '0');
-		expect(cutBleed).toBeGreaterThan(beforeBleed);
-		await page.waitForTimeout(250);
-		await shot(page, 'operation-forearm-blood-1280');
-		await shot(page, 'operation-forearm-tool-1280');
-		await page.getByRole('button', { name: '细腻' }).click();
 		await page.waitForTimeout(200);
+		await shot(page, 'operation-forearm-cut-1280');
+		await expect(page.getByRole('button', { name: '吸引' })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: '冲洗' })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: '纱布' })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: '挺子' })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: '镊' })).toHaveCount(0);
+		await useTool(page, '缝针');
+		const t = await target(page);
+		await dragUv(page, 0.2, t.y, 0.8, t.y);
+		await expect(playRoot(page).locator('[data-hud="notice"]')).toContainText(/现在不能用|请用刀/);
+		await expect(playRoot(page)).toHaveAttribute('data-phase', 'cut');
+		const beforeBleed = Number((await playRoot(page).getAttribute('data-bleed')) ?? '0');
+		await cutThenSew(page, {
+			cut: 'operation-forearm-blood-1280',
+			sew: 'operation-forearm-tool-1280',
+			end: 'operation-forearm-closed-1280'
+		});
+		const after = Number((await playRoot(page).getAttribute('data-bleed')) ?? '0');
+		expect(after).toBeGreaterThanOrEqual(beforeBleed);
+		await page.getByRole('button', { name: '细腻' }).click();
+		await page.waitForTimeout(180);
 		await shot(page, 'operation-forearm-lowdetail-1280');
 		await page.getByRole('button', { name: '低细腻' }).click();
-		await useTool(page, '镊');
-		await pickUv(page, t.x, t.y);
-		await waitPhase(page, 'hemostasis');
-		await useTool(page, '吸引');
-		await holdUv(page, t.x, t.y, 1400);
-		await waitPhase(page, 'close');
-		const afterSuction = Number((await playRoot(page).getAttribute('data-bleed')) ?? '0');
-		expect(afterSuction).toBeLessThan(cutBleed);
-		await useTool(page, '缝针');
-		await dragUv(page, 0.2, t.y, 0.82, t.y);
-		await expect(playRoot(page)).toHaveAttribute('data-phase', 'done');
-		await shot(page, 'operation-forearm-closed-1280');
 		await page.getByRole('button', { name: '暂停' }).click();
 		await expect(playRoot(page)).toHaveAttribute('data-paused', '1');
+		await page.getByRole('button', { name: '继续' }).click();
+		await expect(playRoot(page)).toHaveAttribute('data-paused', '0');
 	});
 
-	test('knee completes with wrap', async ({ page }) => {
-		test.setTimeout(120_000);
+	test('knee, tooth, and belly complete with the same two path gestures', async ({ page }) => {
+		test.setTimeout(180_000);
 		await boot(page);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await ackAndHub(page);
-		await completeRegion(
-			page,
-			'膝',
-			'knee',
-			[
-				{ tool: '纱布', gesture: 'hold' },
-				{ tool: '刀', gesture: 'path' },
-				{ tool: '冲洗', gesture: 'hold' },
-				{ tool: '纱布', gesture: 'hold' },
-				{ tool: '缝针', gesture: 'path', dual: '绷带' }
-			],
-			{ mid: 'operation-knee-field-1280', end: 'operation-knee-closed-1280' }
-		);
+		await enterRegion(page, '膝', 'knee');
+		await cutThenSew(page, { cut: 'operation-knee-field-1280', end: 'operation-knee-closed-1280' });
+		await page.getByRole('button', { name: '身体图' }).click();
+		await expect(playRoot(page)).toHaveAttribute('data-view', 'hub');
+		await enterRegion(page, '口腔', 'tooth');
+		await cutThenSew(page, { cut: 'operation-tooth-field-1280', end: 'operation-tooth-closed-1280' });
+		await page.getByRole('button', { name: '身体图' }).click();
+		await enterRegion(page, '腹', 'belly');
+		await cutThenSew(page, { cut: 'operation-belly-field-1280', end: 'operation-belly-closed-1280' });
 	});
 
-	test('tooth completes with pack', async ({ page }) => {
-		test.setTimeout(90_000);
-		await boot(page);
-		await page.setViewportSize({ width: 1280, height: 800 });
-		await ackAndHub(page);
-		await completeRegion(
-			page,
-			'口腔',
-			'tooth',
-			[
-				{ tool: '吸引', gesture: 'hold' },
-				{ tool: '挺子', gesture: 'path' },
-				{ tool: '镊', gesture: 'pick' },
-				{ tool: '纱布', gesture: 'hold' },
-				{ tool: '纱布', gesture: 'hold' }
-			],
-			{ mid: 'operation-tooth-field-1280', end: 'operation-tooth-closed-1280' }
-		);
-	});
-
-	test('belly bags stones and closes', async ({ page }) => {
-		test.setTimeout(120_000);
-		await boot(page);
-		await page.setViewportSize({ width: 1280, height: 800 });
-		await ackAndHub(page);
-		await completeRegion(
-			page,
-			'腹',
-			'belly',
-			[
-				{ tool: '吸引', gesture: 'hold' },
-				{ tool: '刀', gesture: 'path' },
-				{ tool: '抓钳', gesture: 'pick', dual: '取袋' },
-				{ tool: '吸引', gesture: 'hold' },
-				{ tool: '缝针', gesture: 'path' }
-			],
-			{ mid: 'operation-belly-field-1280', end: 'operation-belly-closed-1280' }
-		);
-	});
-
-	test('mobile 390 warning, hub, gesture, pause, and no HUD overlap', async ({ page }) => {
+	test('mobile 390 warning, hub, active cut/sew, 44px tools', async ({ page }) => {
 		test.setTimeout(120_000);
 		await boot(page, 'light');
 		await page.setViewportSize({ width: 390, height: 844 });
@@ -314,15 +228,28 @@ test.describe('手术', () => {
 
 		await enterRegion(page, '前臂', 'forearm');
 		await shot(page, 'operation-forearm-390');
-		await useTool(page, '纱布');
-		const t = await target(page);
-		await holdUv(page, t.x, t.y);
-		await waitPhase(page, 'expose');
+		const knife = page.locator('[data-hud="tray"] button:has-text("刀")');
+		const needle = page.locator('[data-hud="tray"] button:has-text("缝针")');
+		const kBox = await knife.boundingBox();
+		const nBox = await needle.boundingBox();
+		expect(kBox).toBeTruthy();
+		expect(nBox).toBeTruthy();
+		expect(kBox!.height).toBeGreaterThanOrEqual(44);
+		expect(kBox!.width).toBeGreaterThanOrEqual(44);
+		expect(nBox!.height).toBeGreaterThanOrEqual(44);
+		expect(nBox!.width).toBeGreaterThanOrEqual(44);
 		await useTool(page, '刀');
-		await dragUv(page, 0.2, t.y, 0.82, t.y);
-		await waitPhase(page, 'operate');
-		await page.waitForTimeout(250);
+		const t = await target(page);
+		await dragUv(page, 0.16, t.y, 0.86, t.y);
+		await waitPhase(page, 'sew');
 		await shot(page, 'operation-forearm-field-390');
+		await useTool(page, '缝针');
+		await dragUv(page, 0.16, t.y, 0.86, t.y);
+		if ((await playRoot(page).getAttribute('data-complete')) !== '1') {
+			await dragUv(page, 0.16, t.y, 0.86, t.y);
+		}
+		await expect(playRoot(page)).toHaveAttribute('data-complete', '1', { timeout: 8_000 });
+		await shot(page, 'operation-forearm-complete-390');
 		await page.getByRole('button', { name: '暂停' }).click();
 		await expect(playRoot(page)).toHaveAttribute('data-paused', '1');
 		await shot(page, 'operation-forearm-pause-390');
@@ -337,18 +264,10 @@ test.describe('手术', () => {
 		await ackAndHub(page);
 		await enterRegion(page, '前臂', 'forearm');
 		await expect(playRoot(page)).toHaveAttribute('data-reduced', '1');
-		await useTool(page, '纱布');
-		{
-			const p = await target(page);
-			await holdUv(page, p.x, p.y, 1400);
-		}
-		await waitPhase(page, 'expose');
 		await useTool(page, '刀');
-		{
-			const p = await target(page);
-			await dragUv(page, 0.2, p.y, 0.82, p.y);
-		}
-		await waitPhase(page, 'operate');
+		const p = await target(page);
+		await dragUv(page, 0.16, p.y, 0.86, p.y);
+		await waitPhase(page, 'sew');
 		expect(Number((await playRoot(page).getAttribute('data-bleed')) ?? '0')).toBeGreaterThan(8);
 		await expect(playRoot(page)).toHaveAttribute('data-spray', '0');
 		await shot(page, 'operation-forearm-reduced-1280');
@@ -361,5 +280,45 @@ test.describe('手术', () => {
 		await page.reload({ waitUntil: 'networkidle' });
 		await expect(playRoot(page)).toHaveAttribute('data-view', 'warning');
 		await expect(page.locator('canvas')).toHaveCount(0);
+	});
+
+	test('schema 1 save keeps ack and stars; field restarts at cut', async ({ page }) => {
+		await page.addInitScript(() => {
+			localStorage.setItem('qingxin.privacyConsent', 'accepted');
+			localStorage.setItem('qingxin.theme', 'dark');
+			localStorage.setItem(
+				'qingxin.games.operation',
+				JSON.stringify({
+					schema: 1,
+					graphicAck: true,
+					stars: { forearm: 2, knee: 0, tooth: 0, belly: 0 },
+					lastSeed: 4,
+					audioWanted: false,
+					lessSpray: false,
+					lowDetail: false,
+					dockCollapsed: false,
+					phase: 'hemostasis',
+					tool: 'suction'
+				})
+			);
+		});
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.goto('/modules/games/operation/play', { waitUntil: 'networkidle' });
+		await expect(playRoot(page)).toHaveAttribute('data-view', 'hub');
+		await expect(page.getByRole('button', { name: '我已知晓，进入手术' })).toHaveCount(0);
+		await enterRegion(page, '前臂', 'forearm');
+		await expect(playRoot(page)).toHaveAttribute('data-phase', 'cut');
+		await expect(playRoot(page)).toHaveAttribute('data-tool', 'scalpel');
+	});
+
+	test('sibling truck and cloud still boot', async ({ page }) => {
+		await boot(page);
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.goto('/modules/games/cargo-haul/play', { waitUntil: 'networkidle' });
+		await expect(page.locator('canvas[aria-label="重卡公路"]')).toBeVisible();
+		await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
+		await page.goto('/modules/games/cloud-walk/play', { waitUntil: 'networkidle' });
+		await expect(page.locator('canvas[aria-label="云上散步天空"]')).toBeVisible();
+		await expect(page.locator('canvas[data-ready="1"]')).toBeVisible({ timeout: 20_000 });
 	});
 });
