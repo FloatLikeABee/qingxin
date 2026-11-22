@@ -10,10 +10,13 @@
 		dropOnPlate,
 		FOOD_KINDS,
 		FOOD_LABEL,
+		FOOD_SHAPE,
 		HEAT_LABEL,
 		heldKind,
+		isCompactKitchen,
 		kitchenSteaming,
 		maxDoneness,
+		nearestPanPiece,
 		PAN_CAP,
 		pickBowl,
 		pickPanPiece,
@@ -26,6 +29,7 @@
 		washPlates,
 		type FoodKind,
 		type Heat,
+		type KitchenHitMode,
 		type KitchenWorld
 	} from './sim';
 
@@ -40,6 +44,8 @@
 	let stageEl = $state<HTMLDivElement | null>(null);
 	let audioOn = $state(false);
 	let fpsLabel = $state('—');
+	let bowlTags = $state<Array<{ kind: FoodKind; text: string; x: number; y: number }>>([]);
+	let plateTags = $state<Array<{ slot: number; text: string; x: number; y: number }>>([]);
 
 	function save() {
 		writeKitchenSave(world);
@@ -75,25 +81,49 @@
 		canvas.dataset.fps = fpsLabel;
 		canvas.dataset.cap = String(PAN_CAP);
 		canvas.dataset.platecap = String(PLATE_CAP);
+		canvas.dataset.narrow = world.narrow ? '1' : '0';
+		const w = canvas.clientWidth || 1;
+		const h = canvas.clientHeight || 1;
+		const pad = 28;
+		let inbox = true;
+		const nextBowls: Array<{ kind: FoodKind; text: string; x: number; y: number }> = [];
+		const nextPlates: Array<{ slot: number; text: string; x: number; y: number }> = [];
 		if (scene) {
 			for (const kind of FOOD_KINDS) {
 				const pt = scene.projectBowl(kind);
 				if (pt) {
 					canvas.setAttribute(`data-bx-${kind}`, String(Math.round(pt.x)));
 					canvas.setAttribute(`data-by-${kind}`, String(Math.round(pt.y)));
-				}
+					canvas.setAttribute(`data-shape-${kind}`, FOOD_SHAPE[kind]);
+					if (pt.x < pad || pt.x > w - pad || pt.y < pad || pt.y > h - pad) inbox = false;
+					nextBowls.push({
+						kind,
+						text: FOOD_LABEL[kind],
+						x: pt.x,
+						y: pt.y
+					});
+				} else inbox = false;
 			}
 			const pan = scene.projectPan();
 			if (pan) {
 				canvas.dataset.panx = String(Math.round(pan.x));
 				canvas.dataset.pany = String(Math.round(pan.y));
+				if (pan.x < pad || pan.x > w - pad || pan.y < pad || pan.y > h - pad) inbox = false;
 			}
 			for (let i = 0; i < 8; i++) {
 				const pt = scene.projectPlate(i);
 				if (pt) {
 					canvas.dataset[`plx${i}`] = String(Math.round(pt.x));
 					canvas.dataset[`ply${i}`] = String(Math.round(pt.y));
-				}
+					if (pt.x < pad || pt.x > w - pad || pt.y < pad || pt.y > h - pad) inbox = false;
+					const dish = world.plated.find((item) => item.slot === i);
+					nextPlates.push({
+						slot: i,
+						text: dish?.label ?? `盘${i + 1}`,
+						x: pt.x,
+						y: Math.max(16, pt.y - 18)
+					});
+				} else inbox = false;
 			}
 			world.pan.forEach((piece, i) => {
 				const pt = scene.projectPiece(piece.id);
@@ -103,6 +133,9 @@
 				}
 			});
 		}
+		canvas.dataset.inbox = inbox ? '1' : '0';
+		bowlTags = nextBowls;
+		plateTags = nextPlates;
 	}
 
 	function applyHit(hit: KitchenHit | null, moved: boolean, pickedThisDown: boolean) {
@@ -116,6 +149,11 @@
 		}
 		if (hit.zone === 'piece' && !world.held) {
 			pickPanPiece(world, hit.id);
+			return;
+		}
+		if (hit.zone === 'pan' && !world.held) {
+			const piece = nearestPanPiece(world, hit.x, hit.z);
+			if (piece) pickPanPiece(world, piece.id);
 			return;
 		}
 		if (world.held?.source === 'bowl' && (hit.zone === 'pan' || hit.zone === 'piece')) {
@@ -182,6 +220,12 @@
 		paint();
 	}
 
+	function hitMode(): KitchenHitMode {
+		if (world.held?.source === 'bowl') return 'drop-pan';
+		if (world.held?.source === 'pan') return 'drop-plate';
+		return 'pick';
+	}
+
 	function heatTo(next: Heat) {
 		setHeat(world, next);
 		save();
@@ -240,8 +284,11 @@
 			startX = event.clientX;
 			startY = event.clientY;
 			stage.setPointerCapture(event.pointerId);
-			const hit = scene?.hit(event.clientX, event.clientY) ?? null;
-			if (!world.held && (hit?.zone === 'bowl' || hit?.zone === 'piece')) {
+			const hit = scene?.hit(event.clientX, event.clientY, hitMode()) ?? null;
+			if (
+				!world.held &&
+				(hit?.zone === 'bowl' || hit?.zone === 'piece' || (hit?.zone === 'pan' && world.pan.length))
+			) {
 				applyHit(hit, false, true);
 				pickedThisDown = true;
 				save();
@@ -255,7 +302,7 @@
 			if (!pointerDown) return;
 			markMoved(event.clientX, event.clientY);
 			if (moved && world.held?.source === 'pan') {
-				const hit = scene?.hit(event.clientX, event.clientY);
+				const hit = scene?.hit(event.clientX, event.clientY, hitMode());
 				if (hit?.zone === 'pan' || hit?.zone === 'piece')
 					stirPan(world, world.held.id, hit.x, hit.z);
 			}
@@ -277,7 +324,7 @@
 				paint(canvas, scene);
 				return;
 			}
-			const hit = scene?.hit(event.clientX, event.clientY) ?? null;
+			const hit = scene?.hit(event.clientX, event.clientY, hitMode()) ?? null;
 			applyHit(hit, moved, pickedThisDown);
 			save();
 			paint(canvas, scene);
@@ -298,8 +345,11 @@
 			canvas.dataset.ready = '1';
 			scene?.sync(world, { reducedMotion: motion.matches });
 			paint(canvas, scene);
+			world.narrow = isCompactKitchen(stage.clientWidth || window.innerWidth);
 			resizeObserver = new ResizeObserver(() => {
+				world.narrow = isCompactKitchen(stage.clientWidth || window.innerWidth);
 				scene?.resize();
+				scene?.sync(world, { reducedMotion: motion.matches });
 				paint(canvas, scene);
 			});
 			resizeObserver.observe(stage);
@@ -375,6 +425,19 @@
 
 	<div bind:this={stageEl} class="stage" data-play="kitchen">
 		<canvas bind:this={canvasEl} class="h-full w-full" aria-label="家庭厨房灶台"></canvas>
+		{#each bowlTags as tag (tag.kind)}
+			<span class="food-tag" data-bowl-label={tag.kind} style="left:{tag.x}px; top:{tag.y}px"
+				>{tag.text}</span
+			>
+		{/each}
+		{#each plateTags as tag (tag.slot)}
+			<span class="plate-tag" data-plate-label={tag.slot} style="left:{tag.x}px; top:{tag.y}px"
+				>{tag.text}</span
+			>
+		{/each}
+		{#if world.held}
+			<p class="held-chip" data-held-chip="1">手里：{heldText()}</p>
+		{/if}
 		<p class="sr-only" aria-live="polite">{world.notice}</p>
 		{#if sceneFailed}
 			<p class="fail">这台设备画不出三维灶台。仍可把食材点进锅里，熟了再盛盘。</p>
@@ -527,6 +590,46 @@
 
 	.stage:active {
 		cursor: grabbing;
+	}
+
+	.food-tag,
+	.plate-tag {
+		position: absolute;
+		transform: translate(-50%, 40%);
+		pointer-events: none;
+		z-index: 3;
+		padding: 0.08rem 0.38rem;
+		border-radius: 999px;
+		background: #fff6e8;
+		color: #4a2a12;
+		font-size: 0.72rem;
+		font-weight: 800;
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+		box-shadow: 0 4px 10px rgb(80 40 10 / 0.16);
+	}
+
+	.plate-tag {
+		font-size: 0.64rem;
+		font-weight: 700;
+		transform: translate(-50%, -100%);
+		background: color-mix(in srgb, var(--qx-card) 88%, #fff6e8);
+	}
+
+	.held-chip {
+		position: absolute;
+		top: 0.4rem;
+		right: 0.45rem;
+		z-index: 4;
+		margin: 0;
+		padding: 0.22rem 0.55rem;
+		border-radius: 999px;
+		background: #e36b2a;
+		color: white;
+		font-size: 0.85rem;
+		font-weight: 800;
+		pointer-events: none;
+		white-space: nowrap;
 	}
 
 	.fail {

@@ -27,15 +27,20 @@ async function waitKitchen(page: Page) {
 	return stove;
 }
 
+const FOODS = ['veg', 'meat', 'egg', 'dough', 'tofu', 'shrimp'] as const;
+
 async function dualShot(page: Page, stove: Locator, name: string) {
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await expect.poll(async () => (await stove.boundingBox())?.width ?? 0).toBeGreaterThan(400);
+	await expect.poll(async () => stove.getAttribute('data-inbox'), { timeout: 8_000 }).toBe('1');
 	await page.screenshot({ path: `screenshots/${name}-1280.png` });
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect.poll(async () => (await stove.boundingBox())?.width ?? 0).toBeLessThan(500);
+	await expect.poll(async () => stove.getAttribute('data-inbox'), { timeout: 8_000 }).toBe('1');
 	await page.screenshot({ path: `screenshots/${name}-390.png` });
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await expect.poll(async () => (await stove.boundingBox())?.width ?? 0).toBeGreaterThan(400);
+	await expect.poll(async () => stove.getAttribute('data-inbox'), { timeout: 8_000 }).toBe('1');
 }
 
 async function canvasPoint(stove: Locator, xKey: string, yKey: string) {
@@ -54,6 +59,55 @@ async function dragKindToPan(page: Page, stove: Locator, kind = 'veg') {
 	await page.mouse.down();
 	await page.mouse.move(dest.x, dest.y, { steps: 16 });
 	await page.mouse.up();
+}
+
+async function dragPanToPlate(page: Page, stove: Locator, slot: number) {
+	const start = await canvasPoint(stove, 'panx', 'pany');
+	const dest = await canvasPoint(stove, `plx${slot}`, `ply${slot}`);
+	await page.mouse.move(start.x, start.y);
+	await page.mouse.down();
+	await expect
+		.poll(async () => stove.getAttribute('data-held'), { timeout: 4_000 })
+		.toMatch(/pan:/);
+	await page.mouse.move(dest.x, dest.y, { steps: 16 });
+	await page.mouse.up();
+}
+
+async function assertReachable(page: Page, stove: Locator) {
+	const box = await stove.boundingBox();
+	expect(box).toBeTruthy();
+	const pad = 16;
+	await expect(stove).toHaveAttribute('data-inbox', '1');
+	for (const kind of FOODS) {
+		const pt = await canvasPoint(stove, `bx-${kind}`, `by-${kind}`);
+		expect(pt.x - box!.x, `${kind} x`).toBeGreaterThan(pad);
+		expect(pt.x - box!.x, `${kind} x`).toBeLessThan(box!.width - pad);
+		expect(pt.y - box!.y, `${kind} y`).toBeGreaterThan(pad);
+		expect(pt.y - box!.y, `${kind} y`).toBeLessThan(box!.height - pad);
+		const tag = page.locator(`[data-bowl-label="${kind}"]`);
+		await expect(tag).toBeVisible();
+		const tbox = await tag.boundingBox();
+		expect(tbox).toBeTruthy();
+		expect(tbox!.x).toBeGreaterThanOrEqual(box!.x - 6);
+		expect(tbox!.x + tbox!.width).toBeLessThanOrEqual(box!.x + box!.width + 6);
+		expect(tbox!.y).toBeGreaterThanOrEqual(box!.y - 6);
+		expect(tbox!.y + tbox!.height).toBeLessThanOrEqual(box!.y + box!.height + 6);
+	}
+	for (let i = 0; i < 8; i++) {
+		const pt = await canvasPoint(stove, `plx${i}`, `ply${i}`);
+		expect(pt.x - box!.x, `plate${i} x`).toBeGreaterThan(pad);
+		expect(pt.x - box!.x, `plate${i} x`).toBeLessThan(box!.width - pad);
+		expect(pt.y - box!.y, `plate${i} y`).toBeGreaterThan(pad);
+		expect(pt.y - box!.y, `plate${i} y`).toBeLessThan(box!.height - pad);
+		const tag = page.locator(`[data-plate-label="${i}"]`);
+		await expect(tag).toBeVisible();
+		const tbox = await tag.boundingBox();
+		expect(tbox).toBeTruthy();
+		expect(tbox!.x).toBeGreaterThanOrEqual(box!.x - 6);
+		expect(tbox!.x + tbox!.width).toBeLessThanOrEqual(box!.x + box!.width + 6);
+		expect(tbox!.y).toBeGreaterThanOrEqual(box!.y - 6);
+		expect(tbox!.y + tbox!.height).toBeLessThanOrEqual(box!.y + box!.height + 6);
+	}
 }
 
 function alongScreenRight(
@@ -85,6 +139,9 @@ test.describe('烹饪', () => {
 		await expect(stove).toHaveAttribute('data-heat', 'off');
 		await expect(page.getByRole('timer')).toHaveCount(0);
 		await expect(page.getByText('客人还在店门口等着。')).toHaveCount(0);
+		await assertReachable(page, stove);
+		await expect(page.locator('[data-bowl-label="veg"]')).toHaveText('菜叶');
+		await expect(page.locator('[data-bowl-label="shrimp"]')).toHaveText('虾');
 		await dualShot(page, stove, 'home-kitchen-raw');
 
 		await dragKindToPan(page, stove, 'veg');
@@ -97,6 +154,15 @@ test.describe('烹饪', () => {
 			.toBeGreaterThan(0.04);
 		await expect.poll(async () => stove.getAttribute('data-steam'), { timeout: 12_000 }).toBe('1');
 		await expect(page.getByRole('timer')).toHaveCount(0);
+		const beforeStir = await canvasPoint(stove, 'px0', 'py0');
+		const pan = await canvasPoint(stove, 'panx', 'pany');
+		await page.mouse.move(beforeStir.x, beforeStir.y);
+		await page.mouse.down();
+		await page.mouse.move(pan.x + 28, pan.y - 20, { steps: 12 });
+		await page.mouse.up();
+		await expect
+			.poll(async () => stove.getAttribute('data-notice'))
+			.toMatch(/搅了一下|下锅了|盛起/);
 		await dualShot(page, stove, 'home-kitchen-cooking');
 
 		const beforePlate = await stove.getAttribute('data-pan');
@@ -140,13 +206,25 @@ test.describe('烹饪', () => {
 	});
 
 	test('390 drags into the pan with 44px heat chips', async ({ page }) => {
-		test.setTimeout(90_000);
+		test.setTimeout(120_000);
 		await page.setViewportSize({ width: 390, height: 844 });
 		await boot(page);
 		await page.goto('/modules/games/home-kitchen/play', { waitUntil: 'networkidle' });
 		const stove = await waitKitchen(page);
-		await dragKindToPan(page, stove, 'veg');
-		await expect.poll(async () => stove.getAttribute('data-pan'), { timeout: 8_000 }).toBe('1');
+		await expect(stove).toHaveAttribute('data-narrow', '1');
+		await assertReachable(page, stove);
+		for (let slot = 0; slot < 8; slot++) {
+			await dragKindToPan(page, stove, FOODS[slot % FOODS.length]);
+			await expect.poll(async () => stove.getAttribute('data-pan'), { timeout: 8_000 }).toBe('1');
+			await dragPanToPlate(page, stove, slot);
+			await expect
+				.poll(async () => stove.getAttribute('data-plated'), { timeout: 8_000 })
+				.toBe(String(slot + 1));
+			await expect.poll(async () => stove.getAttribute('data-pan'), { timeout: 8_000 }).toBe('0');
+		}
+		await expect(page.locator('[data-plate-label="0"]')).toHaveText(
+			/炒青菜|煎肉|煎蛋|烙饼|煎豆腐|炒虾/
+		);
 		const high = page.getByRole('button', { name: '武火' });
 		const box = await high.boundingBox();
 		expect(box).toBeTruthy();
@@ -170,7 +248,9 @@ test.describe('烹饪', () => {
 		await page.goto('/modules/games/cloud-walk/play', { waitUntil: 'networkidle' });
 		const sky = page.locator('canvas[aria-label="云上散步天空"]');
 		await expect(sky).toHaveAttribute('data-ready', '1', { timeout: 20_000 });
-		await expect.poll(async () => sky.getAttribute('data-lookx'), { timeout: 8_000 }).not.toBeNull();
+		await expect
+			.poll(async () => sky.getAttribute('data-lookx'), { timeout: 8_000 })
+			.not.toBeNull();
 		const idle = await sky.evaluate((el) => ({
 			x: Number(el.getAttribute('data-x')),
 			z: Number(el.getAttribute('data-z')),

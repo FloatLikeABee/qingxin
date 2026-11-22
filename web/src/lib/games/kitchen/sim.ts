@@ -4,6 +4,7 @@ export const FOOD_KINDS = ['veg', 'meat', 'egg', 'dough', 'tofu', 'shrimp'] as c
 export type FoodKind = (typeof FOOD_KINDS)[number];
 export type Heat = 'off' | 'low' | 'high';
 export type Held = { source: 'bowl'; kind: FoodKind } | { source: 'pan'; id: string } | null;
+export type KitchenHitMode = 'pick' | 'drop-pan' | 'drop-plate';
 
 export type PanPiece = {
 	id: string;
@@ -32,6 +33,7 @@ export type KitchenWorld = {
 	audioWanted: boolean;
 	dockCollapsed: boolean;
 	recovered: boolean;
+	narrow: boolean;
 	t: number;
 	nextId: number;
 };
@@ -107,6 +109,24 @@ export function pieceFlatten(doneness: number) {
 	return 1 - 0.5 * clamp(doneness, 0, 1);
 }
 
+export function yolkColor(doneness: number): number {
+	return lerpColor(0xf5c518, 0xe07010, doneness);
+}
+
+export const FOOD_SHAPE: Record<FoodKind, 'leaves' | 'slabs' | 'yolk' | 'lump' | 'cube' | 'curve'> =
+	{
+		veg: 'leaves',
+		meat: 'slabs',
+		egg: 'yolk',
+		dough: 'lump',
+		tofu: 'cube',
+		shrimp: 'curve'
+	};
+
+export function isCompactKitchen(width: number) {
+	return width > 0 && width < 500;
+}
+
 export function dishLabel(kinds: FoodKind[]): string {
 	const set = new Set(kinds);
 	if (set.size === 1) {
@@ -140,6 +160,7 @@ export function createKitchen(): KitchenWorld {
 		audioWanted: false,
 		dockCollapsed: false,
 		recovered: false,
+		narrow: false,
 		t: 0,
 		nextId: 1
 	};
@@ -157,6 +178,19 @@ export function pickPanPiece(world: KitchenWorld, id: string) {
 	if (!piece) return;
 	world.held = { source: 'pan', id };
 	world.notice = `盛起${FOOD_LABEL[piece.kind]}。拖到盘子上，或在锅里搅拌。`;
+}
+
+export function nearestPanPiece(world: KitchenWorld, x: number, z: number) {
+	let best: PanPiece | null = null;
+	let dist = Infinity;
+	for (const piece of world.pan) {
+		const d = Math.hypot(piece.x - x, piece.z - z);
+		if (d < dist) {
+			dist = d;
+			best = piece;
+		}
+	}
+	return best;
 }
 
 function nestlePan(world: KitchenWorld, x: number, z: number) {
@@ -298,11 +332,40 @@ export function bowlSlot(kind: FoodKind) {
 	return FOOD_KINDS.indexOf(kind);
 }
 
-export function bowlWorld(kind: FoodKind) {
+export const WOK_CENTER_Z = 0.08;
+export const WOK_RADIUS = 0.78;
+export const BOWL_RADIUS = 0.36;
+export const PLATE_RADIUS = 0.26;
+
+export function bowlWorld(kind: FoodKind, compact = false) {
 	const i = bowlSlot(kind);
-	return { x: -1.75 + i * 0.7, y: 0.28, z: -1.18 };
+	if (compact) {
+		const col = i % 3;
+		const row = Math.floor(i / 3);
+		return { x: -0.76 + col * 0.76, y: 0.28, z: -1.18 - row * 0.7 };
+	}
+	return { x: -1.5 + i * 0.6, y: 0.28, z: -1.12 };
 }
 
-export function plateWorld(slot: number) {
-	return { x: -1.75 + slot * 0.5, y: 0.12, z: 1.12 };
+export function pickKitchenHit<T extends { zone: string }>(
+	ranked: T[],
+	mode: KitchenHitMode
+): T | null {
+	const find = (zone: string) => ranked.find((item) => item.zone === zone) ?? null;
+	if (mode === 'drop-plate') {
+		return find('plate') ?? find('pan') ?? find('piece') ?? find('bowl');
+	}
+	if (mode === 'drop-pan') {
+		return find('pan') ?? find('piece') ?? find('bowl') ?? find('plate');
+	}
+	return find('piece') ?? find('bowl') ?? find('plate') ?? find('pan');
+}
+
+export function plateWorld(slot: number, compact = false) {
+	if (compact) {
+		const col = slot % 4;
+		const row = Math.floor(slot / 4);
+		return { x: -0.93 + col * 0.62, y: 0.12, z: 1.28 + row * 0.5 };
+	}
+	return { x: -1.54 + slot * 0.44, y: 0.12, z: 1.08 };
 }

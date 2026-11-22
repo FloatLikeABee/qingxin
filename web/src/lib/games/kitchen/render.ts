@@ -2,11 +2,15 @@ import * as THREE from 'three';
 import {
 	bowlWorld,
 	FOOD_KINDS,
+	isCompactKitchen,
 	kitchenSteaming,
+	pickKitchenHit,
 	pieceColor,
 	pieceFlatten,
 	plateWorld,
+	yolkColor,
 	type FoodKind,
+	type KitchenHitMode,
 	type KitchenWorld
 } from './sim';
 
@@ -21,7 +25,7 @@ export interface KitchenScene {
 	render(now: number): void;
 	resize(): void;
 	dispose(): void;
-	hit(clientX: number, clientY: number): KitchenHit | null;
+	hit(clientX: number, clientY: number, mode?: KitchenHitMode): KitchenHit | null;
 	projectBowl(kind: FoodKind): { x: number; y: number } | null;
 	projectPan(): { x: number; y: number } | null;
 	projectPlate(slot: number): { x: number; y: number } | null;
@@ -32,6 +36,8 @@ type Geo = InstanceType<typeof THREE.BufferGeometry>;
 type Renderer = InstanceType<typeof THREE.WebGLRenderer>;
 type Obj = InstanceType<typeof THREE.Object3D>;
 type Mesh = InstanceType<typeof THREE.Mesh>;
+type Group = InstanceType<typeof THREE.Group>;
+type StdMat = InstanceType<typeof THREE.MeshStandardMaterial>;
 
 function mat(color: number, extras: Record<string, unknown> = {}) {
 	return new THREE.MeshStandardMaterial({
@@ -40,6 +46,15 @@ function mat(color: number, extras: Record<string, unknown> = {}) {
 		metalness: 0.08,
 		...extras
 	});
+}
+
+function shown(obj: Obj) {
+	let node: Obj | null = obj;
+	while (node) {
+		if (!node.visible) return false;
+		node = node.parent;
+	}
+	return true;
 }
 
 export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | null {
@@ -67,9 +82,9 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 
 	const scene = new THREE.Scene();
 	scene.fog = new THREE.Fog(0xf3e4c8, 9, 16);
-	const camera = new THREE.PerspectiveCamera(42, 1, 0.08, 40);
-	camera.position.set(0, 5.35, 4.2);
-	camera.lookAt(0, 0.12, 0.05);
+	const camera = new THREE.PerspectiveCamera(40, 1, 0.08, 40);
+	camera.position.set(0, 5.5, 4);
+	camera.lookAt(0, 0.1, 0.05);
 
 	const geos: Geo[] = [];
 	const mats: Array<{ dispose: () => void }> = [];
@@ -88,6 +103,7 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 	const cyl = keepGeo(new THREE.CylinderGeometry(1, 1, 1, 20));
 	const cone = keepGeo(new THREE.ConeGeometry(1, 1, 10));
 	const torus = keepGeo(new THREE.TorusGeometry(1, 0.12, 10, 28));
+	const ico = keepGeo(new THREE.IcosahedronGeometry(1, 0));
 
 	const wood = keepMat(mat(0x8b5a32, { roughness: 0.82 }));
 	const woodDark = keepMat(mat(0x5a341c, { roughness: 0.88 }));
@@ -102,9 +118,7 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 	const steamMat = keepMat(
 		new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28 })
 	);
-	const bowlMats = FOOD_KINDS.map((kind) => keepMat(mat(pieceColor(kind, 0))));
-	const panMats = Array.from({ length: 12 }, () => keepMat(mat(0xffffff)));
-	const plateMats = Array.from({ length: 8 }, () => keepMat(mat(0xffffff)));
+	const ghost = keepMat(mat(0x222, { transparent: true, opacity: 0 }));
 
 	const sun = new THREE.DirectionalLight(0xfff4e0, 1.35);
 	sun.position.set(-2.4, 6.2, 3.2);
@@ -143,54 +157,144 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 	apron.position.set(0, -0.5, 2.05);
 	scene.add(apron);
 
+	const hitList: Obj[] = [];
+
+	function forgetHits(group: Group) {
+		group.traverse((node: Obj) => {
+			const at = hitList.indexOf(node);
+			if (at >= 0) hitList.splice(at, 1);
+		});
+	}
+
+	function paintFood(
+		group: Group,
+		kind: FoodKind,
+		body: StdMat,
+		yolk: StdMat | null,
+		zone: object
+	) {
+		forgetHits(group);
+		group.clear();
+		const add = (mesh: Mesh, part?: string) => {
+			mesh.castShadow = true;
+			mesh.userData = { ...zone, part };
+			group.add(mesh);
+			hitList.push(mesh);
+		};
+		if (kind === 'veg') {
+			for (let i = 0; i < 3; i++) {
+				const leaf = new THREE.Mesh(sphere, body);
+				leaf.scale.set(0.15, 0.03, 0.08);
+				leaf.rotation.set(0.15, i * 0.85 - 0.7, 0.35);
+				leaf.position.set((i - 1) * 0.05, 0.02, (i % 2) * 0.04 - 0.02);
+				add(leaf);
+			}
+		} else if (kind === 'meat') {
+			const a = new THREE.Mesh(box, body);
+			a.scale.set(0.2, 0.045, 0.13);
+			a.rotation.y = 0.35;
+			add(a);
+			const b = new THREE.Mesh(box, body);
+			b.scale.set(0.18, 0.04, 0.11);
+			b.position.set(0.04, 0.045, -0.02);
+			b.rotation.y = -0.25;
+			add(b);
+		} else if (kind === 'egg') {
+			const white = new THREE.Mesh(sphere, body);
+			white.scale.set(0.13, 0.07, 0.15);
+			add(white);
+			const yolkMesh = new THREE.Mesh(sphere, yolk ?? body);
+			yolkMesh.scale.set(0.055, 0.035, 0.055);
+			yolkMesh.position.y = 0.055;
+			add(yolkMesh, 'yolk');
+		} else if (kind === 'dough') {
+			const lump = new THREE.Mesh(ico, body);
+			lump.scale.set(0.13, 0.08, 0.13);
+			add(lump);
+		} else if (kind === 'tofu') {
+			const cube = new THREE.Mesh(box, body);
+			cube.scale.set(0.15, 0.13, 0.15);
+			add(cube);
+		} else {
+			for (let i = 0; i < 5; i++) {
+				const a = -0.15 + i * 0.52;
+				const seg = new THREE.Mesh(sphere, body);
+				const r = 0.05 - i * 0.005;
+				seg.scale.set(r, r * 0.72, r * 1.15);
+				seg.position.set(Math.cos(a) * 0.14, 0.03, Math.sin(a) * 0.14);
+				add(seg);
+			}
+			const tail = new THREE.Mesh(cone, body);
+			tail.scale.set(0.03, 0.09, 0.03);
+			tail.rotation.z = 1.2;
+			tail.position.set(-0.14, 0.03, 0.09);
+			add(tail);
+		}
+		const pad = new THREE.Mesh(sphere, ghost);
+		pad.scale.set(0.2, 0.12, 0.2);
+		pad.position.y = 0.05;
+		add(pad, 'hit');
+		group.userData = zone;
+	}
+
+	function tint(group: Group, kind: FoodKind, doneness: number, body: StdMat, yolk: StdMat | null) {
+		body.color.setHex(pieceColor(kind, doneness));
+		if (yolk) yolk.color.setHex(yolkColor(doneness));
+		group.scale.set(1, pieceFlatten(doneness), 1);
+	}
+
 	const bowls: Mesh[] = [];
-	const bowlFood: Mesh[] = [];
+	const bowlFood: Group[] = [];
 	const bowlHits: Mesh[] = [];
-	FOOD_KINDS.forEach((kind, i) => {
+	FOOD_KINDS.forEach((kind) => {
 		const pos = bowlWorld(kind);
 		const bowl = new THREE.Mesh(cyl, ceramic);
-		bowl.scale.set(0.38, 0.14, 0.38);
+		bowl.scale.set(0.34, 0.12, 0.34);
 		bowl.position.set(pos.x, 0.16, pos.z);
 		bowl.castShadow = true;
 		bowl.userData = { zone: 'bowl', kind };
 		scene.add(bowl);
 		bowls.push(bowl);
-		const food = new THREE.Mesh(sphere, bowlMats[i]);
-		food.scale.set(0.26, 0.12, 0.26);
-		food.position.set(pos.x, 0.28, pos.z);
-		food.userData = { zone: 'bowl', kind };
+		hitList.push(bowl);
+		const body = keepMat(mat(pieceColor(kind, 0)));
+		const yolk = kind === 'egg' ? keepMat(mat(yolkColor(0))) : null;
+		const food = new THREE.Group();
+		paintFood(food, kind, body, yolk, { zone: 'bowl', kind });
+		food.position.set(pos.x, 0.26, pos.z);
 		scene.add(food);
 		bowlFood.push(food);
 		const bowlHit = new THREE.Mesh(cyl, keepMat(mat(0x222, { transparent: true, opacity: 0 })));
-		bowlHit.scale.set(0.52, 0.22, 0.52);
+		bowlHit.scale.set(0.46, 0.2, 0.46);
 		bowlHit.position.set(pos.x, 0.2, pos.z);
 		bowlHit.userData = { zone: 'bowl', kind };
 		scene.add(bowlHit);
 		bowlHits.push(bowlHit);
+		hitList.push(bowlHit);
 	});
 
 	const panGroup = new THREE.Group();
 	panGroup.position.set(0, 0.16, 0.08);
 	const wok = new THREE.Mesh(cyl, iron);
-	wok.scale.set(0.78, 0.08, 0.78);
+	wok.scale.set(0.72, 0.08, 0.72);
 	wok.position.y = 0.04;
 	wok.castShadow = true;
 	wok.userData = { zone: 'pan' };
 	const rim = new THREE.Mesh(torus, copper);
-	rim.scale.set(0.72, 0.72, 0.72);
+	rim.scale.set(0.66, 0.66, 0.66);
 	rim.rotation.x = Math.PI / 2;
 	rim.position.y = 0.1;
 	rim.userData = { zone: 'pan' };
 	const handle = new THREE.Mesh(cyl, woodDark);
-	handle.scale.set(0.05, 0.55, 0.05);
+	handle.scale.set(0.05, 0.5, 0.05);
 	handle.rotation.z = Math.PI / 2;
-	handle.position.set(1.05, 0.1, 0);
+	handle.position.set(0.95, 0.1, 0);
 	const panHit = new THREE.Mesh(cyl, keepMat(mat(0x222, { transparent: true, opacity: 0 })));
-	panHit.scale.set(0.9, 0.16, 0.9);
+	panHit.scale.set(0.82, 0.16, 0.82);
 	panHit.position.y = 0.16;
 	panHit.userData = { zone: 'pan' };
 	panGroup.add(wok, rim, handle, panHit);
 	scene.add(panGroup);
+	hitList.push(wok, rim, panHit);
 
 	const flameGroup = new THREE.Group();
 	flameGroup.position.set(0, 0.1, 0.08);
@@ -198,7 +302,7 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 		const f = new THREE.Mesh(cone, flameMat);
 		const a = (i / 8) * Math.PI * 2;
 		f.scale.set(0.08, 0.2, 0.08);
-		f.position.set(Math.cos(a) * 0.55, 0.02, Math.sin(a) * 0.55);
+		f.position.set(Math.cos(a) * 0.5, 0.02, Math.sin(a) * 0.5);
 		flameGroup.add(f);
 	}
 	scene.add(flameGroup);
@@ -214,50 +318,89 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 	scene.add(steamGroup);
 
 	const plates: Mesh[] = [];
-	const platedFood: Mesh[] = [];
+	const plateHits: Mesh[] = [];
+	const platedFood: Group[] = [];
+	const plateBody: StdMat[] = [];
+	const plateYolk: Array<StdMat | null> = [];
+	const platedKind: Array<FoodKind | null> = [];
 	for (let i = 0; i < 8; i++) {
 		const pos = plateWorld(i);
 		const plate = new THREE.Mesh(cyl, ceramic);
-		plate.scale.set(0.28, 0.04, 0.28);
+		plate.scale.set(0.24, 0.04, 0.24);
 		plate.position.set(pos.x, 0.12, pos.z);
 		plate.castShadow = true;
 		plate.userData = { zone: 'plate', slot: i };
 		scene.add(plate);
 		plates.push(plate);
-		const food = new THREE.Mesh(sphere, plateMats[i]);
-		food.scale.set(0.2, 0.1, 0.2);
-		food.position.set(pos.x, 0.22, pos.z);
+		hitList.push(plate);
+		const plateHit = new THREE.Mesh(cyl, keepMat(mat(0x222, { transparent: true, opacity: 0 })));
+		plateHit.scale.set(0.34, 0.22, 0.34);
+		plateHit.position.set(pos.x, 0.22, pos.z);
+		plateHit.userData = { zone: 'plate', slot: i };
+		scene.add(plateHit);
+		plateHits.push(plateHit);
+		hitList.push(plateHit);
+		const body = keepMat(mat(0xffffff));
+		const yolk = keepMat(mat(yolkColor(0)));
+		plateBody.push(body);
+		plateYolk.push(yolk);
+		const food = new THREE.Group();
 		food.visible = false;
-		food.userData = { zone: 'plate', slot: i };
+		food.position.set(pos.x, 0.2, pos.z);
 		scene.add(food);
 		platedFood.push(food);
+		platedKind.push(null);
 	}
 
-	const pieces: Mesh[] = [];
+	const pieces: Group[] = [];
+	const pieceBody: StdMat[] = [];
+	const pieceYolk: Array<StdMat | null> = [];
+	const pieceKind: Array<FoodKind | null> = [];
 	for (let i = 0; i < 12; i++) {
-		const mesh = new THREE.Mesh(sphere, panMats[i]);
-		mesh.visible = false;
-		mesh.castShadow = true;
-		panGroup.add(mesh);
-		pieces.push(mesh);
+		const body = keepMat(mat(0xffffff));
+		const yolk = keepMat(mat(yolkColor(0)));
+		pieceBody.push(body);
+		pieceYolk.push(yolk);
+		pieceKind.push(null);
+		const group = new THREE.Group();
+		group.visible = false;
+		panGroup.add(group);
+		pieces.push(group);
 	}
 
 	const ray = new THREE.Raycaster();
 	const ndc = new THREE.Vector2();
-	const hitList: Obj[] = [
-		...pieces,
-		...bowlHits,
-		...bowlFood,
-		...bowls,
-		...platedFood,
-		...plates,
-		panHit,
-		wok,
-		rim
-	];
+
+	function compactNow() {
+		return isCompactKitchen(canvas.clientWidth || window.innerWidth);
+	}
+
+	function applyLayout() {
+		const compact = compactNow();
+		panGroup.scale.setScalar(compact ? 0.88 : 1);
+		const bowlScale = compact ? 0.26 : 0.34;
+		FOOD_KINDS.forEach((kind, i) => {
+			const pos = bowlWorld(kind, compact);
+			bowls[i]!.scale.set(bowlScale, compact ? 0.1 : 0.12, bowlScale);
+			bowls[i]!.position.set(pos.x, 0.16, pos.z);
+			bowlFood[i]!.position.set(pos.x, 0.24, pos.z);
+			bowlHits[i]!.scale.set(compact ? 0.38 : 0.46, 0.2, compact ? 0.38 : 0.46);
+			bowlHits[i]!.position.set(pos.x, 0.2, pos.z);
+		});
+		const plateScale = compact ? 0.22 : 0.24;
+		const hitScale = compact ? 0.32 : 0.34;
+		for (let i = 0; i < 8; i++) {
+			const pos = plateWorld(i, compact);
+			plates[i]!.scale.set(plateScale, 0.04, plateScale);
+			plates[i]!.position.set(pos.x, 0.12, pos.z);
+			plateHits[i]!.scale.set(hitScale, 0.22, hitScale);
+			plateHits[i]!.position.set(pos.x, 0.22, pos.z);
+			platedFood[i]!.position.set(pos.x, 0.2, pos.z);
+		}
+	}
 
 	function project(obj: Obj): { x: number; y: number } | null {
-		if (!obj.visible) return null;
+		if (!shown(obj)) return null;
 		const v = obj.getWorldPosition(new THREE.Vector3());
 		v.project(camera);
 		const w = canvas.clientWidth || 1;
@@ -266,7 +409,7 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 	}
 
 	function applyDpr(world: KitchenWorld) {
-		const narrow = (canvas.clientWidth || window.innerWidth) < 500;
+		const narrow = compactNow();
 		const dpr = world.lowDetail || narrow ? 1 : Math.min(2, window.devicePixelRatio || 1);
 		renderer.setPixelRatio(dpr);
 		renderer.shadowMap.enabled = !world.lowDetail;
@@ -278,15 +421,18 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 		const h = canvas.clientHeight || 1;
 		renderer.setSize(w, h, false);
 		camera.aspect = w / h;
-		if (w / h < 0.7) {
-			camera.fov = 48;
-			camera.position.set(0, 6.35, 3.9);
+		if (compactNow()) {
+			camera.fov = 36;
+			camera.position.set(0, 7.2, 2.6);
+			camera.lookAt(0, 0.08, 0.05);
 		} else {
-			camera.fov = 42;
-			camera.position.set(0, 5.35, 4.2);
+			camera.fov = 40;
+			camera.position.set(0, 5.45, 3.85);
+			camera.lookAt(0, 0.1, 0.05);
 		}
-		camera.lookAt(0, 0.12, 0.15);
 		camera.updateProjectionMatrix();
+		camera.updateMatrixWorld();
+		applyLayout();
 	}
 
 	let reduced = false;
@@ -295,44 +441,52 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 		sync(world, opts) {
 			reduced = opts?.reducedMotion === true;
 			applyDpr(world);
+			applyLayout();
 			flameGroup.visible = world.heat !== 'off';
 			flameGroup.scale.setScalar(world.heat === 'high' ? 1.25 : 0.85);
-			const steaming = kitchenSteaming(world) && !reduced;
-			steamGroup.visible = steaming;
+			steamGroup.visible = kitchenSteaming(world) && !reduced;
 			world.pan.forEach((piece, i) => {
-				const mesh = pieces[i];
-				if (!mesh) return;
-				mesh.visible = true;
-				mesh.position.set(piece.x, 0.22, piece.z);
-				const flat = pieceFlatten(piece.doneness);
-				const color = pieceColor(piece.kind, piece.doneness);
-				const m = panMats[i]!;
-				mesh.material = m;
-				(m as InstanceType<typeof THREE.MeshStandardMaterial>).color.setHex(color);
-				if (piece.kind === 'veg' || piece.kind === 'dough') mesh.scale.set(0.22, 0.1 * flat, 0.22);
-				else if (piece.kind === 'tofu' || piece.kind === 'meat')
-					mesh.scale.set(0.2, 0.11 * flat, 0.24);
-				else mesh.scale.set(0.18, 0.16 * flat, 0.18);
-				mesh.userData = { zone: 'piece', id: piece.id };
+				const group = pieces[i];
+				const body = pieceBody[i]!;
+				if (!group) return;
+				group.visible = true;
+				group.position.set(piece.x, 0.2, piece.z);
+				if (pieceKind[i] !== piece.kind) {
+					const yolk = piece.kind === 'egg' ? pieceYolk[i]! : null;
+					paintFood(group, piece.kind, body, yolk, { zone: 'piece', id: piece.id });
+					pieceKind[i] = piece.kind;
+				} else {
+					group.traverse((node: Obj) => {
+						node.userData = { ...node.userData, zone: 'piece', id: piece.id };
+					});
+				}
+				tint(group, piece.kind, piece.doneness, body, piece.kind === 'egg' ? pieceYolk[i]! : null);
+				group.userData = { zone: 'piece', id: piece.id };
 			});
-			for (let i = world.pan.length; i < pieces.length; i++) pieces[i]!.visible = false;
-			platedFood.forEach((mesh) => {
-				mesh.visible = false;
+			for (let i = world.pan.length; i < pieces.length; i++) {
+				pieces[i]!.visible = false;
+				pieceKind[i] = null;
+			}
+			const used = new Set(world.plated.map((dish) => dish.slot));
+			platedFood.forEach((group, slot) => {
+				if (!used.has(slot)) {
+					group.visible = false;
+					platedKind[slot] = null;
+				}
 			});
 			for (const dish of world.plated) {
-				const mesh = platedFood[dish.slot];
-				if (!mesh) continue;
-				mesh.visible = true;
+				const group = platedFood[dish.slot];
+				const body = plateBody[dish.slot];
+				if (!group || !body) continue;
 				const kind = dish.kinds[dish.kinds.length - 1] ?? 'veg';
-				const m = plateMats[dish.slot]!;
-				mesh.material = m;
-				(m as InstanceType<typeof THREE.MeshStandardMaterial>).color.setHex(
-					pieceColor(kind, dish.doneness)
-				);
+				const yolk = kind === 'egg' ? plateYolk[dish.slot]! : null;
+				if (platedKind[dish.slot] !== kind) {
+					paintFood(group, kind, body, yolk, { zone: 'plate', slot: dish.slot });
+					platedKind[dish.slot] = kind;
+				}
+				tint(group, kind, dish.doneness, body, yolk);
+				group.visible = true;
 			}
-			bowlFood.forEach((mesh) => {
-				mesh.visible = true;
-			});
 		},
 		render(now) {
 			if (flameGroup.visible) {
@@ -352,12 +506,11 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 		},
 		resize,
 		dispose() {
-			cancelAnimationFrame(0);
 			renderer.dispose();
 			geos.forEach((g) => g.dispose());
 			mats.forEach((m) => m.dispose());
 		},
-		hit(clientX, clientY) {
+		hit(clientX, clientY, mode = 'pick') {
 			const rect = canvas.getBoundingClientRect();
 			ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
 			ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -365,8 +518,8 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 			const hits = ray.intersectObjects(hitList, false);
 			const ranked: KitchenHit[] = [];
 			for (const hit of hits) {
+				if (!shown(hit.object)) continue;
 				let node: Obj | null = hit.object;
-				if (!hit.object.visible) continue;
 				while (node) {
 					const data = node.userData as {
 						zone?: string;
@@ -395,13 +548,7 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 					node = node.parent;
 				}
 			}
-			return (
-				ranked.find((item) => item.zone === 'piece') ??
-				ranked.find((item) => item.zone === 'bowl') ??
-				ranked.find((item) => item.zone === 'plate') ??
-				ranked.find((item) => item.zone === 'pan') ??
-				null
-			);
+			return pickKitchenHit(ranked, mode);
 		},
 		projectBowl(kind) {
 			const i = FOOD_KINDS.indexOf(kind);
@@ -414,7 +561,15 @@ export function mountKitchenScene(canvas: HTMLCanvasElement): KitchenScene | nul
 			return plates[slot] ? project(plates[slot]!) : null;
 		},
 		projectPiece(id) {
-			const mesh = pieces.find((item) => item.visible && item.userData.id === id);
+			const group = pieces.find((item) => item.visible && item.userData.id === id);
+			if (group) return project(group);
+			const mesh = pieces.find((item) => {
+				let found = false;
+				item.traverse((node: Obj) => {
+					if (node.userData.id === id) found = true;
+				});
+				return item.visible && found;
+			});
 			return mesh ? project(mesh) : null;
 		}
 	};

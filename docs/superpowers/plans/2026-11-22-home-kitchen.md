@@ -220,3 +220,16 @@ Natural pointer only. No `evaluate` pan writes.
 - Siblings: cargo canvas ready; **cloud** ArrowRight at yaw 0 moves along screen-right (`alongScreenRight` > 0.4); operation `[data-play=operation]`; memory-shelf `data-ready=1`
 
 Inspect PNGs before claim. `svelte-check`; full vitest; `CI=1` kitchen e2e. Push. ManagePullRequest stack_on **52**. STOP. No Hospital / annual-report / stock code.
+
+---
+
+### Task 6: Parent visual polish (390 clip + recognizable food)
+
+Parent read 1280 cooking + 390 plated: core loop good, but 390 eight-plate row clips left/right (plated food half cut off). Six raw foods look like identical blobs.
+
+- [x] Compact layout keyed off **canvas width < 500**, not aspect (stage aspect on 390 is ~0.75 and was using the wide row).
+- [x] Narrow: bowls 3×2, plates 4×2, camera more top-down so all six bowls and eight plates sit inside the stage with pad, not under HUD/dock.
+- [x] Procedural shapes: veg leaves, meat slabs, egg+yolk, dough lump, tofu cube, curved shrimp. Color still follows doneness. Labels on bowls (`菜叶`…) and plates (`盘n` / dish name). Held chip.
+- [x] Unit: compact positions inside ±1.05; six distinct `FOOD_SHAPE`s.
+- [x] E2e: `data-inbox=1` on 1280 and 390; bounding boxes for **all** 6 bowls and **all** 8 plates; 390 plates onto every slot; stir drag; fresh raw/cooking/plated shots **read**.
+- [x] No orders/timers. No Hospital / annual-report / stock. Do not subscribe to CI.

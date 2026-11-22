@@ -1,18 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import {
+	BOWL_RADIUS,
+	bowlWorld,
 	createKitchen,
 	dishLabel,
 	dropOnPan,
 	dropOnPlate,
+	FOOD_KINDS,
+	FOOD_SHAPE,
+	isCompactKitchen,
 	maxDoneness,
+	nearestPanPiece,
 	pickBowl,
+	pickKitchenHit,
 	pickPanPiece,
 	pieceColor,
+	plateWorld,
+	PLATE_RADIUS,
 	restartKitchen,
 	setHeat,
 	stepKitchen,
 	stirPan,
-	washPlates
+	washPlates,
+	WOK_CENTER_Z,
+	WOK_RADIUS,
+	yolkColor
 } from './sim';
 
 describe('kitchen sim', () => {
@@ -90,6 +102,47 @@ describe('kitchen sim', () => {
 		expect(dishLabel(['egg'])).toBe('煎蛋');
 		expect(dishLabel(['veg', 'meat'])).toBe('青菜炒肉');
 		expect(dishLabel(['veg', 'meat', 'shrimp'])).toBe('家常小炒');
+	});
+
+	it('compact bowls and eight plates stay inside a reachable counter', () => {
+		expect(isCompactKitchen(390)).toBe(true);
+		expect(isCompactKitchen(1280)).toBe(false);
+		expect(new Set(Object.values(FOOD_SHAPE)).size).toBe(6);
+		for (const kind of FOOD_KINDS) {
+			const pos = bowlWorld(kind, true);
+			expect(Math.abs(pos.x)).toBeLessThan(1.05);
+			expect(pos.z).toBeLessThan(-1.05);
+			expect(pos.z).toBeGreaterThan(-2.1);
+			expect(pos.z + BOWL_RADIUS).toBeLessThan(WOK_CENTER_Z - WOK_RADIUS);
+		}
+		const xs = Array.from({ length: 8 }, (_, slot) => plateWorld(slot, true).x);
+		const zs = Array.from({ length: 8 }, (_, slot) => plateWorld(slot, true).z);
+		expect(Math.min(...xs)).toBeGreaterThan(-1.05);
+		expect(Math.max(...xs)).toBeLessThan(1.05);
+		expect(new Set(zs.map((z) => z.toFixed(2))).size).toBe(2);
+		for (const z of zs) {
+			expect(z - PLATE_RADIUS).toBeGreaterThan(WOK_CENTER_Z + WOK_RADIUS);
+		}
+		expect(yolkColor(0.9)).not.toEqual(yolkColor(0));
+		expect(pieceColor('veg', 0)).not.toEqual(pieceColor('meat', 0));
+		expect(pieceColor('tofu', 0)).not.toEqual(pieceColor('shrimp', 0));
+	});
+
+	it('nearest pan piece is the closest nestled food', () => {
+		const world = createKitchen();
+		pickBowl(world, 'veg');
+		dropOnPan(world, -0.4, 0);
+		pickBowl(world, 'shrimp');
+		dropOnPan(world, 0.4, 0);
+		expect(nearestPanPiece(world, 0.35, 0.02)?.kind).toBe('shrimp');
+		expect(nearestPanPiece(world, -0.35, 0)?.kind).toBe('veg');
+	});
+
+	it('held pan food prefers a plate hit over the wok piece', () => {
+		const ranked = [{ zone: 'piece' }, { zone: 'pan' }, { zone: 'plate' }];
+		expect(pickKitchenHit(ranked, 'drop-plate')?.zone).toBe('plate');
+		expect(pickKitchenHit(ranked, 'pick')?.zone).toBe('piece');
+		expect(pickKitchenHit([{ zone: 'bowl' }, { zone: 'pan' }], 'drop-pan')?.zone).toBe('pan');
 	});
 
 	it('stir moves a pan piece without scoring', () => {
