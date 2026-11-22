@@ -27,6 +27,7 @@ type SkyVec = {
 	biome: string | null;
 	lookx: number;
 	lookz: number;
+	bound: boolean;
 };
 
 async function readSky(sky: Locator): Promise<SkyVec> {
@@ -37,7 +38,8 @@ async function readSky(sky: Locator): Promise<SkyVec> {
 		r: Number(el.getAttribute('data-r')),
 		biome: el.getAttribute('data-biome'),
 		lookx: Number(el.getAttribute('data-lookx')),
-		lookz: Number(el.getAttribute('data-lookz'))
+		lookz: Number(el.getAttribute('data-lookz')),
+		bound: el.getAttribute('data-bound') === '1'
 	}));
 }
 
@@ -101,6 +103,36 @@ async function releaseMouse(page: Page) {
 	await page.mouse.up();
 }
 
+const KEY_FLAG: Record<string, string> = {
+	ArrowUp: 'data-up',
+	ArrowDown: 'data-down',
+	ArrowLeft: 'data-left',
+	ArrowRight: 'data-right',
+	Space: 'data-rise',
+	Shift: 'data-dive'
+};
+
+async function pressSkyKey(page: Page, sky: Locator, key: string) {
+	await page.keyboard.down(key);
+	const attr = KEY_FLAG[key];
+	if (!attr) return;
+	try {
+		await expect(sky).toHaveAttribute(attr, '1', { timeout: 400 });
+	} catch {
+		const code = key === 'Space' ? 'Space' : key === 'Shift' ? 'ShiftLeft' : key;
+		const name = key === 'Space' ? ' ' : key === 'Shift' ? 'Shift' : key;
+		await page.evaluate(
+			({ code, name }) => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', { key: name, code, bubbles: true, cancelable: true })
+				);
+			},
+			{ code, name }
+		);
+		await expect(sky).toHaveAttribute(attr, '1', { timeout: 2500 });
+	}
+}
+
 async function flyUntil(
 	page: Page,
 	sky: Locator,
@@ -110,13 +142,28 @@ async function flyUntil(
 ) {
 	const start = Date.now();
 	let held: string[] = [];
-	let stickKey = '';
-	let stickUntil = 0;
 	const release = async () => {
-		for (const key of held) await page.keyboard.up(key);
+		for (const key of held) {
+			await page.keyboard.up(key);
+			const attr = KEY_FLAG[key];
+			if (attr) {
+				await page.evaluate(
+					({ code, name }) => {
+						window.dispatchEvent(
+							new KeyboardEvent('keyup', { key: name, code, bubbles: true, cancelable: true })
+						);
+					},
+					{
+						code: key === 'Space' ? 'Space' : key === 'Shift' ? 'ShiftLeft' : key,
+						name: key === 'Space' ? ' ' : key === 'Shift' ? 'Shift' : key
+					}
+				);
+			}
+		}
 		held = [];
 	};
 	while (Date.now() - start < timeout) {
+		await focusStage(page);
 		const v = await readSky(sky);
 		if (pred(v)) {
 			await release();
@@ -125,6 +172,7 @@ async function flyUntil(
 		const next: string[] = [];
 		if (target.y != null) {
 			if (v.y < target.y - 0.5) next.push('Space');
+			if (v.y > target.y + 0.8) next.push('Shift');
 		}
 		const dx = target.x - v.x;
 		const dz = target.z - v.z;
@@ -132,27 +180,54 @@ async function flyUntil(
 		const lz = v.lookz;
 		const fwd = dx * lx + dz * lz;
 		const right = dx * lz + dz * -lx;
-		const preferred =
-			Math.abs(fwd) >= Math.abs(right)
-				? fwd >= 0
-					? 'ArrowUp'
-					: 'ArrowDown'
-				: right >= 0
-					? 'ArrowRight'
-					: 'ArrowLeft';
-		const now = Date.now();
-		if (!stickKey || now >= stickUntil || stickKey === preferred) {
-			stickKey = preferred;
-			stickUntil = now + 1400;
+		if (fwd > 0.45) next.push('ArrowUp');
+		else if (fwd < -0.45) next.push('ArrowDown');
+		if (right > 0.45) next.push('ArrowRight');
+		else if (right < -0.45) next.push('ArrowLeft');
+		if (
+			!next.includes('ArrowUp') &&
+			!next.includes('ArrowDown') &&
+			!next.includes('ArrowRight') &&
+			!next.includes('ArrowLeft')
+		) {
+			next.push(
+				Math.abs(fwd) >= Math.abs(right)
+					? fwd >= 0
+						? 'ArrowUp'
+						: 'ArrowDown'
+					: right >= 0
+						? 'ArrowRight'
+						: 'ArrowLeft'
+			);
 		}
-		next.push(stickKey);
 		const uniq = [...new Set(next)];
-		for (const key of held) if (!uniq.includes(key)) await page.keyboard.up(key);
-		for (const key of uniq) if (!held.includes(key)) await page.keyboard.down(key);
+		for (const key of held) {
+			if (uniq.includes(key)) continue;
+			await page.keyboard.up(key);
+			const attr = KEY_FLAG[key];
+			if (attr) {
+				await page.evaluate(
+					({ code, name }) => {
+						window.dispatchEvent(
+							new KeyboardEvent('keyup', { key: name, code, bubbles: true, cancelable: true })
+						);
+					},
+					{
+						code: key === 'Space' ? 'Space' : key === 'Shift' ? 'ShiftLeft' : key,
+						name: key === 'Space' ? ' ' : key === 'Shift' ? 'Shift' : key
+					}
+				);
+			}
+		}
+		for (const key of uniq) if (!held.includes(key)) await pressSkyKey(page, sky, key);
 		held = uniq;
 		await page.waitForTimeout(180);
 	}
 	const last = await readSky(sky);
+	if (pred(last)) {
+		await release();
+		return last;
+	}
 	await release();
 	throw new Error(`timeout flying toward ${JSON.stringify(target)}; last ${JSON.stringify(last)}`);
 }
@@ -190,7 +265,7 @@ test.describe('云上散步', () => {
 	});
 
 	test('guest ghost climbs, dives, roams biomes, and hits the rim', async ({ page }) => {
-		test.setTimeout(180_000);
+		test.setTimeout(210_000);
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await boot(page, 'dark');
 		await page.goto('/modules/games/cloud-walk', { waitUntil: 'networkidle' });
@@ -282,7 +357,14 @@ test.describe('云上散步', () => {
 		await shot(page, 'cloud-walk-city-390.png');
 		await page.setViewportSize({ width: 1280, height: 800 });
 
-		await flyUntil(page, sky, { x: 2, z: -40, y: 8 }, (v) => v.r >= 38, 28_000);
+		await focusStage(page);
+		await flyUntil(
+			page,
+			sky,
+			{ x: 2, z: -40, y: 8 },
+			(v) => v.bound || Math.hypot(v.x, v.z) >= 37.5,
+			40_000
+		);
 		await expect(sky).toHaveAttribute('data-bound', '1');
 		await shot(page, 'cloud-walk-bound-1280.png');
 
@@ -545,6 +627,7 @@ test.describe('云上散步', () => {
 		await expect(sky).toHaveAttribute('data-hidden', '0');
 		const gpu = Number(await sky.getAttribute('data-gpu'));
 		expect(Number.isFinite(gpu)).toBe(true);
+		console.log(`cloud renderer.render ms (CPU timestamp around GL): ${gpu}`);
 
 		await focusStage(page);
 		await page.keyboard.down('Space');

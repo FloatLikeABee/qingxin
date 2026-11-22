@@ -1096,8 +1096,10 @@ export function mountCloudScene(canvas: HTMLCanvasElement): CloudScene | null {
 		scene.add(mesh);
 		return mesh;
 	});
-	const shardGeo = keepGeo(new THREE.BoxGeometry(0.28, 0.22, 0.18));
-	const shardMat = keepMat(mat(0xfde68a, { emissive: 0xf59e0b, emissiveIntensity: 0.55 }));
+	const shardGeo = keepGeo(new THREE.BoxGeometry(0.62, 0.48, 0.4));
+	const shardMat = keepMat(
+		mat(0xffedd5, { emissive: 0xea580c, emissiveIntensity: 1.35, roughness: 0.35 })
+	);
 	const shardBoxes: CloudMesh[] = Array.from({ length: SHARD_POOL }, () => {
 		const mesh = new THREE.Mesh(shardGeo, shardMat);
 		mesh.visible = false;

@@ -121,9 +121,9 @@ function spawnShards(world: SkyWorld, at: { x: number; y: number; z: number }, n
 		const shard = allocShard(world);
 		const a = (i / SHARDS_PER_HIT) * Math.PI * 2;
 		shard.live = true;
-		shard.x = at.x + Math.cos(a) * 0.35;
-		shard.y = at.y + 0.15;
-		shard.z = at.z + Math.sin(a) * 0.35;
+		shard.x = at.x + Math.cos(a) * 0.85;
+		shard.y = at.y + 0.35 + (i % 3) * 0.18;
+		shard.z = at.z + Math.sin(a) * 0.85;
 		shard.born = now;
 		shard.spin = a;
 	}

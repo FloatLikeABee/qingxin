@@ -65,6 +65,10 @@
 		canvas.dataset.yaw = String(Math.round(world.yaw * 100) / 100);
 		canvas.dataset.rise = world.keys.rise ? '1' : '0';
 		canvas.dataset.dive = world.keys.dive ? '1' : '0';
+		canvas.dataset.up = world.keys.up ? '1' : '0';
+		canvas.dataset.down = world.keys.down ? '1' : '0';
+		canvas.dataset.left = world.keys.left ? '1' : '0';
+		canvas.dataset.right = world.keys.right ? '1' : '0';
 		canvas.dataset.steer = world.steer ? '1' : '0';
 		canvas.dataset.fire = world.fireHeld ? '1' : '0';
 		canvas.dataset.bullets = String(world.bullets.filter((b) => b.live).length);
