@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import {
 	FRAG_KINDS,
 	HOME,
@@ -8,11 +9,39 @@ import {
 	chaseOffset,
 	collectNear,
 	createSky,
+	releaseSkyControls,
 	setSkyKey,
 	setSkyLook,
+	setSkySteer,
 	skyControlFromKeyboard,
-	stepSky
+	skyRight,
+	stepSky,
+	type SkyWorld
 } from './sim';
+
+function freezeChaseCam(world: Pick<SkyWorld, 'x' | 'y' | 'z' | 'yaw' | 'biome'>) {
+	const chase = chaseOffset(world.biome);
+	const cam = new THREE.PerspectiveCamera(46, 16 / 9, 0.12, 220);
+	cam.up.set(0, 1, 0);
+	cam.position.set(
+		world.x - Math.sin(world.yaw) * chase.dist,
+		world.y + chase.height,
+		world.z - Math.cos(world.yaw) * chase.dist
+	);
+	cam.lookAt(world.x, world.y + chase.lift, world.z);
+	cam.updateMatrixWorld();
+	cam.updateProjectionMatrix();
+	return cam;
+}
+
+function ndcX(cam: InstanceType<typeof THREE.PerspectiveCamera>, x: number, y: number, z: number) {
+	return new THREE.Vector3(x, y, z).project(cam).x;
+}
+
+function camRightXZ(cam: InstanceType<typeof THREE.PerspectiveCamera>) {
+	const e = cam.matrixWorld.elements;
+	return { x: e[0], z: e[2] };
+}
 
 function drive(world: ReturnType<typeof createSky>, ms: number, keys?: Partial<typeof world.keys>) {
 	for (const key of Object.keys(world.keys) as Array<keyof typeof world.keys>) {
@@ -137,20 +166,157 @@ describe('cloud walk sandbox', () => {
 		expect(world.over).toBe(false);
 	});
 
-	it('A/D strafes across yaw 0 without spinning the heading', () => {
+	it('skyRight matches the chase camera +X axis', () => {
+		for (const yaw of [0, 1.18, Math.PI / 2, Math.PI, -0.7]) {
+			const world = createSky();
+			world.yaw = yaw;
+			const cam = freezeChaseCam(world);
+			const want = skyRight(yaw);
+			const got = camRightXZ(cam);
+			expect(want.x).toBeCloseTo(got.x, 5);
+			expect(want.z).toBeCloseTo(got.z, 5);
+		}
+	});
+
+	it('maps A/ArrowLeft to left and D/ArrowRight to right', () => {
+		expect(skyControlFromKeyboard({ code: 'KeyA', key: 'a' })).toEqual({ move: 'left' });
+		expect(skyControlFromKeyboard({ code: 'ArrowLeft', key: 'ArrowLeft' })).toEqual({
+			move: 'left'
+		});
+		expect(skyControlFromKeyboard({ code: 'KeyD', key: 'd' })).toEqual({ move: 'right' });
+		expect(skyControlFromKeyboard({ code: 'ArrowRight', key: 'ArrowRight' })).toEqual({
+			move: 'right'
+		});
+	});
+
+	it('D and ArrowRight raise frozen-cam NDC x at yaw 0 without spinning', () => {
+		for (const key of ['right'] as const) {
+			const world = createSky();
+			world.yaw = 0;
+			world.lookX = 0;
+			world.lookZ = 1;
+			world.x = 0;
+			world.z = 0;
+			const cam = freezeChaseCam(world);
+			const start = ndcX(cam, world.x, world.y, world.z);
+			const right = camRightXZ(cam);
+			expect(right.x).toBeLessThan(-0.5);
+			setSkyKey(world, key, true);
+			for (let i = 0; i < 125; i++) stepSky(world, 16);
+			const end = ndcX(cam, world.x, world.y, world.z);
+			const alongRight = (world.x - 0) * right.x + (world.z - 0) * right.z;
+			expect(world.yaw).toBeCloseTo(0, 5);
+			expect(end).toBeGreaterThan(start);
+			expect(alongRight).toBeGreaterThan(2);
+			expect(Math.abs(world.z)).toBeLessThan(0.3);
+			expect(world.lookX).toBeCloseTo(0, 5);
+			expect(world.lookZ).toBeCloseTo(1, 5);
+		}
+	});
+
+	it('A and ArrowLeft lower frozen-cam NDC x at yaw 0', () => {
 		const world = createSky();
 		world.yaw = 0;
 		world.lookX = 0;
 		world.lookZ = 1;
 		world.x = 0;
 		world.z = 0;
+		const cam = freezeChaseCam(world);
+		const start = ndcX(cam, world.x, world.y, world.z);
+		setSkyKey(world, 'left', true);
+		for (let i = 0; i < 125; i++) stepSky(world, 16);
+		expect(ndcX(cam, world.x, world.y, world.z)).toBeLessThan(start);
+		expect(world.x).toBeGreaterThan(2);
+		expect(world.yaw).toBeCloseTo(0, 5);
+	});
+
+	it('signed screen-right holds for other headings and underwater chase', () => {
+		const headings = [0, Math.PI / 2, Math.PI, -0.7];
+		for (const yaw of headings) {
+			const world = createSky();
+			world.yaw = yaw;
+			world.lookX = Math.sin(yaw);
+			world.lookZ = Math.cos(yaw);
+			world.x = 1.2;
+			world.z = -0.4;
+			const cam = freezeChaseCam(world);
+			const start = ndcX(cam, world.x, world.y, world.z);
+			const origin = { x: world.x, z: world.z };
+			setSkyKey(world, 'right', true);
+			for (let i = 0; i < 80; i++) stepSky(world, 16);
+			expect(ndcX(cam, world.x, world.y, world.z)).toBeGreaterThan(start);
+			expect(world.yaw).toBeCloseTo(yaw, 5);
+			const dx = world.x - origin.x;
+			const dz = world.z - origin.z;
+			const right = camRightXZ(cam);
+			expect(dx * right.x + dz * right.z).toBeGreaterThan(1);
+		}
+		const wet = createSky();
+		wet.x = 0.2;
+		wet.y = -2.4;
+		wet.z = -0.55;
+		wet.yaw = 0;
+		wet.lookX = 0;
+		wet.lookZ = 1;
+		expect(biomeAt(wet.x, wet.y, wet.z)).toBe('water');
+		wet.biome = 'water';
+		const cam = freezeChaseCam(wet);
+		const start = ndcX(cam, wet.x, wet.y, wet.z);
+		setSkyKey(wet, 'right', true);
+		for (let i = 0; i < 80; i++) stepSky(wet, 16);
+		expect(wet.biome).toBe('water');
+		expect(ndcX(cam, wet.x, wet.y, wet.z)).toBeGreaterThan(start);
+	});
+
+	it('W+D diagonal is forward and screen-right', () => {
+		const world = createSky();
+		world.yaw = 0;
+		world.lookX = 0;
+		world.lookZ = 1;
+		world.x = 0;
+		world.z = 0;
+		const cam = freezeChaseCam(world);
+		const start = ndcX(cam, world.x, world.y, world.z);
+		setSkyKey(world, 'up', true);
 		setSkyKey(world, 'right', true);
 		for (let i = 0; i < 125; i++) stepSky(world, 16);
+		expect(world.z).toBeGreaterThan(1.2);
+		expect(ndcX(cam, world.x, world.y, world.z)).toBeGreaterThan(start);
 		expect(world.yaw).toBeCloseTo(0, 5);
-		expect(world.x).toBeGreaterThan(2);
-		expect(Math.abs(world.z)).toBeLessThan(0.3);
-		expect(world.lookX).toBeCloseTo(0, 5);
-		expect(world.lookZ).toBeCloseTo(1, 5);
+	});
+
+	it('steer toward a screen-left aim point lowers frozen NDC x', () => {
+		const world = createSky();
+		world.yaw = 0;
+		world.lookX = 0;
+		world.lookZ = 1;
+		world.x = 0;
+		world.z = 0;
+		const cam = freezeChaseCam(world);
+		const left = { x: 5, y: world.y, z: 0 };
+		expect(ndcX(cam, left.x, left.y, left.z)).toBeLessThan(ndcX(cam, 0, world.y, 0));
+		const start = ndcX(cam, world.x, world.y, world.z);
+		setSkySteer(world, left.x, left.y, left.z);
+		for (let i = 0; i < 90; i++) stepSky(world, 16);
+		expect(ndcX(cam, world.x, world.y, world.z)).toBeLessThan(start);
+		expect(world.x).toBeGreaterThan(1);
+	});
+
+	it('releaseSkyControls stops leftover strafe on the next tick', () => {
+		const world = createSky();
+		world.yaw = 0;
+		world.x = 0;
+		world.z = 0;
+		setSkyKey(world, 'right', true);
+		stepSky(world, 80);
+		releaseSkyControls(world);
+		const x = world.x;
+		const z = world.z;
+		stepSky(world, 400);
+		expect(world.x).toBeCloseTo(x, 5);
+		expect(world.z).toBeCloseTo(z, 5);
+		expect(world.keys.right).toBe(false);
+		expect(world.steer).toBeNull();
 	});
 
 	it('yaw 0 hold W stays on +Z even if lookX is camera-stale', () => {
