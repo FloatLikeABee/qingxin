@@ -1,7 +1,7 @@
 import { createHaul, type Biome, type HaulWorld } from './sim';
 
 export const HAUL_SAVE_KEY = 'qingxin.games.cargo-haul';
-export const HAUL_SCHEMA = 1;
+export const HAUL_SCHEMA = 2;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return value && typeof value === 'object' && !Array.isArray(value)
@@ -65,15 +65,24 @@ export function readHaulSave(
 		const raw = storage?.getItem(HAUL_SAVE_KEY);
 		if (!raw) return createHaul();
 		const rec = asRecord(JSON.parse(raw) as unknown);
-		if (!rec || rec.schema !== HAUL_SCHEMA) {
+		if (!rec || (rec.schema !== HAUL_SCHEMA && rec.schema !== 1)) {
 			const fresh = createHaul();
 			fresh.recovered = true;
 			fresh.notice = '路书读不出来，从匝道重新起步。';
 			if (rec) keepSettings(fresh, rec);
 			return fresh;
 		}
-		const biome = BIOMES.has(String(rec.biome) as Biome) ? (rec.biome as Biome) : 'highway';
 		const seed = clamp(rec.seed, 1, 1_000_000, 1);
+		if (rec.schema === 1) {
+			const migrated = createHaul(seed);
+			migrated.odometer = clamp(rec.odometer, 0, 1e9, 0);
+			migrated.cargoLog = parseLog(rec.cargoLog);
+			keepSettings(migrated, rec);
+			migrated.recovered = true;
+			migrated.notice = '转向修好了，从匝道再开。';
+			return migrated;
+		}
+		const biome = BIOMES.has(String(rec.biome) as Biome) ? (rec.biome as Biome) : 'highway';
 		const x = clamp(rec.x, -80_000, 80_000, 0);
 		const z = clamp(rec.z, -80_000, 80_000, 0);
 		const yaw = clamp(rec.yaw, -Math.PI * 4, Math.PI * 4, 0);

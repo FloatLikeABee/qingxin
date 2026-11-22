@@ -6,7 +6,9 @@ import {
 	TREE_POOL,
 	autoFollowHaul,
 	createHaul,
+	haulAhead,
 	haulJointGaps,
+	haulRight,
 	haulPools,
 	haulSpineDepth,
 	minPieceRadius,
@@ -139,6 +141,70 @@ describe('cargo haul sim', () => {
 				expect(liveKids.length).toBe(parent.exits.length);
 			}
 		}
+	});
+
+	it('ribbon left-then-right along -Z has +Y normals', () => {
+		const right = haulRight(0);
+		const ahead = haulAhead(0);
+		const hw = 5;
+		const p0 = { x: -right.x * hw, y: 0, z: -right.z * hw };
+		const p1 = { x: right.x * hw, y: 0, z: right.z * hw };
+		const p2 = { x: p0.x + ahead.x, y: 0, z: p0.z + ahead.z };
+		const ny = (p1.z - p0.z) * (p2.x - p0.x) - (p1.x - p0.x) * (p2.z - p0.z);
+		expect(ny).toBeGreaterThan(0);
+	});
+
+	it('yaw 0 ahead is world -Z and right is +X', () => {
+		const a = haulAhead(0);
+		const r = haulRight(0);
+		expect(a.z).toBeCloseTo(-1);
+		expect(a.x).toBeCloseTo(0);
+		expect(r.x).toBeCloseTo(1);
+		expect(r.z).toBeCloseTo(0);
+		expect(a.x * r.z - a.z * r.x).toBeCloseTo(1);
+	});
+
+	it('yaw 0 road and drive travel world -Z with driver right at +X', () => {
+		const world = createHaul(1);
+		const first = world.pieces[0]!;
+		expect(first.endZ).toBeLessThan(first.startZ - 8);
+		expect(first.endX).toBeCloseTo(first.startX, 1);
+		world.yaw = 0;
+		world.steer = 0;
+		world.steerInput = 0;
+		world.speed = 12;
+		const z0 = world.z;
+		setHaulControl(world, 'throttle', 1);
+		stepHaul(world, 400);
+		expect(world.z).toBeLessThan(z0 - 1);
+	});
+
+	it('drive steer +1 moves toward driver +X right', () => {
+		const world = createHaul(3);
+		world.speed = 12;
+		world.gear = 'drive';
+		const start = { x: world.x, z: world.z, yaw: world.yaw };
+		const rightX = Math.cos(start.yaw);
+		const rightZ = Math.sin(start.yaw);
+		setHaulControl(world, 'steer', 1);
+		setHaulControl(world, 'throttle', 1);
+		stepHaul(world, 700);
+		const dRight = (world.x - start.x) * rightX + (world.z - start.z) * rightZ;
+		expect(dRight).toBeGreaterThan(0.4);
+	});
+
+	it('reverse steer +1 sends the rear toward driver +X right', () => {
+		const world = createHaul(3);
+		world.speed = -7;
+		world.gear = 'reverse';
+		const start = { x: world.x, z: world.z, yaw: world.yaw };
+		const rightX = Math.cos(start.yaw);
+		const rightZ = Math.sin(start.yaw);
+		setHaulControl(world, 'steer', 1);
+		setHaulControl(world, 'throttle', 1);
+		stepHaul(world, 700);
+		const dRight = (world.x - start.x) * rightX + (world.z - start.z) * rightZ;
+		expect(dRight).toBeGreaterThan(0.15);
 	});
 
 	it('recovers off-road without resetting the odometer', () => {

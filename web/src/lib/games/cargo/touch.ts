@@ -1,5 +1,32 @@
 export type HaulPointerKind = 'steer' | 'throttle' | 'brake';
 
+export type HaulSteerHeld = { left: boolean; right: boolean; last: -1 | 1 | 0 };
+
+export function emptyHaulSteerHeld(): HaulSteerHeld {
+	return { left: false, right: false, last: 0 };
+}
+
+export function haulSteerFromHeld(held: HaulSteerHeld) {
+	if (held.left && held.right) return held.last || 0;
+	if (held.right) return 1;
+	if (held.left) return -1;
+	return 0;
+}
+
+export function haulSteerKeyDown(held: HaulSteerHeld, value: number) {
+	if (value < 0) held.left = true;
+	if (value > 0) held.right = true;
+	held.last = value < 0 ? -1 : 1;
+}
+
+export function haulSteerKeyUp(held: HaulSteerHeld, value: number) {
+	if (value < 0) held.left = false;
+	if (value > 0) held.right = false;
+	if (held.left && !held.right) held.last = -1;
+	else if (held.right && !held.left) held.last = 1;
+	else if (!held.left && !held.right) held.last = 0;
+}
+
 export type HaulPointers = {
 	steer: Map<number, number>;
 	throttle: Set<number>;

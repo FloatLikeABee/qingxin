@@ -1,10 +1,22 @@
 import * as THREE from 'three';
-import { dummyCarPose, type Biome, type HaulWorld, type RoadPiece, type SceneryBit } from './sim';
+import { cameraBasisDet, haulChaseWant } from './camera';
+import {
+	dummyCarPose,
+	haulAhead,
+	haulRight,
+	type Biome,
+	type HaulWorld,
+	type RoadPiece,
+	type SceneryBit
+} from './sim';
+
+export type HaulHudNdc = { hr: number; hl: number; truck: number; det: number };
 
 export interface CargoScene {
 	sync(world: HaulWorld, opts?: { reducedMotion?: boolean }): void;
 	render(now: number): void;
 	resize(opts?: { lowDetail?: boolean }): void;
+	projectHud(world: HaulWorld): HaulHudNdc;
 	dispose(): void;
 }
 
@@ -57,15 +69,15 @@ function ribbon(piece: RoadPiece, y = 0.05, halfWidth?: number, overlap = 2.8) {
 		first && last
 			? [
 					{
-						x: first.x - Math.sin(first.yaw) * overlap,
-						z: first.z - Math.cos(first.yaw) * overlap,
+						x: first.x - haulAhead(first.yaw).x * overlap,
+						z: first.z - haulAhead(first.yaw).z * overlap,
 						yaw: first.yaw,
 						s: first.s - overlap
 					},
 					...raw,
 					{
-						x: last.x + Math.sin(last.yaw) * overlap,
-						z: last.z + Math.cos(last.yaw) * overlap,
+						x: last.x + haulAhead(last.yaw).x * overlap,
+						z: last.z + haulAhead(last.yaw).z * overlap,
 						yaw: last.yaw,
 						s: last.s + overlap
 					}
@@ -77,9 +89,15 @@ function ribbon(piece: RoadPiece, y = 0.05, halfWidth?: number, overlap = 2.8) {
 	const index: number[] = [];
 	for (let i = 0; i < samples.length; i++) {
 		const s = samples[i]!;
-		const rx = Math.cos(s.yaw);
-		const rz = -Math.sin(s.yaw);
-		positions.push(s.x + rx * hw, y, s.z + rz * hw, s.x - rx * hw, y, s.z - rz * hw);
+		const right = haulRight(s.yaw);
+		positions.push(
+			s.x - right.x * hw,
+			y,
+			s.z - right.z * hw,
+			s.x + right.x * hw,
+			y,
+			s.z + right.z * hw
+		);
 		normals.push(0, 1, 0, 0, 1, 0);
 		uvs.push(0, s.s * 0.12, 1, s.s * 0.12);
 		if (i > 0) {
@@ -110,29 +128,29 @@ function makeTruck(geos: Geo[], mats: Mat[]) {
 		keepG(new THREE.BoxGeometry(2.55, 1.55, 3.35)),
 		keepM(std(0x3b82f6, { metalness: 0.22, roughness: 0.42 }))
 	);
-	body.position.set(0, 1.35, 0.55);
+	body.position.set(0, 1.35, -0.55);
 	body.castShadow = true;
 	const cabin = new THREE.Mesh(
 		keepG(new THREE.BoxGeometry(2.4, 1.35, 1.7)),
 		keepM(std(0x2563eb, { metalness: 0.18, roughness: 0.38 }))
 	);
-	cabin.position.set(0, 2.55, 1.15);
+	cabin.position.set(0, 2.55, -1.15);
 	cabin.castShadow = true;
 	const glass = new THREE.Mesh(
 		keepG(new THREE.BoxGeometry(2.18, 0.85, 0.12)),
 		keepM(std(0x9ec9ff, { metalness: 0.4, roughness: 0.12, transparent: true, opacity: 0.78 }))
 	);
-	glass.position.set(0, 2.62, 2.02);
+	glass.position.set(0, 2.62, -2.02);
 	const bumper = new THREE.Mesh(
 		keepG(new THREE.BoxGeometry(2.7, 0.38, 0.42)),
 		keepM(std(0x1e293b))
 	);
-	bumper.position.set(0, 0.62, 2.28);
+	bumper.position.set(0, 0.62, -2.28);
 	const grille = new THREE.Mesh(
 		keepG(new THREE.BoxGeometry(1.4, 0.55, 0.12)),
 		keepM(std(0x0f172a))
 	);
-	grille.position.set(0, 1.12, 2.28);
+	grille.position.set(0, 1.12, -2.28);
 	const lamp = keepM(
 		new THREE.MeshStandardMaterial({
 			color: 0xffe08a,
@@ -143,18 +161,18 @@ function makeTruck(geos: Geo[], mats: Mat[]) {
 	);
 	const hl = new THREE.Mesh(keepG(new THREE.BoxGeometry(0.38, 0.22, 0.12)), lamp);
 	const hr = hl.clone();
-	hl.position.set(-0.82, 1.18, 2.3);
-	hr.position.set(0.82, 1.18, 2.3);
+	hl.position.set(-0.82, 1.18, -2.3);
+	hr.position.set(0.82, 1.18, -2.3);
 	const stack = new THREE.Mesh(
 		keepG(new THREE.CylinderGeometry(0.09, 0.11, 1.8, 8)),
 		keepM(std(0x334155))
 	);
-	stack.position.set(-1.15, 2.6, 0.1);
+	stack.position.set(-1.15, 2.6, -0.1);
 	const sleeper = new THREE.Mesh(
 		keepG(new THREE.BoxGeometry(2.45, 1.7, 1.4)),
 		keepM(std(0x1d4ed8))
 	);
-	sleeper.position.set(0, 2.15, -0.85);
+	sleeper.position.set(0, 2.15, 0.85);
 	sleeper.castShadow = true;
 	cab.add(body, cabin, glass, bumper, grille, hl, hr, stack, sleeper);
 	for (const x of [-0.95, 0.95]) {
@@ -163,7 +181,7 @@ function makeTruck(geos: Geo[], mats: Mat[]) {
 			keepM(std(0x111827, { roughness: 0.85 }))
 		);
 		wheel.rotation.z = Math.PI / 2;
-		wheel.position.set(x, 0.52, 1.35);
+		wheel.position.set(x, 0.52, -1.35);
 		cab.add(wheel);
 	}
 	root.add(cab);
@@ -174,21 +192,21 @@ function makeTruck(geos: Geo[], mats: Mat[]) {
 		keepM(std(0x475569))
 	);
 	hitch.rotation.x = Math.PI / 2;
-	hitch.position.set(0, 1.05, -2.15);
+	hitch.position.set(0, 1.05, 2.15);
 	const deck = new THREE.Mesh(keepG(new THREE.BoxGeometry(2.5, 0.28, 9.4)), keepM(std(0x334155)));
-	deck.position.set(0, 1.12, -7.1);
+	deck.position.set(0, 1.12, 7.1);
 	deck.castShadow = true;
 	const box = new THREE.Mesh(
 		keepG(new THREE.BoxGeometry(2.42, 2.55, 8.6)),
 		keepM(std(0xf8fafc, { roughness: 0.55 }))
 	);
-	box.position.set(0, 2.52, -7.2);
+	box.position.set(0, 2.52, 7.2);
 	box.castShadow = true;
 	const stripe = new THREE.Mesh(
 		keepG(new THREE.BoxGeometry(2.44, 0.18, 8.62)),
 		keepM(std(0x14b8a6))
 	);
-	stripe.position.set(0, 2.05, -7.2);
+	stripe.position.set(0, 2.05, 7.2);
 	const coral = keepM(
 		new THREE.MeshStandardMaterial({
 			color: 0xfb7185,
@@ -198,18 +216,18 @@ function makeTruck(geos: Geo[], mats: Mat[]) {
 	);
 	const tl = new THREE.Mesh(keepG(new THREE.BoxGeometry(0.28, 0.18, 0.1)), coral);
 	const tr = tl.clone();
-	tl.position.set(-0.9, 1.35, -11.82);
-	tr.position.set(0.9, 1.35, -11.82);
+	tl.position.set(-0.9, 1.35, 11.82);
+	tr.position.set(0.9, 1.35, 11.82);
 	for (let i = 0; i < 3; i++) {
 		const crate = new THREE.Mesh(
 			keepG(new THREE.BoxGeometry(0.9, 0.7, 1.1)),
 			keepM(std(i === 1 ? 0xf59e0b : 0xd97706))
 		);
-		crate.position.set(i === 1 ? 0.55 : -0.55, 3.95, -4.8 - i * 2.2);
+		crate.position.set(i === 1 ? 0.55 : -0.55, 3.95, 4.8 + i * 2.2);
 		crate.castShadow = true;
 		trailer.add(crate);
 	}
-	for (const z of [-4.4, -8.6]) {
+	for (const z of [4.4, 8.6]) {
 		for (const x of [-0.95, 0.95]) {
 			const wheel = new THREE.Mesh(
 				keepG(new THREE.CylinderGeometry(0.5, 0.5, 0.38, 12)),
@@ -277,7 +295,7 @@ function makeDummy() {
 	const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.1, 3.6), std(0xf8fafc));
 	body.position.y = 0.9;
 	const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.7, 1.2), std(0x60a5fa));
-	cabin.position.set(0, 1.55, 0.7);
+	cabin.position.set(0, 1.55, -0.7);
 	g.add(body, cabin);
 	return g;
 }
@@ -420,9 +438,10 @@ export function mountCargoScene(canvas: HTMLCanvasElement): CargoScene | null {
 	const truck = makeTruck(geos, mats);
 	scene.add(truck.root);
 
-	const camPos = new THREE.Vector3(0, 8, -14);
+	const camPos = new THREE.Vector3(0, 8, 14);
 	const look = new THREE.Vector3();
 	let bob = 0;
+	let camSettled = false;
 
 	function sync(world: HaulWorld, opts?: { reducedMotion?: boolean }) {
 		syncRoads(world);
@@ -461,31 +480,30 @@ export function mountCargoScene(canvas: HTMLCanvasElement): CargoScene | null {
 			}
 			g.visible = true;
 			g.position.set(pose.x, 0, pose.z);
-			g.rotation.y = pose.yaw;
+			g.rotation.set(0, -pose.yaw, 0);
 		});
 
 		truck.root.position.set(world.x, world.onRoad ? 0 : -0.12, world.z);
-		truck.cab.rotation.y = world.yaw;
-		truck.trailer.position.set(world.x, 0, world.z);
-		truck.trailer.rotation.y = world.trailerYaw;
-		// keep trailer in the cab group space: actually both in root which is at truck xz
 		truck.cab.position.set(0, 0, 0);
 		truck.trailer.position.set(0, 0, 0);
+		truck.cab.rotation.set(0, -world.yaw, 0);
+		truck.trailer.rotation.set(0, -world.trailerYaw, 0);
 
-		const aheadX = Math.sin(world.yaw);
-		const aheadZ = Math.cos(world.yaw);
-		const rightX = Math.cos(world.yaw);
-		const rightZ = -Math.sin(world.yaw);
-		const back = 16.8 + Math.min(5, Math.abs(world.speed) * 0.14);
-		const height = 7.2 + Math.min(2.2, Math.abs(world.speed) * 0.06);
 		bob += opts?.reducedMotion ? 0 : Math.abs(world.speed) * 0.002;
+		const wantPose = haulChaseWant(world);
 		const want = new THREE.Vector3(
-			world.x - aheadX * back + rightX * 2.4,
-			height + (opts?.reducedMotion ? 0 : Math.sin(bob) * 0.12),
-			world.z - aheadZ * back + rightZ * 2.4
+			wantPose.x,
+			wantPose.y + (opts?.reducedMotion ? 0 : Math.sin(bob) * 0.12),
+			wantPose.z
 		);
-		camPos.lerp(want, 0.12);
-		look.set(world.x + aheadX * 12, 2.1, world.z + aheadZ * 12);
+		if (camSettled) camPos.lerp(want, 0.12);
+		else {
+			camPos.copy(want);
+			camSettled = true;
+		}
+		look.set(wantPose.lookX, wantPose.lookY, wantPose.lookZ);
+		camera.up.set(0, 1, 0);
+		camera.scale.set(1, 1, 1);
 		camera.position.copy(camPos);
 		camera.lookAt(look);
 		sun.position.set(world.x + 48, 34, world.z - 28);
@@ -497,6 +515,25 @@ export function mountCargoScene(canvas: HTMLCanvasElement): CargoScene | null {
 			38,
 			world.lowDetail ? 140 : 230
 		);
+	}
+
+	function projectHud(world: HaulWorld): HaulHudNdc {
+		camera.updateMatrixWorld();
+		camera.updateProjectionMatrix();
+		const right = haulRight(world.yaw);
+		const ahead = haulAhead(world.yaw);
+		const hr = new THREE.Vector3(
+			world.x + right.x * 0.82 + ahead.x * 2.3,
+			1.2,
+			world.z + right.z * 0.82 + ahead.z * 2.3
+		).project(camera);
+		const hl = new THREE.Vector3(
+			world.x - right.x * 0.82 + ahead.x * 2.3,
+			1.2,
+			world.z - right.z * 0.82 + ahead.z * 2.3
+		).project(camera);
+		const truckNdc = new THREE.Vector3(world.x, 1.2, world.z).project(camera);
+		return { hr: hr.x, hl: hl.x, truck: truckNdc.x, det: cameraBasisDet(camera) };
 	}
 
 	function render(_now: number) {
@@ -531,5 +568,5 @@ export function mountCargoScene(canvas: HTMLCanvasElement): CargoScene | null {
 	}
 
 	resize();
-	return { sync, render, resize, dispose };
+	return { sync, render, resize, projectHud, dispose };
 }
