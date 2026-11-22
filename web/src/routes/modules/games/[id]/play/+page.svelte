@@ -8,6 +8,7 @@
 	import OpPlay from '#lib/games/op/OpPlay.svelte';
 	import ShelfPlay from '#lib/games/shelf/ShelfPlay.svelte';
 	import KitchenPlay from '#lib/games/kitchen/KitchenPlay.svelte';
+	import ClinicPlay from '#lib/games/clinic/ClinicPlay.svelte';
 	import TidePlay from '#lib/games/tide/TidePlay.svelte';
 	import ShangbanPlay from '#lib/shangban/ShangbanPlay.svelte';
 	import type { PageProps } from './$types';
@@ -27,6 +28,8 @@
 	<ShelfPlay title={data.game.title} />
 {:else if data.game.id === 'home-kitchen'}
 	<KitchenPlay title={data.game.title} />
+{:else if data.game.id === 'story-clinic'}
+	<ClinicPlay title={data.game.title} />
 {:else if data.game.id === 'cargo-haul'}
 	<CargoPlay title={data.game.title} />
 {:else if data.game.id === 'annual-report'}

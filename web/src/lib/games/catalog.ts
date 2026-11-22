@@ -13,7 +13,8 @@ export type CoverMotif =
 	| 'truck'
 	| 'ledger'
 	| 'orlamp'
-	| 'wok';
+	| 'wok'
+	| 'clinic';
 
 export const GAME_ALIASES: Record<string, string> = {
 	'corner-florist': 'window-garden',
@@ -225,6 +226,24 @@ export const GAMES: GameInfo[] = [
 			ground: '#E2E8F0',
 			accent: '#3B82F6',
 			motif: 'office'
+		}
+	},
+	{
+		id: 'story-clinic',
+		title: '中医馆',
+		englishTitle: 'Hospital',
+		summary: '在一间虚构的医院里听故事、写纸条、抓药包。不是诊疗。',
+		about:
+			'这是一间故事里的中医馆，也是游戏里的医院。候诊厅坐着会说话的狐狸、书记员、石龟和风筝，都不是真人。听完它们的牢骚，望一望、闻一闻、把把脉，会看到故事标签。写一张不超过八十个字的纸条，从柜子里选二到五只罐子，数量是游戏药包，不是克或医嘱。抓药之后它们会带着笑话回来。对上两三个标签就暖和些，对上一两个就客气追问，对不上也只是笑料，它们本来就没事。虚构娱乐，不是诊疗，没有真实剂量，不能当医嘱。',
+		category: '益智',
+		tags: ['医院', '中医', '处方', '虚构'],
+		status: 'playable',
+		playCta: '开始接诊',
+		cover: {
+			sky: '#F4E4C8',
+			ground: '#6B3A22',
+			accent: '#C4A35A',
+			motif: 'clinic'
 		}
 	},
 	{
