@@ -91,12 +91,12 @@ function ribbon(piece: RoadPiece, y = 0.05, halfWidth?: number, overlap = 2.8) {
 		const s = samples[i]!;
 		const right = haulRight(s.yaw);
 		positions.push(
-			s.x + right.x * hw,
-			y,
-			s.z + right.z * hw,
 			s.x - right.x * hw,
 			y,
-			s.z - right.z * hw
+			s.z - right.z * hw,
+			s.x + right.x * hw,
+			y,
+			s.z + right.z * hw
 		);
 		normals.push(0, 1, 0, 0, 1, 0);
 		uvs.push(0, s.s * 0.12, 1, s.s * 0.12);

@@ -143,6 +143,17 @@ describe('cargo haul sim', () => {
 		}
 	});
 
+	it('ribbon left-then-right along -Z has +Y normals', () => {
+		const right = haulRight(0);
+		const ahead = haulAhead(0);
+		const hw = 5;
+		const p0 = { x: -right.x * hw, y: 0, z: -right.z * hw };
+		const p1 = { x: right.x * hw, y: 0, z: right.z * hw };
+		const p2 = { x: p0.x + ahead.x, y: 0, z: p0.z + ahead.z };
+		const ny = (p1.z - p0.z) * (p2.x - p0.x) - (p1.x - p0.x) * (p2.z - p0.z);
+		expect(ny).toBeGreaterThan(0);
+	});
+
 	it('yaw 0 ahead is world -Z and right is +X', () => {
 		const a = haulAhead(0);
 		const r = haulRight(0);
