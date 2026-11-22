@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import {
 	BULLET_POOL,
 	SHARD_POOL,
@@ -7,7 +8,7 @@ import {
 	rebuildCloud,
 	stepCannon
 } from './cannon';
-import { createSky, releaseSkyControls, setSkyKey, setSkySteer } from './sim';
+import { chaseOffset, createSky, releaseSkyControls, setSkyKey, setSkySteer } from './sim';
 
 describe('cloud fly aim and cannon', () => {
 	it('flyAimAlongRay never returns a y≈0 disk in front of home', () => {
@@ -16,6 +17,28 @@ describe('cloud fly aim and cannon', () => {
 		expect(p.z).toBeCloseTo(14, 5);
 		expect(p.y).not.toBeCloseTo(0.1, 1);
 		expect(Math.hypot(p.x, p.y - 5, p.z)).toBeCloseTo(14, 5);
+	});
+
+	it('a screen-left camera ray aims at a point that stays on screen-left', () => {
+		const world = createSky();
+		world.yaw = 0;
+		world.x = 0;
+		world.y = 1;
+		world.z = 0;
+		const chase = chaseOffset('garden');
+		const cam = new THREE.PerspectiveCamera(46, 16 / 9, 0.12, 220);
+		cam.position.set(0, 1 + chase.height, -chase.dist);
+		cam.lookAt(0, 1 + chase.lift, 0);
+		cam.updateMatrixWorld();
+		cam.updateProjectionMatrix();
+		const ndc = new THREE.Vector3(-0.55, 0.05, 0.4);
+		ndc.unproject(cam);
+		const origin = cam.position;
+		const dir = ndc.sub(origin);
+		const aim = flyAimAlongRay({ x: origin.x, y: origin.y, z: origin.z }, dir, 14);
+		const projected = new THREE.Vector3(aim.x, aim.y, aim.z).project(cam);
+		expect(projected.x).toBeLessThan(-0.2);
+		expect(aim.x).toBeGreaterThan(1);
 	});
 
 	it('releaseSkyControls clears keys, steer, and fire', () => {

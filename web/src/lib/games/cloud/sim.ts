@@ -160,6 +160,20 @@ export function chaseOffset(biome: BiomeId): { dist: number; height: number; lif
 	return { dist: 10, height: 5.2, lift: 0.45 };
 }
 
+/** Yaw 0 looks along world +Z. Matches chase `follow()` in render.ts. */
+export function skyAhead(yaw: number) {
+	return { x: Math.sin(yaw), z: Math.cos(yaw) };
+}
+
+/**
+ * Screen-right of the Three.js chase camera that looks along `skyAhead`.
+ * lookAt from behind the ghost makes camera +X = (−cos yaw, sin yaw), so yaw 0
+ * screen-right is world −X, not +X.
+ */
+export function skyRight(yaw: number) {
+	return { x: -Math.cos(yaw), z: Math.sin(yaw) };
+}
+
 export function skyControlFromKeyboard(event: { code: string; key: string; shiftKey?: boolean }): {
 	move?: keyof SkyKeys;
 	pause?: boolean;
@@ -365,25 +379,23 @@ function wish(world: SkyWorld) {
 	let wx = 0;
 	let wy = 0;
 	let wz = 0;
-	const lx = Math.sin(world.yaw);
-	const lz = Math.cos(world.yaw);
-	const rx = lz;
-	const rz = -lx;
+	const ahead = skyAhead(world.yaw);
+	const right = skyRight(world.yaw);
 	if (world.keys.up) {
-		wx += lx;
-		wz += lz;
+		wx += ahead.x;
+		wz += ahead.z;
 	}
 	if (world.keys.down) {
-		wx -= lx;
-		wz -= lz;
+		wx -= ahead.x;
+		wz -= ahead.z;
 	}
 	if (world.keys.right) {
-		wx += rx;
-		wz += rz;
+		wx += right.x;
+		wz += right.z;
 	}
 	if (world.keys.left) {
-		wx -= rx;
-		wz -= rz;
+		wx -= right.x;
+		wz -= right.z;
 	}
 	if (world.keys.rise) wy += 1;
 	if (world.keys.dive) wy -= 1;
